@@ -138,26 +138,35 @@ function setupWorkbook() {
     setup.setColumnWidth(2, 520);
   }
 
+  // Safe to run again: existing tabs keep their data and only get the current
+  // headers, dropdowns, formats and any default numbers they are missing.
+  const notes = [];
+
   const map = getOrCreateSheet_(ss, SHEETS.MAP);
+  const mapRow = (m) => [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], 'Not defined', m[8], m[9]];
   if (map.getLastRow() === 0) {
-    writeTable_(map, MAP_HEADERS, DEFAULT_METRICS.map((m) =>
-      [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], 'Not defined', m[8], m[9]]));
-    const rows = DEFAULT_METRICS.length;
-    map.getRange(2, 9, rows, 1).setDataValidation(listRule_(STATUSES));
-    map.getRange(2, 10, rows, 1).setDataValidation(listRule_(['Y', 'N']));
-    map.getRange(2, 11, rows, 1).setDataValidation(listRule_(UNITS));
+    writeTable_(map, MAP_HEADERS, DEFAULT_METRICS.map(mapRow));
     map.setColumnWidth(4, 320);
+  } else {
+    writeHeaders_(map, MAP_HEADERS);
+    const have = new Set(readRows_(map).map((r) => String(r[0])));
+    const missing = DEFAULT_METRICS.filter((m) => !have.has(m[0])).map(mapRow);
+    if (missing.length) {
+      map.getRange(map.getLastRow() + 1, 1, missing.length, MAP_HEADERS.length).setValues(missing);
+      notes.push(`added ${missing.length} new numbers to Data Map`);
+    }
   }
+  map.getRange('I2:I').setDataValidation(listRule_(STATUSES));
+  map.getRange('J2:J').setDataValidation(listRule_(['Y', 'N']));
+  map.getRange('K2:K').setDataValidation(listRule_(UNITS));
 
   const weekly = getOrCreateSheet_(ss, SHEETS.WEEKLY);
-  if (weekly.getLastRow() === 0) {
-    writeTable_(weekly, WEEKLY_HEADERS, []);
-    weekly.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
-    weekly.getRange('B2:B').setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInRange(map.getRange('A2:A'), true).build());
-    weekly.getRange('D2:D').setDataValidation(
-      SpreadsheetApp.newDataValidation().requireValueInRange(setup.getRange('A5:A'), true).build());
-  }
+  writeHeaders_(weekly, WEEKLY_HEADERS);
+  weekly.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
+  weekly.getRange('B2:B').setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInRange(map.getRange('A2:A'), true).build());
+  weekly.getRange('D2:D').setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInRange(setup.getRange('A5:A'), true).build());
 
   const audit = getOrCreateSheet_(ss, SHEETS.AUDIT);
   if (audit.getLastRow() === 0) {
@@ -166,22 +175,23 @@ function setupWorkbook() {
       return [a[0], a[1], ALL_SEGMENTS, '', '', '', '', a[2],
         `=IF(OR(D${r}="",F${r}=""),"",IF(D${r}=H${r},1,MAX(0,(D${r}-F${r})/(D${r}-H${r}))))`];
     }));
-    audit.getRange('E2:E').setNumberFormat('yyyy-mm-dd');
-    audit.getRange('G2:G').setNumberFormat('yyyy-mm-dd');
-    audit.getRange('I2:I').setNumberFormat('0%');
+  } else {
+    writeHeaders_(audit, AUDIT_HEADERS);
   }
+  audit.getRange('E2:E').setNumberFormat('yyyy-mm-dd');
+  audit.getRange('G2:G').setNumberFormat('yyyy-mm-dd');
+  audit.getRange('I2:I').setNumberFormat('0%');
 
   const hours = getOrCreateSheet_(ss, SHEETS.HOURS);
-  if (hours.getLastRow() === 0) {
-    writeTable_(hours, HOURS_HEADERS, []);
-    hours.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
-    hours.getRange('B2:B').setDataValidation(listRule_(HOURS_AREAS));
-  }
+  writeHeaders_(hours, HOURS_HEADERS);
+  hours.getRange('A2:A').setNumberFormat('yyyy-mm-dd');
+  hours.getRange('B2:B').setDataValidation(listRule_(HOURS_AREAS));
 
   const blank = ss.getSheetByName('Sheet1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 
-  SpreadsheetApp.getUi().alert('Count On It is set up. Start with the Setup tab, then mark each number\'s status in Data Map.');
+  SpreadsheetApp.getUi().alert('Count On It is set up' + (notes.length ? ' (' + notes.join(', ') + ')' : '') +
+    '. Your existing data was not changed. Start with the Setup tab, then mark each number\'s status in Data Map.');
 }
 
 /** Adds an empty row for every tracked number and segment for the current week. */
@@ -423,8 +433,13 @@ function getOrCreateSheet_(ss, name) {
 }
 
 function writeTable_(sheet, headers, rows) {
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#E3ECF7');
+  writeHeaders_(sheet, headers);
   if (rows.length) sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+}
+
+/** Rewrites row 1 only, so renamed columns update without touching data. */
+function writeHeaders_(sheet, headers) {
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#E3ECF7');
   sheet.setFrozenRows(1);
 }
 
