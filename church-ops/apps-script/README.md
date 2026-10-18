@@ -32,7 +32,7 @@ campuses, congregations and owners all live in the sheet, not the code.
 
 1. Monday: **Count On It > Add this week's rows.** It adds a blank row for every number marked
    Tracked or Partial, for each segment when the number splits.
-2. Owners fill in the Value column by their deadline.
+2. Owners fill in the "This week's number" column by their deadline.
 3. **Count On It > Open dashboard.**
 
 A number only shows on the dashboard once its Data Map status is Tracked or Partial. Everything else

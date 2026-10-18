@@ -19,9 +19,9 @@ const STATUSES = ['Tracked', 'Partial', 'Gap', 'Not defined'];
 const UNITS = ['count', 'percent', 'dollars'];
 const ALL_SEGMENTS = 'All';
 
-const MAP_HEADERS = ['Metric ID', 'Number', 'Category', 'What counts', 'Owner (role)',
+const MAP_HEADERS = ['Metric ID', 'What we count', 'Category', 'Definition', 'Owner (role)',
   'Recorded in', 'Deadline', 'Flows to', 'Status', 'Split by segment?', 'Unit'];
-const WEEKLY_HEADERS = ['Week of', 'Metric ID', 'Number', 'Segment', 'Value', 'Entered by', 'Note'];
+const WEEKLY_HEADERS = ['Week of', 'Metric ID', 'What we count', 'Segment', 'This week\'s number', 'Entered by', 'Note'];
 const AUDIT_HEADERS = ['Area', 'Check', 'Segment', 'Baseline', 'Baseline date', 'Current',
   'Updated', 'Target', 'Progress'];
 const HOURS_HEADERS = ['Date', 'Area', 'Segment', 'Hours', 'Notes'];
@@ -211,7 +211,7 @@ function addThisWeek() {
     weekly.getRange(weekly.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
   }
   SpreadsheetApp.getUi().alert(rows.length
-    ? `Added ${rows.length} rows for the week of ${weekKey}. Fill in the Value column.`
+    ? `Added ${rows.length} rows for the week of ${weekKey}. Fill in the "This week's number" column.`
     : `The week of ${weekKey} already has every row. Mark more numbers Tracked in Data Map to add them.`);
 }
 
@@ -354,6 +354,8 @@ function sampleData_(segments, lastWeek) {
   };
   const segShare = segments.map((_, i) => (i === segments.length - 1 && segments.length > 2 ? 0.35 : 1));
   const split = { GIVE_TOTAL: false, GIVERS: false };
+  const names = {};
+  DEFAULT_METRICS.forEach((m) => { names[m[0]] = m[1]; });
 
   const weekly = [];
   for (let w = 9; w >= 0; w--) {
@@ -364,7 +366,7 @@ function sampleData_(segments, lastWeek) {
       segs.forEach((seg, si) => {
         const share = split[id] === false ? 1 : segShare[si];
         const v = Math.round(base[id] * share * growth * (0.94 + rand() * 0.12));
-        weekly.push([week, id, id, seg, v, 'Sample', '']);
+        weekly.push([week, id, names[id] || id, seg, v, 'Sample', '']);
       });
     });
   }
