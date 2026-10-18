@@ -139,3 +139,18 @@ Build path: V1 manual sheet → V2 Planning Center API script (read-only token) 
 
 Gaps to own: fixed published prices, all six modules, health dashboard, YouTube proof.
 Get listed in the Planning Center integrations directory.
+
+## Ops-as-a-service ladder (modeled on Chaney & Associates)
+Chaney & Associates (Roseville, CA; Palm Valley's accounting firm) ladder, published "starting at" by annual giving:
+software $99/mo ($165 w/ payroll) → small (<$250k) $425/mo → midsize ($250–500k) $825/mo →
+large ($500–750k) $1,250/mo → fractional CFO → church hires own CFO.
+
+Church Ops Society mirror, priced by weekend attendance (draft):
+1. Software baseline: Count On It audit $300–$500 + Planning Center Reset $1,500–$5,000 (required first)
+2. Essentials (<300): $300/mo: monthly merges, list/workflow upkeep, monthly health report, email support
+3. Growth (300–1,000): $650/mo: + weekly dashboard, 2 event/registration builds/mo, pre-season tune-ups, quarterly call
+4. Multi-staff (1,000+/multisite): $1,250/mo: + dedicated specialist, live hours, texting/email integrations, on/offboarding, monthly leadership report
+5. Fractional Ops Director: $2,500+/mo: + strategy, process docs, staff training, staff meetings, hiring help
+6. Graduation: help the church hire its own ops director and hand off every system
+
+Mockups: Count On It canvas https://claude.ai/artifact/1KbbGVNnsa3JrdS1rWZy5c (checklist→dashboard, data map, flow).
