@@ -154,3 +154,31 @@ Church Ops Society mirror, priced by weekend attendance (draft):
 6. Graduation: help the church hire its own ops director and hand off every system
 
 Mockups: Count On It canvas https://claude.ai/artifact/1KbbGVNnsa3JrdS1rWZy5c (checklist→dashboard, data map, flow).
+
+## Client zero: Palm Valley pilot (approved)
+~8,000 weekly attendance · 2 physical campuses · Spanish congregation and service. Written approval received.
+Rules: no real Palm Valley data, people or logo in public content; sample data only. Church documents stay with the
+church; generic templates and checklist built on own time/equipment. Log hours by area and campus from day one.
+
+Key design decision: one standard, every number tagged by campus and language (not separate systems).
+- People: campus on every profile + "preferred language" field
+- Check-Ins: locations per campus, headcount per service incl. Spanish
+- Groups: campus + language tags · Services: service types per campus + Spanish
+- Lists/workflows built once, filtered by campus/language
+- Dashboard: total on top, breakdown Campus 1 / Campus 2 / Spanish underneath
+
+Spanish congregation specifics:
+- Duplicate rules for two-surname names (García López vs García) and accents (José/Jose)
+- Spanish versions of connection cards and forms
+- Guest workflows route Spanish speakers to a Spanish-speaking person; Spanish text/email templates
+- Spanish pastor owns the Spanish numbers on the data map
+
+90-day plan:
+- Wk 1–2: audit; baseline duplicates, missing campus/language by campus + congregation
+- Wk 2–4: definitions meeting (exec pastor, both campus pastors, Spanish pastor); data map w/ campus + language columns
+- Month 2: Reset order: campus/language fields → duplicates → check-in → groups → services/teams → registrations
+- Month 2–3: weekly dashboard sheet split by campus/language
+- Month 3: monthly health report to leadership, a section per campus
+
+Video angles: "How a church of 8,000 cleans up Planning Center", "Two campuses without two systems",
+"Your Spanish congregation is missing from your numbers".
