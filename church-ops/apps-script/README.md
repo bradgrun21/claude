@@ -22,7 +22,7 @@ campuses, congregations and owners all live in the sheet, not the code.
 | Tab | What it's for |
 |---|---|
 | **Setup** | Church name, week start day, and segments (one per row: Campus 1, Campus 2, Spanish…). |
-| **Data Map** | Every number: what counts, owner (role), where it's recorded, deadline, what it flows to, status, whether it splits by segment, unit. Starts with 34 numbers from the checklist. |
+| **Data Map** | Every number: what counts, owner (role), where it's recorded, deadline, what it flows to, status, whether it splits by segment, unit, and a **Source link**. Starts with 34 numbers from the checklist. |
 | **Weekly Numbers** | One row per week × number × segment. Use **Add this week's rows** so staff only type values. |
 | **Health Audit** | Planning Center issues (duplicates, missing campus/language, groups with no leader…). Baseline vs. current vs. target, with progress. |
 | **Hours Log** | Hours by area and segment, so you know what a Reset really costs. |
@@ -32,11 +32,19 @@ campuses, congregations and owners all live in the sheet, not the code.
 
 1. Monday: **Count On It > Add this week's rows.** It adds a blank row for every number marked
    Tracked or Partial, for each segment when the number splits.
-2. Owners fill in the "This week's number" column by their deadline.
+2. Owners fill in the "This week's number" column by their deadline. If the number has a Source link
+   in Data Map, each new row gets an "Open source" link to wherever that number already lives
+   (an attendance sheet, a Planning Center report, a YouTube Studio page).
 3. **Count On It > Open dashboard.**
 
 A number only shows on the dashboard once its Data Map status is Tracked or Partial. Everything else
 shows as a blank "No data" tile with who owns it and what nobody gets because it isn't tracked.
+
+## Updating an existing sheet
+
+Paste in the new code, then run **Set up this sheet** again. It renames columns and adds new ones
+(like Source link) and any new numbers, without touching data you've entered. Rows added before a
+Source link existed won't have the link; new weeks will.
 
 ## Dashboard as a link (optional)
 

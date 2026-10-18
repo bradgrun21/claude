@@ -20,8 +20,8 @@ const UNITS = ['count', 'percent', 'dollars'];
 const ALL_SEGMENTS = 'All';
 
 const MAP_HEADERS = ['Metric ID', 'What we count', 'Category', 'Definition', 'Owner (role)',
-  'Recorded in', 'Deadline', 'Flows to', 'Status', 'Split by segment?', 'Unit'];
-const WEEKLY_HEADERS = ['Week of', 'Metric ID', 'What we count', 'Segment', 'This week\'s number', 'Entered by', 'Note'];
+  'Recorded in', 'Deadline', 'Flows to', 'Status', 'Split by segment?', 'Unit', 'Source link'];
+const WEEKLY_HEADERS = ['Week of', 'Metric ID', 'What we count', 'Segment', 'This week\'s number', 'Entered by', 'Note', 'Source'];
 const AUDIT_HEADERS = ['Area', 'Check', 'Segment', 'Baseline', 'Baseline date', 'Current',
   'Updated', 'Target', 'Progress'];
 const HOURS_HEADERS = ['Date', 'Area', 'Segment', 'Hours', 'Notes'];
@@ -143,7 +143,7 @@ function setupWorkbook() {
   const notes = [];
 
   const map = getOrCreateSheet_(ss, SHEETS.MAP);
-  const mapRow = (m) => [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], 'Not defined', m[8], m[9]];
+  const mapRow = (m) => [m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], 'Not defined', m[8], m[9], ''];
   if (map.getLastRow() === 0) {
     writeTable_(map, MAP_HEADERS, DEFAULT_METRICS.map(mapRow));
     map.setColumnWidth(4, 320);
@@ -212,7 +212,7 @@ function addThisWeek() {
     const segs = m.split ? setup.segments : [ALL_SEGMENTS];
     segs.forEach((seg) => {
       if (!existing.has([weekKey, m.id, seg].join('|'))) {
-        rows.push([week, m.id, m.name, seg, '', '', '']);
+        rows.push([week, m.id, m.name, seg, '', '', '', sourceCell_(m.sourceLink)]);
       }
     });
   });
@@ -270,6 +270,7 @@ function buildDashboard_(setup, metrics, weekly, audit, hours, maxWeeks) {
     return {
       id: m.id, name: m.name, category: m.category, owner: m.owner, recordedIn: m.recordedIn,
       deadline: m.deadline, flowsTo: m.flowsTo, status: m.status, unit: m.unit,
+      sourceLink: isLink_(m.sourceLink) ? m.sourceLink : '',
       tracked: m.status === 'Tracked' || m.status === 'Partial',
       bySegment: bySegment,
     };
@@ -420,6 +421,7 @@ function readMetrics_(ss) {
       owner: String(r[4]), recordedIn: String(r[5]), deadline: String(r[6]), flowsTo: String(r[7]),
       status: String(r[8] || 'Not defined'), split: String(r[9]).toUpperCase() === 'Y',
       unit: String(r[10] || 'count'),
+      sourceLink: String(r[11] || '').trim(),
     }));
 }
 
@@ -441,6 +443,16 @@ function writeTable_(sheet, headers, rows) {
 function writeHeaders_(sheet, headers) {
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold').setBackground('#E3ECF7');
   sheet.setFrozenRows(1);
+}
+
+function isLink_(url) {
+  return /^https?:\/\/\S+$/i.test(String(url || '').trim());
+}
+
+/** A clickable "Open source" cell for a Weekly Numbers row, or blank when there is no link. */
+function sourceCell_(url) {
+  if (!isLink_(url)) return '';
+  return '=HYPERLINK("' + String(url).trim().replace(/"/g, '""') + '","Open source")';
 }
 
 function listRule_(values) {
