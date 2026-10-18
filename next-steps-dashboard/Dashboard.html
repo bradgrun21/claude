@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;800&display=swap">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --white: #FFFFFF;
+      --black: #000000;
+      --blue: #4D7C95;
+      --blue-light: #75A1B8;
+      --tint: #DDE8EE;
+      --paper: #F3F3F3;
+      --text: #333333;
+      --line: #DDDDDD;
+      --up: #2E7D4F;
+      --down: #B3261E;
+      --font: Lato, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--black); font-family: var(--font); font-size: 15px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+
+    header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+    h1 { margin: 0; font-weight: 800; font-size: 40px; line-height: 40px; letter-spacing: -1px; text-transform: uppercase; }
+    .asof { margin-top: 6px; color: var(--text); font-size: 13px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; }
+    .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+    select { font: inherit; font-size: 14px; padding: 6px 10px; border: 1px solid var(--black); border-radius: 0; background: var(--white); min-width: 120px; }
+    select:focus-visible, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+    [hidden] { display: none !important; }
+    .notice { background: var(--tint); padding: 12px 16px; margin-bottom: 16px; font-size: 14px; }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .tile { background: var(--white); padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+    .tile .name { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text); }
+    .tile .big { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+    .tile .vs { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+    .chip { align-self: flex-start; font-size: 13px; font-weight: 700; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+    .chip.up { color: var(--up); background: #E3F1E8; }
+    .chip.down { color: var(--down); background: #F7E3E1; }
+    .chip.flat { color: var(--text); background: var(--paper); }
+
+    .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 12px; }
+    @media (max-width: 540px) { .charts { grid-template-columns: 1fr; } h1 { font-size: 30px; line-height: 30px; } }
+    .card { background: var(--white); padding: 16px; min-width: 0; }
+    .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .card h2 { margin: 0; font-weight: 700; font-size: 18px; letter-spacing: -.5px; text-transform: uppercase; }
+    .toggle { display: flex; }
+    .toggle button { font: inherit; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; border: 1px solid var(--black); background: var(--white); color: var(--black); border-radius: 0; cursor: pointer; }
+    .toggle button + button { border-left: 0; }
+    .toggle button[aria-pressed="true"] { background: var(--black); color: var(--white); }
+    .canvas-box { position: relative; height: 260px; }
+
+    .loading { padding: 48px 0; text-align: center; color: var(--text); }
+    .error { background: #F7E3E1; color: var(--down); padding: 12px 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1 id="title">Next Steps</h1>
+        <div class="asof" id="asof"></div>
+      </div>
+      <div class="controls">
+        <label id="campusWrap" hidden>Campus
+          <select id="campus"></select>
+        </label>
+        <label>Year
+          <select id="year"></select>
+        </label>
+        <label>Compare to
+          <select id="compare"></select>
+        </label>
+      </div>
+    </header>
+
+    <div class="notice" id="notice" hidden></div>
+    <div id="body"><div class="loading">Loading…</div></div>
+  </div>
+
+  <script>
+    var DATA = null;
+    var charts = [];
+    var modes = {};   // metric label -> 'running' | 'monthly'
+    var MONTH_START = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335, 366];
+    var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var COLOR_PRIMARY = '#4D7C95';
+    var COLOR_COMPARE = 'rgba(0,0,0,0.45)';
+
+    google.script.run
+      .withSuccessHandler(init)
+      .withFailureHandler(function (err) {
+        document.getElementById('body').innerHTML = '';
+        var div = document.createElement('div');
+        div.className = 'error';
+        div.textContent = err && err.message ? err.message : String(err);
+        document.getElementById('body').appendChild(div);
+      })
+      .getDashboardData();
+
+    function init(data) {
+      DATA = data;
+      document.getElementById('title').textContent = data.title;
+      document.getElementById('asof').textContent = 'As of ' + data.asOf.label;
+
+      if (data.missing.length) {
+        var n = document.getElementById('notice');
+        n.textContent = 'Columns not found in the export: ' + data.missing.join(', ') + '. Check CONFIG in Code.gs.';
+        n.hidden = false;
+      }
+
+      var yearSel = document.getElementById('year');
+      var compareSel = document.getElementById('compare');
+      data.years.slice().reverse().forEach(function (y) {
+        yearSel.add(new Option(y, y));
+        compareSel.add(new Option(y, y));
+      });
+      yearSel.value = data.asOf.year;
+      compareSel.value = data.asOf.year - 1;
+      yearSel.onchange = function () {
+        compareSel.value = Math.max(Number(yearSel.value) - 1, data.years[0]);
+        render();
+      };
+      compareSel.onchange = render;
+
+      if (data.campuses.length) {
+        var campusSel = document.getElementById('campus');
+        campusSel.add(new Option('All campuses', 'All'));
+        data.campuses.forEach(function (c) { campusSel.add(new Option(c, c)); });
+        campusSel.onchange = render;
+        document.getElementById('campusWrap').hidden = false;
+      }
+
+      window.addEventListener('resize', function () { charts.forEach(function (c) { c.resize(); }); });
+      render();
+    }
+
+    function selection() {
+      var year = Number(document.getElementById('year').value);
+      var compare = Number(document.getElementById('compare').value);
+      var campusSel = document.getElementById('campus');
+      var campus = campusSel.value || 'All';
+      // In the current year, compare against the same date; past years compare full years.
+      var cutoff = year === DATA.asOf.year ? DATA.asOf.dayIndex : 365;
+      return { year: year, compare: compare, campus: campus, cutoff: cutoff };
+    }
+
+    function daily(metric, campus, year) {
+      var byCampus = metric.counts[campus] || {};
+      return byCampus[year] || new Array(366).fill(0);
+    }
+
+    function sumThrough(arr, cutoff) {
+      var t = 0;
+      for (var i = 0; i <= cutoff; i++) t += arr[i];
+      return t;
+    }
+
+    function running(arr, stopAt) {
+      var out = [], t = 0;
+      for (var i = 0; i < 366; i++) {
+        t += arr[i];
+        out.push(i <= stopAt ? t : null);
+      }
+      return out;
+    }
+
+    function monthly(arr, stopAt) {
+      var out = [];
+      for (var m = 0; m < 12; m++) {
+        if (MONTH_START[m] > stopAt) { out.push(null); continue; }
+        var t = 0;
+        for (var i = MONTH_START[m]; i < MONTH_START[m + 1]; i++) t += arr[i];
+        out.push(t);
+      }
+      return out;
+    }
+
+    function fmt(n) { return n.toLocaleString(); }
+
+    function changeChip(cur, prev) {
+      var chip = document.createElement('span');
+      var diff = cur - prev;
+      if (diff === 0) { chip.className = 'chip flat'; chip.textContent = 'No change'; return chip; }
+      chip.className = 'chip ' + (diff > 0 ? 'up' : 'down');
+      var pct = prev > 0 ? ' (' + (diff > 0 ? '+' : '') + Math.round(diff / prev * 100) + '%)' : '';
+      chip.textContent = (diff > 0 ? '▲ +' : '▼ ') + fmt(diff) + pct;
+      return chip;
+    }
+
+    function dayLabel(idx) {
+      for (var m = 11; m >= 0; m--) {
+        if (idx >= MONTH_START[m]) return MONTHS[m] + ' ' + (idx - MONTH_START[m] + 1);
+      }
+      return '';
+    }
+
+    function render() {
+      charts.forEach(function (c) { c.destroy(); });
+      charts = [];
+      var s = selection();
+      var body = document.getElementById('body');
+      body.innerHTML = '';
+
+      // Tiles
+      var tiles = document.createElement('div');
+      tiles.className = 'tiles';
+      DATA.metrics.forEach(function (m) {
+        var cur = sumThrough(daily(m, s.campus, s.year), s.cutoff);
+        var prev = sumThrough(daily(m, s.campus, s.compare), s.cutoff);
+        var tile = document.createElement('div');
+        tile.className = 'tile';
+        var name = document.createElement('div'); name.className = 'name'; name.textContent = m.label;
+        var big = document.createElement('div'); big.className = 'big'; big.textContent = fmt(cur);
+        var vs = document.createElement('div'); vs.className = 'vs';
+        vs.textContent = s.compare + (s.cutoff < 365 ? ' through ' + dayLabel(s.cutoff) : '') + ': ' + fmt(prev);
+        tile.appendChild(name); tile.appendChild(big); tile.appendChild(vs); tile.appendChild(changeChip(cur, prev));
+        tiles.appendChild(tile);
+      });
+      body.appendChild(tiles);
+
+      // Charts
+      var grid = document.createElement('div');
+      grid.className = 'charts';
+      body.appendChild(grid);
+      DATA.metrics.forEach(function (m) {
+        var mode = modes[m.label] || 'running';
+        var card = document.createElement('div'); card.className = 'card';
+        var head = document.createElement('div'); head.className = 'card-head';
+        var h2 = document.createElement('h2'); h2.textContent = m.label;
+        var toggle = document.createElement('div'); toggle.className = 'toggle';
+        [['running', 'Running total'], ['monthly', 'By month']].forEach(function (opt) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.textContent = opt[1];
+          b.setAttribute('aria-pressed', String(mode === opt[0]));
+          b.onclick = function () { modes[m.label] = opt[0]; render(); };
+          toggle.appendChild(b);
+        });
+        head.appendChild(h2); head.appendChild(toggle);
+        var box = document.createElement('div'); box.className = 'canvas-box';
+        var canvas = document.createElement('canvas'); box.appendChild(canvas);
+        card.appendChild(head); card.appendChild(box);
+        grid.appendChild(card);
+        charts.push(drawChart(canvas, m, s, mode));
+      });
+    }
+
+    function drawChart(canvas, m, s, mode) {
+      var cur = daily(m, s.campus, s.year);
+      var cmp = daily(m, s.campus, s.compare);
+      var labels, curData, cmpData, type;
+
+      if (mode === 'monthly') {
+        type = 'bar';
+        labels = MONTHS;
+        curData = monthly(cur, s.cutoff);
+        cmpData = monthly(cmp, 365);
+      } else {
+        type = 'line';
+        labels = [];
+        for (var i = 0; i < 366; i++) labels.push(dayLabel(i));
+        curData = running(cur, s.cutoff);
+        cmpData = running(cmp, 365);
+      }
+
+      var line = type === 'line';
+      return new Chart(canvas, {
+        type: type,
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: String(s.compare),
+              data: cmpData,
+              borderColor: COLOR_COMPARE,
+              backgroundColor: line ? COLOR_COMPARE : 'rgba(0,0,0,0.18)',
+              borderWidth: line ? 2 : 0,
+              borderDash: line ? [6, 4] : [],
+              pointRadius: 0,
+              tension: 0.15,
+            },
+            {
+              label: String(s.year),
+              data: curData,
+              borderColor: COLOR_PRIMARY,
+              backgroundColor: line ? 'rgba(117,161,184,0.15)' : COLOR_PRIMARY,
+              borderWidth: line ? 3 : 0,
+              fill: line ? 'origin' : false,
+              pointRadius: 0,
+              tension: 0.15,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { font: { family: 'Lato', size: 12 }, color: '#333', boxWidth: 14 } },
+            tooltip: { titleFont: { family: 'Lato' }, bodyFont: { family: 'Lato' } },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: line
+                ? {
+                    font: { family: 'Lato' }, color: '#333', autoSkip: false, maxRotation: 0,
+                    callback: function (v, i) { var mi = MONTH_START.indexOf(i); return mi > -1 && mi < 12 ? MONTHS[mi] : null; },
+                  }
+                : { font: { family: 'Lato' }, color: '#333' },
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: '#EEEEEE' },
+              ticks: { font: { family: 'Lato' }, color: '#333', precision: 0 },
+            },
+          },
+        },
+      });
+    }
+  </script>
+</body>
+</html>
