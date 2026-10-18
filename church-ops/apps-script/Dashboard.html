@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Count On It dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#16191D;--muted:#4A5159;--soft:#5A6169;--line:#D9DCD8;--ground:#F4F5F3;--card:#FFFFFF;--blue:#1F5FAD;--blue-soft:#9DB8DC;--blue-tint:#E3ECF7;--orange:#A1460A;--gray:#A3A8A2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px;line-height:1.45}
+.wrap{max-width:1240px;margin:0 auto;padding:28px 16px 48px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--soft)}
+h1{margin:4px 0 0;font-size:28px;line-height:1.2}
+h2{margin:0;font-size:18px}
+.score{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;min-width:260px;display:flex;flex-direction:column;gap:8px}
+.score .big{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;white-space:nowrap}
+.bar{height:8px;border-radius:4px;background:#E6E8E4;overflow:hidden}
+.bar>div{height:8px;background:var(--blue);border-radius:4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls label{font-size:13px;color:var(--soft);margin-right:4px}
+select,button.chip{font:inherit;font-size:14px;min-height:40px;padding:0 14px;border-radius:20px;border:1px solid #B9BEB8;background:var(--card);color:var(--ink);cursor:pointer}
+button.chip[aria-pressed="true"]{background:var(--blue);border-color:var(--blue);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;min-height:178px;display:flex;flex-direction:column;gap:6px}
+.tile .name{font-size:14px;font-weight:600;color:#3A4047}
+.tile .value{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;line-height:1.1}
+.tile .delta{font-size:13px;color:var(--muted)}
+.tile .split{font-size:12px;color:var(--soft)}
+.tile .feeds{font-size:12px;color:var(--blue);font-weight:500}
+.spark{display:flex;align-items:flex-end;gap:3px;height:30px;margin-top:auto}
+.spark div{flex:1 1 0;background:var(--blue-soft);border-radius:2px;min-height:2px}
+.spark div.empty{background:#ECEEEA}
+.tile.blank{background:#F9F9F7;border:2px dashed #C9CDC7;padding:15px 17px}
+.tile.blank .value{color:var(--gray)}
+.tile.blank .lost{font-size:13px;color:var(--orange);font-weight:500}
+.tile.blank .fix{font-size:12px;color:var(--soft);margin-top:auto}
+.tile.waiting{border-style:dashed}
+.pill{display:inline-block;align-self:flex-start;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--blue-tint);color:#163F73}
+.panels{display:flex;flex-wrap:wrap;gap:16px}
+.panel{flex:1 1 380px;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-direction:column;gap:4px}
+.row .top{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.row .top span:last-child{color:var(--soft);font-family:'IBM Plex Mono',monospace;font-size:13px;white-space:nowrap}
+.empty-note{color:var(--soft);font-size:14px}
+.err{background:#FADCCB;color:#8A3708;padding:12px 16px;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Count On It · weekly dashboard</div>
+      <h1 id="title">Loading…</h1>
+      <div class="empty-note" id="weekLabel"></div>
+    </div>
+    <div class="score">
+      <div><span class="big" id="scoreBig">–</span> <span class="empty-note">numbers you can count on</span></div>
+      <div class="bar"><div id="scoreBar" style="width:0"></div></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <label for="segment">Show</label>
+    <select id="segment"></select>
+    <span style="width:8px"></span>
+    <div class="controls" id="cats" role="group" aria-label="Category"></div>
+  </div>
+
+  <div class="grid" id="tiles"></div>
+
+  <div class="panels">
+    <section class="panel">
+      <h2>Planning Center health</h2>
+      <div id="audit"></div>
+    </section>
+    <section class="panel">
+      <h2>Hours logged</h2>
+      <div id="hours"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+var DATA = null;
+var STATE = { segment: 'All', category: 'All' };
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function fmt(v, unit) {
+  if (v == null || isNaN(v)) return '—';
+  if (unit === 'percent') return Math.round(v) + '%';
+  if (unit === 'dollars') return v >= 1000 ? '$' + (v / 1000).toFixed(v >= 100000 ? 0 : 1) + 'k' : '$' + Math.round(v);
+  return Math.round(v).toLocaleString();
+}
+
+// Combine the chosen segments week by week. Percents average, everything else adds.
+function series(tile, segment) {
+  var keys = Object.keys(tile.bySegment);
+  var chosen = segment === 'All' ? keys : keys.filter(function (k) { return k === segment; });
+  var churchWideOnly = segment !== 'All' && chosen.length === 0 && tile.bySegment.All;
+  if (churchWideOnly) chosen = ['All'];
+  var out = DATA.weeks.map(function (_, i) {
+    var vals = chosen.map(function (k) { return tile.bySegment[k][i]; }).filter(function (v) { return v != null; });
+    if (!vals.length) return null;
+    var sum = vals.reduce(function (a, b) { return a + b; }, 0);
+    return tile.unit === 'percent' ? sum / vals.length : sum;
+  });
+  return { values: out, churchWideOnly: churchWideOnly };
+}
+
+function renderTile(t) {
+  if (!t.tracked) {
+    return '<div class="tile blank">' +
+      '<div class="name">' + esc(t.name) + '</div>' +
+      '<div class="value">No data</div>' +
+      '<div class="lost">Not tracked yet, so nobody gets: ' + esc(t.flowsTo) + '</div>' +
+      '<div class="fix">To fix: ' + esc(t.owner) + ' records it in ' + esc(t.recordedIn) + '.' + (t.deadline ? ' Due: ' + esc(t.deadline) + '.' : '') + '</div>' +
+      '</div>';
+  }
+  var s = series(t, STATE.segment);
+  var vals = s.values;
+  var last = vals.length ? vals[vals.length - 1] : null;
+  var prev = vals.length > 1 ? vals[vals.length - 2] : null;
+  if (last == null) {
+    return '<div class="tile waiting">' +
+      '<div class="name">' + esc(t.name) + '</div>' +
+      (t.status === 'Partial' ? '<span class="pill">Partial</span>' : '') +
+      '<div class="value" style="color:var(--gray)">Waiting</div>' +
+      '<div class="delta">Marked ' + esc(t.status) + ', but no number this week yet.</div>' +
+      '<div class="fix" style="font-size:12px;color:var(--soft);margin-top:auto">Owner: ' + esc(t.owner) + (t.deadline ? ' · due ' + esc(t.deadline) : '') + '</div>' +
+      '</div>';
+  }
+  var delta = '';
+  if (prev != null && prev !== 0) {
+    var pct = (last - prev) / prev * 100;
+    delta = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% vs. last week';
+  }
+  // Scale between the lowest and highest week so week-to-week change is visible.
+  var present = vals.filter(function (v) { return v != null; });
+  var max = Math.max.apply(null, present);
+  var min = Math.min.apply(null, present);
+  var bars = vals.map(function (v) {
+    if (v == null) return '<div class="empty" style="height:2px"></div>';
+    var h = max === min ? 18 : 6 + Math.round((v - min) / (max - min) * 24);
+    return '<div style="height:' + h + 'px"></div>';
+  }).join('');
+  var split = '';
+  if (STATE.segment === 'All') {
+    var segs = Object.keys(t.bySegment).filter(function (k) { return k !== 'All'; });
+    if (segs.length > 1) {
+      split = segs.map(function (k) {
+        var arr = t.bySegment[k];
+        return esc(k) + ' ' + fmt(arr[arr.length - 1], t.unit);
+      }).join(' · ');
+    }
+  } else if (s.churchWideOnly) {
+    split = 'Church-wide number only';
+  }
+  return '<div class="tile">' +
+    '<div class="name">' + esc(t.name) + '</div>' +
+    (t.status === 'Partial' ? '<span class="pill">Partial</span>' : '') +
+    '<div class="value">' + fmt(last, t.unit) + '</div>' +
+    '<div class="delta">' + esc(delta) + '</div>' +
+    (split ? '<div class="split">' + split + '</div>' : '') +
+    '<div class="spark" aria-hidden="true">' + bars + '</div>' +
+    '<div class="feeds">Feeds: ' + esc(t.flowsTo) + '</div>' +
+    '</div>';
+}
+
+function render() {
+  document.getElementById('title').textContent = DATA.churchName;
+  var lastWeek = DATA.weeks[DATA.weeks.length - 1];
+  document.getElementById('weekLabel').textContent = lastWeek ? 'Week of ' + lastWeek : 'No weekly numbers yet';
+  var r = DATA.readiness;
+  document.getElementById('scoreBig').textContent = r.tracked + ' of ' + r.total;
+  document.getElementById('scoreBar').style.width = (r.total ? Math.round(r.tracked / r.total * 100) : 0) + '%';
+
+  var tiles = DATA.tiles.filter(function (t) { return STATE.category === 'All' || t.category === STATE.category; });
+  tiles.sort(function (a, b) { return (b.tracked ? 1 : 0) - (a.tracked ? 1 : 0); });
+  document.getElementById('tiles').innerHTML = tiles.map(renderTile).join('');
+
+  document.getElementById('audit').innerHTML = DATA.audit.length ? DATA.audit.map(function (a) {
+    return '<div class="row"><div class="top"><span>' + esc(a.area) + '</span><span>' +
+      a.baseline.toLocaleString() + ' → ' + a.current.toLocaleString() + ' issues</span></div>' +
+      '<div class="bar"><div style="width:' + Math.round(a.progress * 100) + '%"></div></div></div>';
+  }).join('') : '<div class="empty-note">Fill in Baseline and Current on the Health Audit tab.</div>';
+
+  var areas = Object.keys(DATA.hours.byArea).sort(function (a, b) { return DATA.hours.byArea[b] - DATA.hours.byArea[a]; });
+  var maxH = areas.length ? DATA.hours.byArea[areas[0]] : 1;
+  document.getElementById('hours').innerHTML = areas.length
+    ? '<div class="row"><div class="top"><span><b>Total</b></span><span>' + DATA.hours.total + ' hrs</span></div></div>' +
+      areas.map(function (k) {
+        return '<div class="row"><div class="top"><span>' + esc(k) + '</span><span>' + DATA.hours.byArea[k] + ' hrs</span></div>' +
+          '<div class="bar"><div style="width:' + Math.round(DATA.hours.byArea[k] / maxH * 100) + '%"></div></div></div>';
+      }).join('')
+    : '<div class="empty-note">Log hours on the Hours Log tab to see what the work really takes.</div>';
+}
+
+function buildControls() {
+  var sel = document.getElementById('segment');
+  sel.innerHTML = ['All'].concat(DATA.segments.filter(function (s) { return s !== 'All'; })).map(function (s) {
+    return '<option value="' + esc(s) + '">' + (s === 'All' ? 'All campuses' : esc(s)) + '</option>';
+  }).join('');
+  sel.onchange = function () { STATE.segment = sel.value; render(); };
+
+  var cats = ['All'];
+  DATA.tiles.forEach(function (t) { if (cats.indexOf(t.category) === -1) cats.push(t.category); });
+  var box = document.getElementById('cats');
+  box.innerHTML = cats.map(function (c) {
+    return '<button type="button" class="chip" data-cat="' + esc(c) + '" aria-pressed="' + (c === STATE.category) + '">' + esc(c) + '</button>';
+  }).join('');
+  box.onclick = function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    STATE.category = b.getAttribute('data-cat');
+    Array.prototype.forEach.call(box.children, function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    render();
+  };
+}
+
+function load(data) {
+  DATA = data;
+  buildControls();
+  render();
+}
+
+function fail(err) {
+  document.getElementById('tiles').innerHTML = '<div class="err">Could not load the sheet: ' + esc(err && err.message || err) + '. Run "Set up this sheet" from the Count On It menu first.</div>';
+}
+
+if (window.google && google.script && google.script.run) {
+  google.script.run.withSuccessHandler(load).withFailureHandler(fail).getDashboardData();
+} else if (window.SAMPLE_DATA) {
+  load(window.SAMPLE_DATA);
+}
+</script>
+</body>
+</html>
