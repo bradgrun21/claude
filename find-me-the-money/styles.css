@@ -176,3 +176,29 @@ a.outline { display: flex; }
 .stats b { display: block; font-family: var(--display); font-weight: 300; font-size: 26px; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--sun-ink); line-height: 1.1; }
 .stats span { font-size: 12px; color: var(--muted); }
 .lime .stats b, .lime .stats span { color: var(--sun-deep); }
+
+/* ---------- tabs, challenges, milestones, sharing ---------- */
+body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0px)); }
+.tabbar { position: fixed; z-index: 20; left: 50%; transform: translateX(-50%); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: min(400px, calc(100% - 24px));
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 6px; border-radius: 26px;
+  background: rgba(255,255,255,.72); border: 1px solid var(--edge); box-shadow: var(--glass-shadow), 0 12px 30px rgba(30,62,66,.14);
+  -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); }
+.tabbar button { position: relative; border: 0; background: transparent; border-radius: 20px; min-height: 54px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12px; font-weight: 600; color: var(--faint); }
+.tabbar button.on { background: rgba(42,107,102,.12); color: var(--green); }
+.badge-dot { position: absolute; top: 8px; right: calc(50% - 18px); width: 9px; height: 9px; border-radius: 5px; background: #F08A5D; box-shadow: 0 0 0 2px #fff; }
+.dots { display: flex; flex-wrap: wrap; gap: 8px; }
+.dot { width: 38px; height: 38px; border-radius: 19px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--faint);
+  border: 1.5px solid rgba(27,46,45,.15); background: rgba(255,255,255,.5); padding: 0; }
+.dot.today { border-color: var(--green); color: var(--green); }
+.dot.on { background: var(--sun); border-color: transparent; color: #fff; }
+.dot.future { opacity: .45; }
+.medal-tile { text-align: left; font: inherit; color: var(--ink); gap: 6px; }
+.medal-tile b { font-size: 16px; font-weight: 600; }
+.medal-tile.locked { opacity: .8; }
+.medal-tile.locked b { color: var(--muted); }
+.medal { width: 44px; height: 44px; border-radius: 22px; display: flex; align-items: center; justify-content: center; background: rgba(27,46,45,.06); color: var(--faint); }
+.medal.on { background: var(--sun); color: #fff; box-shadow: 0 6px 16px rgba(255,159,122,.4); }
+.sharewrap { border-radius: 24px; overflow: hidden; box-shadow: 0 18px 44px rgba(30,62,66,.2); aspect-ratio: 4 / 5; max-width: 100%; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,.4); }
+.sharewrap img { display: block; width: 100%; height: auto; }
+.sharebtn { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.75); color: var(--sun-deep); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.sharebtn.ghost { background: transparent; }

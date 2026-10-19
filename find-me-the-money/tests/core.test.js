@@ -151,4 +151,32 @@ test('Wins: debt paid down and money saved since the last check-in', () => {
   assert.strictEqual(w.debtPaid, 470); assert.strictEqual(w.saved, 280);
 });
 
+// ---------- challenges and milestones ----------
+const day = (m, d) => new Date(2026, m - 1, d);
+test('Daily challenge: done after all 7 days are marked, missed if the window passes', () => {
+  const marks = [...Array(7)].map((_, i) => C.isoDay(C.addDays(day(10, 19), i)));
+  assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks }, day(10, 25)).state, 'done');
+  const half = C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks: marks.slice(0, 3) }, day(10, 21));
+  assert.strictEqual(half.state, 'active'); assert.strictEqual(half.label, '3 of 7 days'); assert.strictEqual(half.dots.length, 7);
+  assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks: marks.slice(0, 3) }, day(10, 28)).state, 'missed');
+});
+test('Clean challenge counts the days and reports a slip honestly', () => {
+  assert.strictEqual(C.challengeStatus({ id: 'nofees30', start: '2026-10-01' }, day(10, 11)).label, 'Day 11 of 30');
+  assert.strictEqual(C.challengeStatus({ id: 'nofees30', start: '2026-10-01' }, day(11, 1)).state, 'done');
+  const s = C.challengeStatus({ id: 'nofees30', start: '2026-10-01', slipped: '2026-10-13' }, day(10, 14));
+  assert.strictEqual(s.state, 'slipped'); assert.strictEqual(s.label, '12 clean days');
+});
+test('Count, amount, once and cushion challenges', () => {
+  assert.strictEqual(C.challengeStatus({ id: 'sell3', start: '2026-10-01', marks: ['a', 'b', 'c'] }, day(10, 5)).state, 'done');
+  assert.strictEqual(C.challengeStatus({ id: 'found100', start: '2026-10-01', amount: 60 }, day(10, 5)).label, '$60 of $100');
+  assert.strictEqual(C.challengeStatus({ id: 'cancel1', start: '2026-10-01', done: '2026-10-02' }, day(10, 3)).state, 'done');
+  assert.strictEqual(C.challengeStatus({ id: 'sprint30', start: '2026-10-01' }, day(10, 5), { savings: 1000 }).state, 'done');
+});
+test('Milestones: ladders unlock at their thresholds and report progress', () => {
+  const f = { setupDone: true, sortedAll: false, checkins: 2, streakBest: 3, savings: 400, debtsPaid: 1, debtPaidTotal: 850, daysBack: 14, debtFree: false, safetyNet: false, goalsFunded: 0, challengesDone: 1 };
+  const earned = C.BADGES.filter(b => b.test(f)).map(b => b.id);
+  assert.deepStrictEqual(earned, ['plan', 'checkin-1', 'streak-3', 'saved-250', 'payoff-1', 'paid-500', 'days-7', 'challenge-1']);
+  assert.strictEqual(C.badgeProgress(C.BADGES.find(b => b.id === 'cushion'), f).label, '$400 of $1,000');
+});
+
 console.log(`\n${passed} tests passed`);

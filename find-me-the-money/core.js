@@ -324,7 +324,101 @@
   // the date everything counts down to: debt-free while there's debt, then the full safety net
   function freedomDate(o) { return o.target ? o.debtFree : o.safetyNet; }
 
+  // ---------- challenges ----------
+  // kinds: daily = tap each day; count = reach a number within the window; clean = we count the days, you
+  // report a slip; once = one action; amount = add dollars toward a target; cushion = reach $1,000 saved
+  var CHALLENGES = [
+    { id: 'cook7', title: 'Cook at Home 7', kind: 'daily', days: 7, tag: 'Food', blurb: 'Seven days in a row with no restaurants or delivery. Groceries only.', share: 'Seven days of cooking at home.' },
+    { id: 'nodelivery7', title: 'No-Delivery Week', kind: 'daily', days: 7, tag: 'Food', blurb: 'No DoorDash, Uber Eats or takeout for seven days.', share: 'A whole week with zero delivery.' },
+    { id: 'coffee14', title: 'Coffee at Home 14', kind: 'daily', days: 14, tag: 'Food', blurb: 'Make your coffee at home for two weeks.', share: 'Two weeks of home-brewed coffee.' },
+    { id: 'nospend3', title: 'No-Spend Weekend', kind: 'daily', days: 3, tag: 'Spending', blurb: 'Friday to Sunday: spend only on bills and true essentials.', share: 'A whole weekend without spending.' },
+    { id: 'lunch10', title: 'Pack Lunch 10', kind: 'count', target: 10, days: 14, tag: 'Food', blurb: 'Pack your lunch 10 times in the next two weeks.', share: 'Ten packed lunches in two weeks.' },
+    { id: 'nofees30', title: '30 Days, No Late Fees', kind: 'clean', days: 30, tag: 'Bills', blurb: 'Every bill on time for 30 days. We count the days; tell us if a fee happens.', share: 'Thirty days without a single late fee.' },
+    { id: 'nooverdraft30', title: '30 Days, No Overdraft', kind: 'clean', days: 30, tag: 'Bills', blurb: 'Keep your checking account above $0 for 30 days.', share: 'Thirty days with zero overdrafts.' },
+    { id: 'nocard30', title: '30 Days, No New Card Debt', kind: 'clean', days: 30, tag: 'Debt', blurb: 'Use cash or debit. No new charges on a card you’re paying off.', share: 'Thirty days without adding to my card debt.' },
+    { id: 'sprint30', title: 'Cushion Sprint', kind: 'cushion', days: 30, tag: 'Savings', blurb: 'Reach $1,000 saved in 30 days. Sell something, pick up a shift, pause a want.', share: 'I sprinted to my $1,000 emergency cushion.' },
+    { id: 'sell3', title: 'Sell 3 Things', kind: 'count', target: 3, days: 30, tag: 'Income', blurb: 'Clothes, gear, that thing in the closet. Sell three things this month.', share: 'Sold three things and put the money to work.' },
+    { id: 'found100', title: 'Find $100', kind: 'amount', target: 100, days: 30, tag: 'Income', blurb: 'Find $100 this month: sell, skip, cancel or side gig. Add it as you go.', share: 'I found an extra $100 this month.' },
+    { id: 'cancel1', title: 'Cancel One Subscription', kind: 'once', days: 7, tag: 'Spending', blurb: 'Pick one subscription you don’t love and cancel it this week.', share: 'Cancelled a subscription I didn’t need.' },
+    { id: 'boost50', title: 'Snowball Boost', kind: 'once', days: 14, tag: 'Debt', blurb: 'Put an extra $50 on your smallest debt before your next payday.', share: 'Threw an extra $50 at my snowball.' }
+  ];
+  function challengeDef(id) { return CHALLENGES.filter(function (c) { return c.id === id; })[0]; }
+  // c = { id, start, marks: [iso], amount, slipped, done }; facts gives savings for the Cushion Sprint
+  function challengeStatus(c, today, facts) {
+    var def = challengeDef(c.id), dayN = daysBetween(fromIso(c.start), today) + 1, marks = c.marks || [], todayIso = isoDay(today);
+    var st = { def: def, dayN: dayN, daysLeft: Math.max(0, def.days - dayN + 1), state: 'active', progress: 0, label: '', canMark: false, marked: marks.indexOf(todayIso) >= 0 };
+    if (def.kind === 'daily') {
+      st.progress = marks.length / def.days; st.label = marks.length + ' of ' + def.days + ' days';
+      st.canMark = dayN <= def.days && !st.marked;
+      if (marks.length >= def.days) st.state = 'done'; else if (dayN > def.days + 1) st.state = 'missed';
+      st.dots = [];
+      for (var i = 0; i < def.days; i++) { var di = isoDay(addDays(fromIso(c.start), i)); st.dots.push({ iso: di, done: marks.indexOf(di) >= 0, today: di === todayIso, future: daysBetween(today, fromIso(di)) > 0 }); }
+    } else if (def.kind === 'count') {
+      st.progress = marks.length / def.target; st.label = marks.length + ' of ' + def.target;
+      st.canMark = dayN <= def.days;
+      if (marks.length >= def.target) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
+    } else if (def.kind === 'clean') {
+      var clean = c.slipped ? daysBetween(fromIso(c.start), fromIso(c.slipped)) : Math.min(def.days, dayN - 1);
+      st.progress = clean / def.days; st.label = 'Day ' + Math.min(dayN, def.days) + ' of ' + def.days;
+      if (c.slipped) { st.state = 'slipped'; st.label = clean + ' clean ' + (clean === 1 ? 'day' : 'days'); }
+      else if (dayN > def.days) st.state = 'done';
+    } else if (def.kind === 'cushion') {
+      var sv = facts ? facts.savings : 0;
+      st.progress = Math.min(1, sv / CUSHION); st.label = '$' + Math.round(sv).toLocaleString('en-US') + ' of $1,000';
+      if (sv >= CUSHION) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
+    } else if (def.kind === 'amount') {
+      var amt = c.amount || 0;
+      st.progress = Math.min(1, amt / def.target); st.label = '$' + Math.round(amt) + ' of $' + def.target; st.canMark = dayN <= def.days;
+      if (amt >= def.target) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
+    } else {
+      st.progress = c.done ? 1 : 0; st.label = c.done ? 'Done' : st.daysLeft + (st.daysLeft === 1 ? ' day' : ' days') + ' left'; st.canMark = dayN <= def.days;
+      if (c.done) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
+    }
+    st.progress = Math.max(0, Math.min(1, st.progress));
+    return st;
+  }
+
+  // ---------- milestones ----------
+  function money0(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+  function ladder(id, title, desc, key, n, fmt) {
+    return { id: id, title: title, desc: desc, test: function (f) { return f[key] >= n; }, prog: function (f) { return [Math.min(f[key], n), n, fmt]; } };
+  }
+  var BADGES = [
+    { id: 'plan', title: 'Plan Built', desc: 'Every dollar of my paycheck has a job.', test: function (f) { return f.setupDone; } },
+    { id: 'sorted', title: 'Eyes Wide Open', desc: 'Sorted every store into needs and wants.', test: function (f) { return f.sortedAll; } },
+    ladder('checkin-1', 'First Check-In', 'Checked in on payday for the first time.', 'checkins', 1),
+    ladder('streak-3', 'Habit Forming', '3 paydays in a row.', 'streakBest', 3),
+    ladder('streak-6', 'Paying Myself First', '6 paydays in a row.', 'streakBest', 6),
+    ladder('streak-13', 'Half-Year Hero', '13 paydays in a row.', 'streakBest', 13),
+    ladder('streak-26', 'Year of Showing Up', '26 paydays in a row.', 'streakBest', 26),
+    ladder('saved-250', 'First $250', '$250 in emergency savings.', 'savings', 250, 'money'),
+    ladder('saved-500', 'Halfway Cushion', '$500 in emergency savings.', 'savings', 500, 'money'),
+    ladder('cushion', 'Starter Cushion', '$1,000 saved. Emergencies don’t go on a card anymore.', 'savings', 1000, 'money'),
+    ladder('payoff-1', 'First Debt Down', 'Paid off my first debt.', 'debtsPaid', 1),
+    ladder('payoff-3', 'Snowball Rolling', 'Paid off 3 debts.', 'debtsPaid', 3),
+    ladder('paid-500', '$500 Paid Down', '$500 of debt gone since I started.', 'debtPaidTotal', 500, 'money'),
+    ladder('paid-1000', '$1,000 Paid Down', '$1,000 of debt gone since I started.', 'debtPaidTotal', 1000, 'money'),
+    ladder('paid-5000', '$5,000 Paid Down', '$5,000 of debt gone since I started.', 'debtPaidTotal', 5000, 'money'),
+    ladder('paid-10000', '$10,000 Paid Down', '$10,000 of debt gone since I started.', 'debtPaidTotal', 10000, 'money'),
+    ladder('days-7', 'A Week Back', 'Pulled my freedom date 7 days closer.', 'daysBack', 7),
+    ladder('days-30', 'A Month Back', 'Pulled my freedom date 30 days closer.', 'daysBack', 30),
+    ladder('days-100', '100 Days Back', 'Pulled my freedom date 100 days closer.', 'daysBack', 100),
+    ladder('days-365', 'A Year Back', 'Pulled my freedom date a whole year closer.', 'daysBack', 365),
+    { id: 'debt-free', title: 'Debt-Free', desc: 'Every debt paid off. Every one.', test: function (f) { return f.debtFree; } },
+    { id: 'safety-net', title: 'Full Safety Net', desc: '3 months of expenses saved.', test: function (f) { return f.safetyNet; } },
+    ladder('goal-1', 'Dream Funded', 'Fully funded a goal without a credit card.', 'goalsFunded', 1),
+    ladder('challenge-1', 'Challenger', 'Finished my first challenge.', 'challengesDone', 1),
+    ladder('challenge-5', 'Five Challenges', 'Finished 5 challenges.', 'challengesDone', 5),
+    ladder('challenge-10', 'Ten Challenges', 'Finished 10 challenges.', 'challengesDone', 10)
+  ];
+  function badgeProgress(b, f) {
+    if (!b.prog) return null;
+    var p = b.prog(f), fmt = p[2] === 'money' ? money0 : function (n) { return String(Math.round(n)); };
+    return { ratio: p[1] ? p[0] / p[1] : 0, label: fmt(p[0]) + ' of ' + fmt(p[1]) };
+  }
+
   var api = { CUSHION: CUSHION, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
+    CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
     nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
     parseCSV: parseCSV, toNumber: toNumber, parseDate: parseDate, readTransactions: readTransactions, cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
     plan: plan, perCheck: perCheck, stateFrom: stateFrom, smallest: smallest, paycheck: paycheck, paychecksUntil: paychecksUntil, outlook: outlook };

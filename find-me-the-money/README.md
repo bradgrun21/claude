@@ -18,6 +18,12 @@ the phone and never uploaded. There is no server, no account and no database.
   that covers one missed payday; a missed payday pauses the streak (your best is kept), never shames
 - "Days stolen back": a running score of how far you've pulled your freedom date forward beyond the plan
 - Calendar reminders (.ics), backup/restore file, delete everything, privacy page
+- Challenges tab: 13 short sprints (Cook at Home 7, No-Delivery Week, 30 Days No Late Fees, Cushion Sprint,
+  Find $100, Sell 3 Things and more). Up to 3 at a time; tap off days, count, add dollars, or report a slip
+- Milestones tab: 26 small achievements (first $250 saved, first debt down, $1,000 paid down, 7 days stolen
+  back, streaks, challenges finished, debt-free...) with progress toward the next ones
+- Shareable cards: made on the phone as an image for any payoff, funded goal, streak, finished challenge or
+  milestone. A Show/Hide switch for dollar amounts, a ready caption, Share (iPhone share sheet) or Save image
 
 Not in the beta: AI statement reading, bank linking, accounts or sync, payments, App Store app.
 
@@ -38,6 +44,7 @@ Open http://localhost:8000
 `VERSION` at the top of `sw.js` (any new text) so phones pick up the new files.
 
 ## Before you send it to friends and family
+- [ ] Optional: set `shareUrl` at the top of `app.js` (your domain) so it prints on share cards
 - [ ] Set `feedbackUrl` at the top of `app.js` to a Google Form (or similar) so testers can reach you
 - [ ] Optional: turn on privacy-friendly visit counting. Create a free https://www.goatcounter.com site
       and uncomment the script tag in `index.html` with your code. It counts opens and steps like
@@ -62,6 +69,7 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 - `styles.css`: the calm "dawn glass" look with sunrise accents for wins
 - `core.js`: all the math and CSV reading (no screen code, tested)
 - `app.js`: screens and interactions
+- `share.js`: draws the shareable win cards (canvas, on the phone)
 - `privacy.html`, `manifest.webmanifest`, `sw.js` (offline), `icons/`
 
 *An educational budgeting tool, not financial, tax or investment advice.*
