@@ -340,6 +340,12 @@
     { id: 'sell3', title: 'Sell 3 Things', kind: 'count', target: 3, days: 30, tag: 'Income', blurb: 'Clothes, gear, that thing in the closet. Sell three things this month.', share: 'Sold three things and put the money to work.' },
     { id: 'found100', title: 'Find $100', kind: 'amount', target: 100, days: 30, tag: 'Income', blurb: 'Find $100 this month: sell, skip, cancel or side gig. Add it as you go.', share: 'I found an extra $100 this month.' },
     { id: 'cancel1', title: 'Cancel One Subscription', kind: 'once', days: 7, tag: 'Spending', blurb: 'Pick one subscription you don’t love and cancel it this week.', share: 'Cancelled a subscription I didn’t need.' },
+    { id: 'vintage1000', title: 'Sell $1,000 in Vintage', kind: 'earn', target: 1000, days: 60, tag: 'Earn', partner: 'resale', blurb: 'Thrift it, clean it, list it. Sell $1,000 of vintage clothes and finds in 60 days.', share: 'I made $1,000 selling vintage.', tips: 'Popular places to sell: Poshmark, Depop, eBay, Facebook Marketplace.' },
+    { id: 'drive500', title: 'Drive and Earn $500', kind: 'earn', target: 500, days: 30, tag: 'Earn', partner: 'rideshare', blurb: 'Drive rideshare on your own schedule and earn $500 this month.', share: 'I drove my way to an extra $500.', tips: 'Rideshare apps need a qualifying car, license and background check. Track your miles for taxes.' },
+    { id: 'deliver300', title: 'Deliver for $300', kind: 'earn', target: 300, days: 30, tag: 'Earn', partner: 'delivery', blurb: 'Deliver food or groceries in your spare hours and earn $300.', share: 'I delivered my way to an extra $300.', tips: 'Delivery apps often work with a car, bike or scooter, depending on your city.' },
+    { id: 'sit300', title: 'Pet-Sit or Babysit $300', kind: 'earn', target: 300, days: 30, tag: 'Earn', partner: 'care', blurb: 'Watch pets or kids for friends, neighbors or through an app. Earn $300.', share: 'I earned $300 pet-sitting and babysitting.', tips: 'Start with people you know. Friends of friends are the easiest first clients.' },
+    { id: 'shifts2', title: 'Pick Up 2 Extra Shifts', kind: 'earn', target: 200, days: 30, tag: 'Earn', blurb: 'Ask for two extra shifts at work this month and log what they pay.', share: 'I picked up extra shifts and put the money to work.', tips: 'Ask your manager early in the week, when the schedule is still being set.' },
+    { id: 'market5', title: 'Sell 5 Things on Marketplace', kind: 'count', target: 5, days: 30, tag: 'Earn', blurb: 'Furniture, electronics, gear you don\u2019t use. Sell five things this month.', share: 'Sold five things and put the money to work.' },
     { id: 'boost50', title: 'Snowball Boost', kind: 'once', days: 14, tag: 'Debt', blurb: 'Put an extra $50 on your smallest debt before your next payday.', share: 'Threw an extra $50 at my snowball.' }
   ];
   function challengeDef(id) { return CHALLENGES.filter(function (c) { return c.id === id; })[0]; }
@@ -366,6 +372,11 @@
       var sv = facts ? facts.savings : 0;
       st.progress = Math.min(1, sv / CUSHION); st.label = '$' + Math.round(sv).toLocaleString('en-US') + ' of $1,000';
       if (sv >= CUSHION) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
+    } else if (def.kind === 'earn') {
+      var earned = (c.log || []).reduce(function (t, x) { return t + (+x.amt || 0); }, 0);
+      st.earned = earned; st.progress = Math.min(1, earned / def.target); st.canMark = dayN <= def.days;
+      st.label = '$' + Math.round(earned).toLocaleString('en-US') + ' of $' + def.target.toLocaleString('en-US');
+      if (earned >= def.target) st.state = 'done'; else if (dayN > def.days) st.state = 'missed';
     } else if (def.kind === 'amount') {
       var amt = c.amount || 0;
       st.progress = Math.min(1, amt / def.target); st.label = '$' + Math.round(amt) + ' of $' + def.target; st.canMark = dayN <= def.days;
@@ -407,6 +418,10 @@
     { id: 'debt-free', title: 'Debt-Free', desc: 'Every debt paid off. Every one.', test: function (f) { return f.debtFree; } },
     { id: 'safety-net', title: 'Full Safety Net', desc: '3 months of expenses saved.', test: function (f) { return f.safetyNet; } },
     ladder('goal-1', 'Dream Funded', 'Fully funded a goal without a credit card.', 'goalsFunded', 1),
+    ladder('earned-500', 'Side Income $500', 'Earned $500 extra and put it to work.', 'earned', 500, 'money'),
+    ladder('earned-1000', 'Side Income $1,000', 'Earned $1,000 extra and put it to work.', 'earned', 1000, 'money'),
+    ladder('plan-1', 'Plan Finisher', 'Finished a reading plan, day by day.', 'plansDone', 1),
+    ladder('storyteller', 'Storyteller', 'Shared a win to encourage someone else.', 'shares', 1),
     ladder('challenge-1', 'Challenger', 'Finished my first challenge.', 'challengesDone', 1),
     ladder('challenge-5', 'Five Challenges', 'Finished 5 challenges.', 'challengesDone', 5),
     ladder('challenge-10', 'Ten Challenges', 'Finished 10 challenges.', 'challengesDone', 10)
@@ -417,7 +432,31 @@
     return { ratio: p[1] ? p[0] / p[1] : 0, label: fmt(p[0]) + ' of ' + fmt(p[1]) };
   }
 
-  var api = { CUSHION: CUSHION, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
+  // ---------- reading plans ----------
+  // one short read and one action a day; a new day opens each calendar day, and you can always catch up
+  var PLANS = [{
+    id: 'reset7', title: '7-Day Money Reset', blurb: 'One short read and one small action a day. By day 7 you have a plan, a cushion in motion and a payday habit.', share: 'I finished the 7-Day Money Reset.',
+    days: [
+      { title: 'Find your number', read: ['Most of us don\u2019t have a spending problem as much as a seeing problem. Money leaves in small, quiet amounts, and we never add it up.', 'Today you only have to look. What comes in each paycheck, and what already has a job? No judgment. You can\u2019t change what you can\u2019t see.', 'Open your Payday Plan and read every line. Notice what surprises you.'], action: ['See my Payday Plan', 'plan'] },
+      { title: 'Sort your spending', read: ['A need keeps you housed, fed, healthy and getting to work. A want makes life more fun. Both are fine. Problems start when wants hide inside needs.', 'Today you\u2019ll sort your own spending, store by store. You decide what\u2019s a need. Be honest, not harsh.'], action: ['Sort my spending', 'spend'] },
+      { title: 'Wants, on purpose', read: ['Cutting every want rarely lasts. What lasts is choosing your wants ahead of time, so the money you spend on fun is money you meant to spend.', 'Pick a monthly fun-money number you can live with. The difference between that and last month is money found.'], action: ['Set my fun money', 'fun'] },
+      { title: 'Your $1,000 cushion', read: ['The first thing to build is a small wall between you and life. A flat tire or a vet bill shouldn\u2019t go on a credit card.', 'That wall is $1,000. Not forever, just first. If you\u2019re not there yet, a short sprint gets you there faster than you think.'], action: ['Start the Cushion Sprint', 'challenges'] },
+      { title: 'Smallest debt first', read: ['List every debt, smallest balance to largest. Pay minimums on everything, then throw every extra dollar at the smallest one.', 'It isn\u2019t always the cheapest math, but it\u2019s the math people finish. Quick wins build momentum, and each paid-off payment rolls into the next.'], action: ['Check my debts', 'debts'] },
+      { title: 'Name your dream', read: ['Saying no is easier when you know what you\u2019re saying yes to. A trip, a car that runs, a Christmas without a credit card.', 'Name one goal and give it a dollar amount. We\u2019ll give it a date.'], action: ['Add a goal', 'goalnew'] },
+      { title: 'Make it a payday habit', read: ['Plans don\u2019t fail on day one. They fail on the third payday, when life gets busy.', 'Put your payday check-ins on your calendar. Two minutes, every payday: update your balances, watch your date move and celebrate the win.'], action: ['Add check-ins to my calendar', 'ics'] }
+    ]
+  }];
+  function planDef(id) { return PLANS.filter(function (p) { return p.id === id; })[0]; }
+  // p = { id, start, done: [day index] }
+  function planStatus(p, today) {
+    var def = planDef(p.id), open = Math.min(def.days.length, daysBetween(fromIso(p.start), today) + 1), done = p.done || [];
+    var next = -1;
+    for (var i = 0; i < def.days.length; i++) if (done.indexOf(i) < 0) { next = i; break; }
+    return { def: def, open: open, doneCount: done.length, next: next, state: done.length >= def.days.length ? 'done' : 'active', progress: done.length / def.days.length,
+      days: def.days.map(function (d, i) { return { title: d.title, done: done.indexOf(i) >= 0, open: i < open }; }) };
+  }
+
+  var api = { CUSHION: CUSHION, PLANS: PLANS, planDef: planDef, planStatus: planStatus, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
     CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
     nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
     parseCSV: parseCSV, toNumber: toNumber, parseDate: parseDate, readTransactions: readTransactions, cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,

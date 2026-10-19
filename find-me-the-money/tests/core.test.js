@@ -179,4 +179,16 @@ test('Milestones: ladders unlock at their thresholds and report progress', () =>
   assert.strictEqual(C.badgeProgress(C.BADGES.find(b => b.id === 'cushion'), f).label, '$400 of $1,000');
 });
 
+test('Earn challenge adds up the log and finishes at the target', () => {
+  const st = C.challengeStatus({ id: 'drive500', start: '2026-10-01', log: [{ amt: 180 }, { amt: 220.5 }] }, day(10, 10));
+  assert.strictEqual(st.label, '$401 of $500'); assert.strictEqual(st.state, 'active');
+  assert.strictEqual(C.challengeStatus({ id: 'drive500', start: '2026-10-01', log: [{ amt: 500 }] }, day(10, 10)).state, 'done');
+  assert.strictEqual(C.challengeStatus({ id: 'drive500', start: '2026-10-01', log: [{ amt: 100 }] }, day(11, 1)).state, 'missed');
+});
+test('Reading plan opens one day per calendar day, catch-up allowed', () => {
+  const st = C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0] }, day(10, 22));
+  assert.strictEqual(st.open, 4); assert.strictEqual(st.next, 1); assert.strictEqual(st.state, 'active');
+  assert.strictEqual(C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0, 1, 2, 3, 4, 5, 6] }, day(10, 30)).state, 'done');
+});
+
 console.log(`\n${passed} tests passed`);

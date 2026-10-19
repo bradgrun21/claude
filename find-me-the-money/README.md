@@ -20,6 +20,10 @@ the phone and never uploaded. There is no server, no account and no database.
 - Calendar reminders (.ics), backup/restore file, delete everything, privacy page
 - Challenges tab: 13 short sprints (Cook at Home 7, No-Delivery Week, 30 Days No Late Fees, Cushion Sprint,
   Find $100, Sell 3 Things and more). Up to 3 at a time; tap off days, count, add dollars, or report a slip
+- Earn challenges: Sell $1,000 in Vintage, Drive and Earn $500, Deliver for $300, Pet-Sit or Babysit $300,
+  2 Extra Shifts, Sell 5 Things. Log each payout, then "Put it to work": savings, the snowball debt or a goal.
+  Partner links live in `CONFIG.partners` (empty until approved; an FTC-style disclosure shows next to any link)
+- Plans tab: the 7-Day Money Reset. One short read and one action a day; a new day opens each morning; catch-up allowed
 - Milestones tab: 26 small achievements (first $250 saved, first debt down, $1,000 paid down, 7 days stolen
   back, streaks, challenges finished, debt-free...) with progress toward the next ones
 - Shareable cards: made on the phone as an image for any payoff, funded goal, streak, finished challenge or
@@ -45,6 +49,7 @@ Open http://localhost:8000
 
 ## Before you send it to friends and family
 - [ ] Optional: set `shareUrl` at the top of `app.js` (your domain) so it prints on share cards
+- [ ] Only after approval for an official affiliate/partner program (not a personal referral code), add links in `CONFIG.partners`
 - [ ] Set `feedbackUrl` at the top of `app.js` to a Google Form (or similar) so testers can reach you
 - [ ] Optional: turn on privacy-friendly visit counting. Create a free https://www.goatcounter.com site
       and uncomment the script tag in `index.html` with your code. It counts opens and steps like

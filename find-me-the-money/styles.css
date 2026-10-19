@@ -202,3 +202,10 @@ body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0p
 .sharewrap img { display: block; width: 100%; height: auto; }
 .sharebtn { min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); background: rgba(255,255,255,.75); color: var(--sun-deep); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
 .sharebtn.ghost { background: transparent; }
+.tabbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tabbar button { font-size: 11px; }
+.planrow { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; font: inherit; text-align: left; color: var(--ink); }
+.planrow:last-child { border-bottom: 0; }
+.planrow.locked { opacity: .7; }
+.planrow small { font-size: 13px; }
+.toast .sharebtn { justify-content: center; }

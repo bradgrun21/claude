@@ -7,7 +7,15 @@
   var CONFIG = {
     feedbackUrl: '',            // e.g. a Google Form link; the Feedback button hides while this is empty
     storageKey: 'fmtm.v1',
-    shareUrl: ''                // e.g. 'findmethemoney.app'; printed on share cards when set
+    shareUrl: '',               // e.g. 'findmethemoney.app'; printed on share cards when set
+    // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
+    // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
+    partners: {
+      resale: { label: 'Start selling', url: '' },
+      rideshare: { label: 'Sign up to drive', url: '' },
+      delivery: { label: 'Sign up to deliver', url: '' },
+      care: { label: 'Find pet-sitting and babysitting gigs', url: '' }
+    }
   };
 
   // ---------- small helpers ----------
@@ -42,7 +50,7 @@
       bills: [{ name: 'Rent or housing', amount: '' }, { name: 'Utilities', amount: '' }, { name: 'Phone', amount: '' }, { name: 'Insurance', amount: '' }, { name: 'Groceries', amount: '' }, { name: 'Gas & transportation', amount: '' }],
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
-      challenges: [], challengesDone: 0, badges: {}, unseen: [] };
+      challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0 };
   }
   var storageOk = true;
   function load() {
@@ -68,7 +76,7 @@
   // ---------- screen state (not saved) ----------
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
-  var TABS = [['home', 'Plan', 'home'], ['challenges', 'Challenges', 'flag'], ['milestones', 'Milestones', 'medal']];
+  var TABS = [['home', 'Home', 'home'], ['plans', 'Plans', 'book'], ['challenges', 'Challenges', 'flag'], ['milestones', 'Milestones', 'medal']];
   function render() {
     var tabbed = P.setupDone && TABS.some(function (t) { return t[0] === U.screen; });
     if (tabbed || U.screen === 'wins') refresh();
@@ -95,6 +103,7 @@
     flame: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 002.5 2.5z"/></svg>',
     home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>',
     flag: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+    book: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 21V5M8 7h7"/></svg>',
     medal: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M8.5 9.2L6 3h4l2 4 2-4h4l-2.5 6.2"/><path d="M10 14l1.5 1.5L14.5 12"/></svg>',
     share: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>'
   };
@@ -396,6 +405,12 @@
         else if (d.kind === 'count') body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chplus" data-v="' + c.uid + '">+1 \u00b7 ' + act + '</button>' : '';
         else if (d.kind === 'clean') body = U.slip === c.uid ? '<div class="grid2"><button type="button" class="outline" data-a="chslipno">Never mind</button><button type="button" class="primary danger" data-a="chslip" data-v="' + c.uid + '">Yes, it happened</button></div>'
           : '<button type="button" class="textbtn" style="align-self:flex-start;min-height:36px;padding:0" data-a="chslipask" data-v="' + c.uid + '">' + act + '</button>';
+        else if (d.kind === 'earn') {
+          var log = c.log || [];
+          body = ('<div class="rowedit" style="grid-template-columns:minmax(0,1fr) 96px auto"><input type="text" aria-label="What you earned it from" placeholder="From what?" data-earnnote="' + c.uid + '"><input type="number" inputmode="decimal" aria-label="Amount earned" placeholder="$0" data-earnamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="earnadd" data-v="' + c.uid + '">Add</button></div>') +
+            (log.length ? '<div>' + log.slice(-3).reverse().map(function (x) { return '<div class="row" style="padding:6px 0;font-size:14px"><span>' + esc(x.note || 'Earned') + ' <span style="color:var(--faint)">' + dayMonth(F.fromIso(x.date)) + '</span></span><b style="color:var(--sun-ink)">+' + money(x.amt) + '</b></div>'; }).join('') + '</div>' : '') +
+            partnerHtml(d) + '<p style="font-size:12px;color:var(--faint)">Side income is usually taxable, and many apps don\u2019t hold anything back. Set some aside for taxes and ask a tax pro how much.</p>';
+        }
         else if (d.kind === 'amount') body = '<div class="rowedit" style="grid-template-columns:minmax(0,1fr) auto"><input type="number" inputmode="decimal" aria-label="Amount found" placeholder="$ found" data-chamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="chadd" data-v="' + c.uid + '">Add</button></div>';
         else if (d.kind === 'cushion') body = '<button type="button" class="outline" style="min-height:46px" data-a="checkin">Update my savings</button>';
         else body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chonce" data-v="' + c.uid + '">' + act + '</button>' : '';
@@ -404,19 +419,53 @@
           '<button type="button" class="textbtn" style="align-self:flex-end;min-height:30px;padding:0;font-size:13px" data-a="chquit" data-v="' + c.uid + '">Stop this challenge</button></div>';
       };
       var pick = F.CHALLENGES.filter(function (d) { return activeIds.indexOf(d.id) < 0; });
-      return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + celebration(1, 'challenge') +
+      var startCard = function (d) {
+        return '<div class="card stack" style="padding:14px 18px;gap:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>' + d.title + '</b><span class="tag" style="margin:0">' + (d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + ' days') + '</span></div>' +
+          '<span style="font-size:14px;color:var(--muted)">' + d.blurb + '</span>' +
+          '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
+      };
+      var earnPick = pick.filter(function (d) { return d.tag === 'Earn'; }), restPick = pick.filter(function (d) { return d.tag !== 'Earn'; });
+      return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
         (active.length ? active.map(card).join('') : '<div class="note">' + ICON.info + '<span>No challenge running. Start one below; the 7-day ones are a great first win.</span></div>') +
-        '<h3 style="margin-top:10px">' + (active.length >= 3 ? 'Up next (finish one to start another)' : 'Start a challenge') + '</h3>' +
-        pick.map(function (d) {
-          return '<div class="card stack" style="padding:14px 18px;gap:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>' + d.title + '</b><span class="tag" style="margin:0">' + (d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + ' days') + '</span></div>' +
-            '<span style="font-size:14px;color:var(--muted)">' + d.blurb + '</span>' +
-            '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
-        }).join('') +
+        (active.length >= 3 ? '<p style="margin-top:10px">You\u2019re running 3. Finish or stop one to start another.</p>' : '') +
+        (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t. Track every dollar and put it to work.</p>' + earnPick.map(startCard).join('') : '') +
+        (restPick.length ? '<h3 style="margin-top:10px">Spend less, save more</h3>' + restPick.map(startCard).join('') : '') +
         (done.length ? '<h3 style="margin-top:10px">Finished</h3><div class="card">' + done.map(function (c) {
           var d = F.challengeDef(c.id), ok = c.ended === 'done';
           return '<div class="row"><div style="min-width:0">' + d.title + '<small>' + (ok ? 'Completed ' : c.ended === 'quit' ? 'Stopped ' : 'Ended ') + dayMonth(F.fromIso(c.endedOn)) + (c.note ? ' \u00b7 ' + esc(c.note) : '') + '</small></div>' +
             (ok ? '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="sharech" data-v="' + c.uid + '">' + ICON.share + ' Share</button>' : '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="chstart" data-v="' + c.id + '"' + (active.length >= 3 || activeIds.indexOf(c.id) >= 0 ? ' disabled' : '') + '>Try again</button>') + '</div>';
         }).join('') + '</div>' : '');
+    },
+
+    plans: function () {
+      var now = today(), list = F.PLANS.map(function (def) {
+        var run = P.plans.filter(function (p) { return p.id === def.id && !p.ended; })[0];
+        if (!run) {
+          var finished = P.plans.filter(function (p) { return p.id === def.id && p.ended === 'done'; }).length;
+          return '<div class="card stack" style="padding:16px 18px;gap:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + def.title + '</h3><span class="tag" style="margin:0">' + def.days.length + ' days</span></div>' +
+            '<span style="font-size:14px;color:var(--muted)">' + def.blurb + '</span>' + (finished ? '<span style="font-size:13px;color:var(--sun-ink)">Finished ' + plural(finished, 'time') + '</span>' : '') +
+            '<button type="button" class="primary" style="min-height:48px;margin-top:4px" data-a="planstart" data-v="' + def.id + '">' + (finished ? 'Start again' : 'Start the plan') + '</button></div>';
+        }
+        var st = F.planStatus(run, now);
+        return '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + def.title + '</h3><span style="font-size:13px;color:var(--faint)">' + st.doneCount + ' of ' + def.days.length + '</span></div>' +
+          '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(2, st.progress * 100) + '%"></i></div>' +
+          '<div>' + st.days.map(function (d, i) {
+            var when = d.done ? 'Done' : d.open ? (i === st.next ? 'Up next' : 'Catch up') : 'Opens ' + dayMonth(F.addDays(F.fromIso(run.start), i));
+            var inner = '<span class="dot' + (d.done ? ' on' : '') + (d.open && !d.done ? ' today' : '') + (!d.open ? ' future' : '') + '" aria-hidden="true">' + (d.done ? ICON.check('#fff', 12) : i + 1) + '</span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">Day ' + (i + 1) + ': ' + d.title + '</span><small style="color:var(--faint)">' + when + '</small></span>';
+            return d.open ? '<button type="button" class="planrow" data-a="planopen" data-v="' + run.uid + '" data-i="' + i + '">' + inner + '<span aria-hidden="true">\u203a</span></button>' : '<div class="planrow locked">' + inner + '</div>';
+          }).join('') + '</div></div>';
+      }).join('');
+      return '<div style="margin-top:8px"><div class="eyebrow">One small step a day</div><h2>Plans</h2><p style="margin-top:6px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' +
+        celebration(1, 'plan') + list + '<p class="fine">More plans are coming.</p>';
+    },
+    planday: function () {
+      var run = P.plans.filter(function (p) { return p.uid === U.planUid; })[0], def = F.planDef(run.id), i = U.planDay, d = def.days[i], done = (run.done || []).indexOf(i) >= 0;
+      return back('plans') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day ' + (i + 1) + ' of ' + def.days.length + ' \u00b7 ' + def.title + '</div><h2>' + d.title + '</h2></div>' +
+        '<div class="card stack" style="padding:18px;gap:12px;font-size:17px;line-height:1.6">' + d.read.map(function (para) { return '<p style="color:var(--ink)">' + para + '</p>'; }).join('') + '</div>' +
+        '<div class="eyebrow" style="margin-top:6px">Today\u2019s one action</div>' +
+        '<button type="button" class="outline" data-a="planact" data-v="' + d.action[1] + '">' + d.action[0] + ' \u203a</button>' +
+        '<div class="push">' + (done ? '<div class="left"><span>Day ' + (i + 1) + ' complete</span><span>\u2713</span></div><button type="button" class="textbtn" data-a="go" data-v="plans">Back to the plan</button>'
+          : '<button type="button" class="primary" data-a="planmark">Mark day ' + (i + 1) + ' complete</button>') + '</div>';
     },
 
     milestones: function () {
@@ -536,7 +585,8 @@
     return { setupDone: P.setupDone, sortedAll: P.tx.length > 0 && !spending().unsorted.length, checkins: P.history.filter(function (h) { return h.payday; }).length,
       streakBest: P.streak.best || 0, savings: p.savings, debtsPaid: P.debts.filter(function (d) { return num(d.orig) > 0 && num(d.bal) <= 0; }).length,
       debtPaidTotal: P.totals.debtPaid, daysBack: P.totals.daysBack, debtFree: P.debts.length > 0 && !open && P.debts.some(function (d) { return num(d.orig) > 0; }),
-      safetyNet: !open && p.savings >= pl.safetyNet, goalsFunded: P.goals.filter(function (g) { return num(g.saved) >= g.amount; }).length, challengesDone: P.challengesDone || 0 };
+      safetyNet: !open && p.savings >= pl.safetyNet, goalsFunded: P.goals.filter(function (g) { return num(g.saved) >= g.amount; }).length, challengesDone: P.challengesDone || 0,
+      earned: num(P.totals.earned), plansDone: P.plansDone || 0, shares: P.shares || 0 };
   }
   // finishes challenges and awards milestones; new ones wait in P.unseen until celebrated
   function refresh() {
@@ -550,13 +600,18 @@
       if (st.state === 'done') { P.challengesDone = (P.challengesDone || 0) + 1; P.unseen.push({ type: 'challenge', id: c.uid }); }
       else if (st.state === 'missed') c.note = st.label;
     });
-    f.challengesDone = P.challengesDone || 0;
+    (P.plans || []).forEach(function (pl) {
+      if (pl.ended || F.planStatus(pl, now).state !== 'done') return;
+      pl.ended = 'done'; pl.endedOn = iso; P.plansDone = (P.plansDone || 0) + 1; P.unseen.push({ type: 'plan', id: pl.uid }); changed = true;
+    });
+    f.challengesDone = P.challengesDone || 0; f.plansDone = P.plansDone || 0;
     F.BADGES.forEach(function (b) { if (!P.badges[b.id] && b.test(f)) { P.badges[b.id] = iso; P.unseen.push({ type: 'badge', id: b.id }); changed = true; } });
     if (P.challenges.length > 40) P.challenges = P.challenges.filter(function (c) { return !c.ended; }).concat(P.challenges.filter(function (c) { return c.ended; }).slice(-30));
     if (changed) save();
   }
   function unseenItem(u) {
     if (u.type === 'badge') { var b = F.BADGES.filter(function (x) { return x.id === u.id; })[0]; return b ? { eyebrow: 'New milestone', title: b.title, desc: b.desc, share: 'sharebadge', v: b.id } : null; }
+    if (u.type === 'plan') { var pl = P.plans.filter(function (x) { return x.uid === u.id; })[0]; if (!pl) return null; var pd = F.planDef(pl.id); return { eyebrow: 'Plan complete', title: pd.title, desc: pd.share, share: 'shareplan', v: pl.uid }; }
     var c = P.challenges.filter(function (x) { return x.uid === u.id; })[0]; if (!c) return null;
     var d = F.challengeDef(c.id); return { eyebrow: 'Challenge complete', title: d.title, desc: d.share, share: 'sharech', v: c.uid };
   }
@@ -571,6 +626,21 @@
         '<div style="display:flex;gap:10px;margin-top:4px"><button type="button" class="sharebtn" data-a="' + it.share + '" data-v="' + it.v + '">' + ICON.share + ' Share</button><button type="button" class="sharebtn ghost" data-a="seen" data-v="' + x[0].type + ':' + x[0].id + '">Nice!</button></div>' +
         (i === items.length - 1 && more > 0 && max === 1 ? '<span style="font-size:13px">+' + more + ' more in Milestones</span>' : '') + '</div>';
     }).join('');
+  }
+  function pitwHtml() {
+    var amt = U.pitw.amt, target = P.debts.filter(function (d) { return num(d.bal) > 0; }).sort(function (a, b) { return num(a.bal) - num(b.bal); })[0];
+    var goals = P.goals.filter(function (g) { return num(g.saved) < g.amount; }).slice(0, 2);
+    return '<div class="toast win stack" style="gap:8px"><b>+' + money(amt) + '. Nice work.</b><span>Put it to work before it disappears:</span><div class="stack" style="gap:8px">' +
+      '<button type="button" class="sharebtn" data-a="pitw" data-v="savings">Add to my emergency savings</button>' +
+      (target ? '<button type="button" class="sharebtn" data-a="pitw" data-v="debt">Pay down ' + esc(target.name) + '</button>' : '') +
+      goals.map(function (g) { return '<button type="button" class="sharebtn" data-a="pitw" data-v="goal:' + g.id + '">Add to ' + esc(g.name) + '</button>'; }).join('') +
+      '<button type="button" class="sharebtn ghost" data-a="pitw" data-v="later">Decide later</button></div></div>';
+  }
+  function partnerHtml(d) {
+    var pt = d.partner && CONFIG.partners[d.partner];
+    return (d.tips ? '<p style="font-size:13px">' + d.tips + '</p>' : '') +
+      (pt && pt.url ? '<a class="outline" style="text-decoration:none;color:var(--ink);min-height:44px;font-size:15px" href="' + esc(pt.url) + '" target="_blank" rel="noopener sponsored">' + esc(pt.label) + ' \u203a</a>' +
+        '<p style="font-size:12px;color:var(--faint)">We may earn money if you sign up through this link. We only list places we\u2019d recommend anyway.</p>' : '');
   }
   function markSeen(key) { P.unseen = P.unseen.filter(function (u) { return u.type + ':' + u.id !== key; }); save(); }
   function caption() {
@@ -710,6 +780,35 @@
         save(); render(); break;
       case 'chquit': var cq = P.challenges.filter(function (c) { return c.uid === v; })[0]; cq.ended = 'quit'; cq.endedOn = F.isoDay(today()); save(); render(); break;
       case 'seen': markSeen(v); render(); break;
+      case 'earnadd':
+        var ea = app.querySelector('[data-earnamt="' + v + '"]'), en = app.querySelector('[data-earnnote="' + v + '"]'), amtE = ea ? num(ea.value) : 0;
+        if (!(amtE > 0)) break;
+        var ce = P.challenges.filter(function (c) { return c.uid === v; })[0];
+        ce.log = ce.log || []; ce.log.push({ date: F.isoDay(today()), amt: Math.round(amtE * 100) / 100, note: en ? en.value.trim().slice(0, 40) : '' });
+        P.totals.earned = num(P.totals.earned) + amtE; U.pitw = { uid: v, amt: amtE };
+        save(); track('earn'); render(); break;
+      case 'pitw':
+        var amtP = U.pitw ? U.pitw.amt : 0;
+        if (v === 'savings') P.savings = String(num(P.savings) + amtP);
+        else if (v === 'debt') { var tgt = P.debts.filter(function (d) { return num(d.bal) > 0; }).sort(function (a, b) { return num(a.bal) - num(b.bal); })[0]; if (tgt) tgt.bal = String(Math.max(0, num(tgt.bal) - amtP)); }
+        else if (v.indexOf('goal:') === 0) { var gp = P.goals.filter(function (g) { return g.id === v.slice(5); })[0]; if (gp) gp.saved = num(gp.saved) + amtP; }
+        U.pitw = null; save(); render(); break;
+      case 'planstart': P.plans.push({ uid: uid(), id: v, start: F.isoDay(today()), done: [] }); save(); track('plan-start'); render(); break;
+      case 'planopen': U.planUid = v; U.planDay = i; go('planday'); break;
+      case 'planmark':
+        var rp = P.plans.filter(function (p) { return p.uid === U.planUid; })[0];
+        if (rp.done.indexOf(U.planDay) < 0) rp.done.push(U.planDay);
+        save(); track('plan-day'); go('plans'); break;
+      case 'planact':
+        if (v === 'ics') { download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break; }
+        if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6 }; U.formErr = ''; U.back = 'planday'; U.next = 'planday'; go('goal'); break; }
+        if (v === 'spend') { if (!P.tx.length) { go('import'); break; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); break; } }
+        go(v); break;
+      case 'shareplan':
+        markSeen('plan:' + v);
+        var sp = P.plans.filter(function (p) { return p.uid === v; })[0], spd = F.planDef(sp.id);
+        openShare({ eyebrow: 'Plan complete', title: spd.title, sub: spd.share, chips: [spd.days.length + ' days, ' + spd.days.length + ' small steps'].concat(streakChips()).slice(0, 3), caption: 'Finished the ' + spd.title + '!' });
+        break;
       case 'winsdone': P.unseen = P.unseen.filter(function (u) { return u.type !== 'badge'; }); save(); go('home'); break;
       case 'sharebadge': markSeen('badge:' + v); openShare(cardForBadge(v)); break;
       case 'sharech': markSeen('challenge:' + v); openShare(cardForChallenge(v)); break;
@@ -729,10 +828,10 @@
       case 'doshare':
         var file = new File([U.cardImg.blob], 'find-me-the-money-win.png', { type: 'image/png' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], text: caption() }).catch(function (err) { if (err && err.name !== 'AbortError') { U.shareErr = 'Sharing didn\u2019t open here. Use Save image, then share it from your photos.'; render(); } });
+          navigator.share({ files: [file], text: caption() }).then(function () { P.shares = (P.shares || 0) + 1; save(); }).catch(function (err) { if (err && err.name !== 'AbortError') { U.shareErr = 'Sharing didn\u2019t open here. Use Save image, then share it from your photos.'; render(); } });
         } else { U.shareErr = 'This browser can\u2019t share images directly. Use Save image, then share it from your photos.'; render(); }
         track('share'); break;
-      case 'saveimg': download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
+      case 'saveimg': P.shares = (P.shares || 0) + 1; save(); download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
       case 'copycap':
         var txt = caption();
         var ok = function () { U.copied = true; render(); };
