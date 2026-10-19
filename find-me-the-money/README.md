@@ -13,7 +13,10 @@ the phone and never uploaded. There is no server, no account and no database.
 - "Found money": pick a new fun-money limit and see what it frees up
 - Payday Plan: every dollar of each paycheck gets a job
 - Home: countdown to the current step's finish line, snowball list, goals with a tradeoff slider
-- Payday check-in: type real balances, see how far the date moved, celebrate payoffs
+- Payday check-in: type real balances and get a wins screen: debt paid, money saved, days stolen back
+- Payday streak: check in from the day before payday to 2 days after; every 4 in a row earns a grace pass
+  that covers one missed payday; a missed payday pauses the streak (your best is kept), never shames
+- "Days stolen back": a running score of how far you've pulled your freedom date forward beyond the plan
 - Calendar reminders (.ics), backup/restore file, delete everything, privacy page
 
 Not in the beta: AI statement reading, bank linking, accounts or sync, payments, App Store app.

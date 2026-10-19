@@ -39,7 +39,8 @@
   function blank() {
     return { v: 1, setupDone: false, paycheck: '', freq: 'biweekly', nextPay: F.isoDay(F.addDays(today(), 7)),
       bills: [{ name: 'Rent or housing', amount: '' }, { name: 'Utilities', amount: '' }, { name: 'Phone', amount: '' }, { name: 'Insurance', amount: '' }, { name: 'Groceries', amount: '' }, { name: 'Gas & transportation', amount: '' }],
-      debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [] };
+      debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
+      streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {} };
   }
   var storageOk = true;
   function load() {
@@ -75,6 +76,7 @@
     gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>',
     file: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
     info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
+    flame: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 002.5 2.5z"/></svg>',
     share: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>'
   };
   function back(to) { return '<button type="button" class="back" data-a="go" data-v="' + to + '" aria-label="Back">' + ICON.back + '</button>'; }
@@ -264,7 +266,7 @@
 
     home: function () {
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step, h = headline(o), now = today();
-      var due = F.daysBetween(now, F.fromIso(P.nextPay)) <= 0, next = F.fromIso(p.nextPay);
+      var due = !!F.paydayFor(P.nextPay, P.freq, now), next = F.fromIso(p.nextPay), sv = F.streakView(P.streak, P.nextPay, P.freq, now);
       var cdDays = h.date ? Math.max(0, F.daysBetween(now, h.date)) : null;
       var cd = cdDays != null ? parts(cdDays) : null;
       var prog = '';
@@ -287,9 +289,9 @@
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var install = !standalone() && isIOS() ? '<div class="note" style="border-color:rgba(255,159,122,.6)">' + ICON.info + '<span><b>Keep your plan safe:</b> tap ' + ICON.share + ' Share, then <b>Add to Home Screen</b>. Safari can clear saved data from websites you haven’t opened in a week, but not from Home Screen apps.</span></div>' : '';
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
-      var payday = '<div class="card stack" style="padding:14px 18px"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + (due ? 'It’s payday!' : 'Next payday') + '</b><span style="font-size:14px;color:var(--muted)">' + dayMonth(due ? F.fromIso(P.nextPay) : next) + '</span></div>' +
+      var payday = '<div class="card stack" style="padding:14px 18px"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + (due ? (F.daysBetween(F.fromIso(F.paydayFor(P.nextPay, P.freq, now)), now) > 0 ? 'Check-in time' : 'It’s payday!') : 'Next payday') + '</b><span style="font-size:14px;color:var(--muted)">' + dayMonth(due ? F.fromIso(F.paydayFor(P.nextPay, P.freq, now)) : next) + '</span></div>' +
         '<div style="font-size:14px;color:var(--muted)">' + money(p.paycheck) + ' in · ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
-        '<button type="button" class="' + (due ? 'primary' : 'outline') + '" style="min-height:50px" data-a="checkin">' + (due ? 'Check in and move my countdown' : 'Update my balances') + '</button></div>';
+        '<button type="button" class="' + (due ? 'primary' : 'outline') + '" style="min-height:50px" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
       var maxPer = Math.max(0, Math.min(500, Math.floor(Math.max(0, pl.extra + o.plan.rows.filter(function (r) { return r.kind === 'goal'; }).reduce(function (t2, r) { return t2 + r.amount; }, 0)) / 10) * 10));
       var goals = '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Your goals</h3><span style="font-size:13px;color:var(--faint)">' + P.goals.length + ' of 3</span></div>' +
         (P.goals.length ? P.goals.map(function (g, i) {
@@ -314,7 +316,7 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + install + toast + hero + payday + goals + snow + nw +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + install + toast + hero + streakCard() + payday + goals + snow + nw +
         '<button type="button" class="card" data-a="go" data-v="plan" style="text-align:left;width:100%;padding:16px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--display);font-weight:600;font-size:18px">Payday Plan</span><span style="font-size:13px;color:var(--faint)">' + (pl.tight ? 'Needs attention ›' : 'Every dollar has a job ›') + '</span></button>' +
         '<div class="card" style="padding:14px 18px"><h3 style="margin-bottom:6px">Your 7 steps</h3>' + ladderHtml(step) + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
@@ -322,8 +324,8 @@
 
     checkin: function () {
       var o = F.outlook(profile(), today());
-      return back('home') + '<div class="stack" style="gap:6px"><div class="eyebrow">Payday check-in · 2 minutes</div><h2>What do your balances say today?</h2>' +
-        '<p>Open your bank and card apps and type what they show. Real numbers keep your countdown honest.</p></div>' +
+      return back('home') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (F.paydayFor(P.nextPay, P.freq, today()) ? 'Payday check-in' : 'Balance update') + ' \u00b7 2 minutes</div><h2>What do your balances say today?</h2>' +
+        '<p>Open your bank and card apps and type what they show. We\u2019ll count your wins: debt paid, money saved and days stolen back.</p></div>' +
         (P.debts.length ? '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Debts</b>' + P.debts.map(function (d, i) {
           return '<label class="field">' + esc(d.name) + ' balance<input type="number" inputmode="decimal" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>'; }).join('') + '</div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Savings</b>' + field('Emergency savings', 'savings') +
@@ -332,6 +334,31 @@
         '<div class="push"><button type="button" class="primary" data-a="checkdone">Update my countdown</button></div>' + (o ? '' : '');
     },
 
+    wins: function () {
+      var r = U.result, w = r.w, t = P.totals, s = r.streak, v = F.streakView(P.streak, P.nextPay, P.freq, today());
+      var title = r.paid.length ? esc(r.paid[0]) + ': PAID OFF' : r.goal ? esc(r.goal) + ': FULLY FUNDED' : r.daysBack > 0 ? plural(r.daysBack, 'day') + ' stolen back' : r.daysBack === 0 && (w.debtPaid > 0 || w.saved > 0) ? 'Right on plan.' : w.debtPaid > 0 || w.saved > 0 ? 'Progress, on the record.' : 'Checked in.';
+      var win = r.paid.length || r.goal || r.daysBack > 0 || w.debtPaid > 0 || w.saved > 0;
+      var msg = !r.counted ? (r.repeat ? 'You already checked in for this payday, so your numbers are updated and your streak stays the same.' : 'Balances updated. Payday check-ins (the ones that build your streak) open the day before payday.')
+        : s.milestone ? MILESTONE_TEXT[s.milestone]
+        : s.broke ? 'A new streak starts today. Your best is ' + v.best + '. Let\u2019s beat it.'
+        : s.usedGrace ? 'You missed a payday, so your grace pass covered it. Streak saved.'
+        : s.earnedGrace ? 'You earned a grace pass. It covers one missed payday.'
+        : 'See you next payday, ' + dayMonth(F.fromIso(P.nextPay)) + '.';
+      var savedStat = w.saved >= 0 ? stat(money(w.saved), 'saved') : stat('\u2013' + money(-w.saved), 'from savings');
+      return (win ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="eyebrow" style="margin-top:12px">' + (r.counted ? 'Payday check-in' : 'Balance update') + ' \u00b7 ' + dayMonth(today()) + '</div>' +
+        '<div class="lime pop"><div style="font-weight:600">' + (r.counted ? 'This payday' : 'Since your last update') + '</div>' +
+        '<div style="font-family:var(--display);font-size:30px;font-weight:500;line-height:1.15;margin-top:4px">' + title + '</div>' +
+        '<div class="grid3 stats" style="margin-top:16px">' + stat(money(w.debtPaid), 'debt paid') + savedStat + stat((r.daysBack > 0 ? '+' : '') + r.daysBack, 'days stolen back') + '</div></div>' +
+        (r.paid.length > 1 ? '<p style="text-align:center">Also paid off: ' + r.paid.slice(1).map(esc).join(', ') + '. The snowball grows.</p>' : r.paid.length ? '<p style="text-align:center">That payment now rolls into your next debt. The snowball grows.</p>' : '') +
+        (r.daysBack < 0 ? '<div class="note">' + ICON.info + '<span>Your date slipped ' + plural(-r.daysBack, 'day') + '. It happens. Your Payday Plan shows what to adjust before next time.</span></div>' : '') +
+        (w.saved < 0 ? '<div class="note">' + ICON.info + '<span>You used some savings. That\u2019s exactly what it\u2019s there for. You\u2019ll rebuild it.</span></div>' : '') +
+        '<div class="card" style="padding:16px 18px;display:flex;gap:12px;align-items:center"><span class="flame' + (v.count ? ' lit' : '') + '">' + ICON.flame + '</span><div>' +
+        '<div style="font-family:var(--display);font-weight:600;font-size:19px">' + (v.count ? plural(v.count, 'payday') + ' in a row' : 'Payday streak') + (P.streak.grace ? ' <span class="tag">1 grace pass</span>' : '') + '</div><div style="font-size:14px;color:var(--muted)">' + msg + '</div></div></div>' +
+        '<div class="card"><div class="row"><span style="font-weight:600">Since you started</span><span></span></div>' +
+        '<div class="row"><span style="color:var(--muted)">Debt paid</span><b>' + money(t.debtPaid) + '</b></div><div class="row"><span style="color:var(--muted)">Money saved</span><b>' + money(t.saved) + '</b></div>' +
+        '<div class="row"><span style="color:var(--muted)">Days stolen back</span><b style="color:var(--sun-ink)">' + (t.daysBack > 0 ? '+' + t.daysBack : t.daysBack) + '</b></div></div>' +
+        '<div class="push"><button type="button" class="primary" data-a="go" data-v="home">Back to my plan</button></div>';
+    },
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
       return back('home') + '<h2>Settings</h2>' +
@@ -374,37 +401,59 @@
     }
     return '';
   }
-  function eventToast(e) {
-    if (e.kind === 'goal') return [esc(e.name) + ': FULLY FUNDED', 'You saved it without touching a credit card. Go enjoy it.', true];
-    if (e.kind === 'paid') return [esc(e.name) + ': PAID OFF', 'That payment now rolls into your next debt. The snowball grows.', true];
-    return null;
+  var MILESTONE_TEXT = {
+    3: 'Three paydays in a row. That\u2019s a habit forming.',
+    6: 'Six in a row. You\u2019re paying yourself first now.',
+    13: 'Thirteen paydays. Months of showing up for your future.',
+    26: 'Twenty-six paydays in a row. That\u2019s a year for most people.',
+    52: 'Fifty-two paydays. You\u2019re not budgeting anymore; you\u2019re just like this.',
+    104: 'A hundred and four paydays. Legendary.'
+  };
+  function balancesNow() {
+    var cur = { debts: {}, savings: num(P.savings), goals: {} };
+    P.debts.forEach(function (d) { cur.debts[d.id] = num(d.bal); });
+    P.goals.forEach(function (g) { cur.goals[g.id] = num(g.saved); });
+    return cur;
   }
   function checkDone() {
-    var before = P.lastHeadline, prevDebts = (P.prevBalances || {});
+    var now = today(), prevDebts = P.prevBalances || {};
     P.debts.forEach(function (d) { if (num(d.bal) > num(d.orig)) d.orig = num(d.bal); });
-    var o = F.outlook(profile(), today()), h = headline(o), toast = null;
-    var paidNow = P.debts.filter(function (d) { return num(d.bal) <= 0 && num(prevDebts[d.id]) > 0; })[0];
-    var goalNow = P.goals.filter(function (g) { return num(g.saved) >= g.amount && !g.celebrated; })[0];
-    if (paidNow) toast = eventToast({ kind: 'paid', name: paidNow.name });
-    else if (goalNow) { toast = eventToast({ kind: 'goal', name: goalNow.name }); goalNow.celebrated = true; }
-    else if (before && h.date && before.kind === h.kind) {
-      var moved = F.daysBetween(h.date, F.fromIso(before.date));
-      toast = moved > 0 ? ['Your date moved ' + plural(moved, 'day') + ' closer.', 'Real progress, from real balances. See you next payday.', true]
-        : moved < 0 ? ['Your date slipped ' + plural(-moved, 'day') + '.', 'It happens. Check your Payday Plan and see what you can adjust for next time.', false]
-        : ['Right on schedule.', 'Your countdown held steady. Keep going.', false];
-    } else toast = ['Checked in.', 'Your countdown is up to date.', false];
-    P.history.push({ date: F.isoDay(today()), debt: P.debts.reduce(function (t, d) { return t + num(d.bal); }, 0), savings: num(P.savings) });
-    var rolled = F.rollPayday(P.nextPay, P.freq, today());
-    if (F.daysBetween(today(), F.fromIso(rolled)) <= 0) rolled = F.isoDay(F.addDays(F.fromIso(rolled), F.FREQS[P.freq].days));
-    P.nextPay = F.rollPayday(rolled, P.freq, F.addDays(today(), 1));
-    snapshot();
-    U.toast = toast; save(); track('checkin'); go('home');
+    var cur = balancesNow();
+    var w = F.winsBetween({ debts: prevDebts, savings: P.prevSavings != null ? P.prevSavings : cur.savings, goals: P.prevGoals || {} }, cur);
+    var free = F.freedomDate(F.outlook(profile(), now));
+    var daysBack = P.lastFree && free ? F.daysBetween(free, F.fromIso(P.lastFree)) : 0;
+    var pd = F.paydayFor(P.nextPay, P.freq, now), sr = pd ? F.applyCheckin(P.streak, pd, F.isoDay(now), P.freq) : null;
+    if (sr) {
+      P.streak = sr.st;
+      var nx = F.nextAfter(pd, P.freq);
+      while (F.daysBetween(now, F.fromIso(nx)) <= 0) nx = F.nextAfter(nx, P.freq);
+      P.nextPay = nx;
+    }
+    P.totals.debtPaid += w.debtPaid; P.totals.saved += Math.max(0, w.saved); P.totals.daysBack += daysBack;
+    var paid = P.debts.filter(function (d) { return num(d.bal) <= 0 && num(prevDebts[d.id]) > 0; }).map(function (d) { return d.name; });
+    var goal = P.goals.filter(function (g) { return num(g.saved) >= g.amount && !g.celebrated; })[0];
+    if (goal) goal.celebrated = true;
+    U.result = { w: w, daysBack: daysBack, counted: !!sr && !sr.repeat, repeat: !!(sr && sr.repeat), streak: sr ? sr.out : null, paid: paid, goal: goal ? goal.name : null };
+    P.history.push({ date: F.isoDay(now), debt: P.debts.reduce(function (t, d) { return t + num(d.bal); }, 0), savings: num(P.savings), debtPaid: w.debtPaid, saved: w.saved, daysBack: daysBack, payday: pd });
+    snapshot(); save(); track(sr && !sr.repeat ? 'checkin-payday' : 'checkin-update'); U.toast = null; go('wins');
   }
-  // remembers where the plan stood, so the next check-in can say how far the date moved
+  // remembers where things stood, so the next check-in can count what changed
   function snapshot() {
-    var o = F.outlook(profile(), today()), h = headline(o);
+    var o = F.outlook(profile(), today()), h = headline(o), free = F.freedomDate(o), cur = balancesNow();
     P.lastHeadline = h.date ? { kind: h.kind, date: F.isoDay(h.date) } : null;
-    P.prevBalances = {}; P.debts.forEach(function (d) { P.prevBalances[d.id] = num(d.bal); });
+    P.lastFree = free ? F.isoDay(free) : null;
+    P.prevBalances = cur.debts; P.prevSavings = cur.savings; P.prevGoals = cur.goals;
+  }
+  function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
+  function streakCard() {
+    var v = F.streakView(P.streak, P.nextPay, P.freq, today()), t = P.totals;
+    var line = v.state === 'new' ? 'Check in on payday to start your streak.'
+      : v.state === 'paused' ? 'Paused. Check in on payday to start a new one. Your best: ' + v.best + '.'
+      : v.state === 'due' ? 'It\u2019s payday. Check in to make it ' + (v.count + 1) + ' in a row.'
+      : 'Next check-in ' + dayMonth(F.fromIso(P.nextPay)) + (v.grace ? ' \u00b7 1 grace pass saved' : '');
+    return '<div class="card stack" style="padding:16px 18px;gap:14px"><div style="display:flex;align-items:center;gap:12px"><span class="flame' + (v.count ? ' lit' : '') + '">' + ICON.flame + '</span>' +
+      '<div><div style="font-family:var(--display);font-weight:600;font-size:19px">' + (v.count ? plural(v.count, 'payday') + ' in a row' : 'Payday streak') + '</div><div style="font-size:13px;color:var(--muted)">' + line + '</div></div></div>' +
+      '<div class="grid3 stats">' + stat((t.daysBack > 0 ? '+' : '') + Math.max(0, t.daysBack), 'days stolen back') + stat(money(t.debtPaid), 'debt paid') + stat(money(t.saved), 'saved') + '</div></div>';
   }
   function download(name, type, text) {
     var blob = new Blob([text], { type: type }), url = URL.createObjectURL(blob), a = document.createElement('a');

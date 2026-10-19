@@ -278,7 +278,54 @@
     return o;
   }
 
+  // ---------- streaks and wins ----------
+  var MILESTONES = [3, 6, 13, 26, 52, 104];
+  function nextAfter(iso, freq) { return isoDay(addDays(fromIso(iso), FREQS[freq].days)); }
+  // the scheduled payday a check-in today counts for: the latest one on or before tomorrow (null if none is due)
+  function paydayFor(nextPay, freq, today) {
+    var lim = addDays(today, 1), d = nextPay;
+    if (daysBetween(lim, fromIso(d)) > 0) return null;
+    while (daysBetween(lim, fromIso(nextAfter(d, freq))) <= 0) d = nextAfter(d, freq);
+    return d;
+  }
+  // A payday check-in counts from the day before payday to 2 days after. Missed or late paydays
+  // use up a grace pass if one is saved; otherwise the streak starts over. Every 4 in a row earns a pass (hold 1).
+  function applyCheckin(st, payday, checkinIso, freq) {
+    st = Object.assign({ count: 0, best: 0, grace: 0, lastPayday: null }, st);
+    var out = { usedGrace: 0, broke: false, earnedGrace: false, milestone: null };
+    if (st.lastPayday === payday) return { st: st, out: out, repeat: true };
+    var late = daysBetween(fromIso(payday), fromIso(checkinIso)) > 2;
+    var missed = st.lastPayday ? Math.max(0, Math.round(daysBetween(fromIso(st.lastPayday), fromIso(payday)) / FREQS[freq].days) - 1) : 0;
+    var need = missed + (late ? 1 : 0);
+    if (need && need <= st.grace) { st.grace -= need; out.usedGrace = need; }
+    else if (need) { out.broke = st.count > 0; st.count = 0; st.grace = 0; }
+    st.count += 1; st.best = Math.max(st.best, st.count); st.lastPayday = payday;
+    if (st.count % 4 === 0 && st.grace < 1) { st.grace = 1; out.earnedGrace = true; }
+    if (MILESTONES.indexOf(st.count) >= 0) out.milestone = st.count;
+    return { st: st, out: out };
+  }
+  // how the streak looks between check-ins
+  function streakView(st, nextPay, freq, today) {
+    st = st || {};
+    var count = st.count || 0, grace = st.grace || 0, closed = 0, d = nextPay;
+    if (!count) return { count: 0, best: st.best || 0, grace: 0, state: 'new', due: !!paydayFor(nextPay, freq, today) };
+    while (daysBetween(fromIso(d), today) > 2 && closed < 60) { closed++; d = nextAfter(d, freq); }
+    var due = !!paydayFor(nextPay, freq, today);
+    var state = closed > grace ? 'paused' : due ? 'due' : 'active';
+    return { count: state === 'paused' ? 0 : count, was: count, best: Math.max(st.best || 0, count), grace: grace, state: state, due: due };
+  }
+  // what changed since the last check-in: debt paid down and money saved (savings + goals)
+  function winsBetween(prev, now) {
+    var paid = 0, saved = now.savings - (prev.savings || 0);
+    Object.keys(now.debts).forEach(function (id) { if (prev.debts && id in prev.debts) paid += Math.max(0, prev.debts[id] - now.debts[id]); });
+    Object.keys(now.goals).forEach(function (id) { saved += now.goals[id] - (prev.goals && id in prev.goals ? prev.goals[id] : 0); });
+    return { debtPaid: Math.round(paid * 100) / 100, saved: Math.round(saved * 100) / 100 };
+  }
+  // the date everything counts down to: debt-free while there's debt, then the full safety net
+  function freedomDate(o) { return o.target ? o.debtFree : o.safetyNet; }
+
   var api = { CUSHION: CUSHION, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
+    nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
     parseCSV: parseCSV, toNumber: toNumber, parseDate: parseDate, readTransactions: readTransactions, cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
     plan: plan, perCheck: perCheck, stateFrom: stateFrom, smallest: smallest, paycheck: paycheck, paychecksUntil: paychecksUntil, outlook: outlook };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FMTM = api;
