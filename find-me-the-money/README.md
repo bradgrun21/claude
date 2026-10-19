@@ -10,6 +10,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Setup in 5 short steps: paycheck and schedule, monthly bills, debts, savings and giving, fun money
 - Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
 - Swipe deck: the person sorts each store into Need or Want (nothing is pre-tagged)
+- Needs vs wants: tap any store to see each purchase and flip one on its own (a Target run can be half groceries, half decor)
 - "Found money": pick a new fun-money limit and see what it frees up
 - Payday Plan: every dollar of each paycheck gets a job
 - Home: countdown to the current step's finish line, snowball list, goals with a tradeoff slider

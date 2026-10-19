@@ -209,3 +209,13 @@ body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0p
 .planrow.locked { opacity: .7; }
 .planrow small { font-size: 13px; }
 .toast .sharebtn { justify-content: center; }
+/* needs vs wants: tap a store to sort each purchase */
+.storebtn { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 8px; align-items: flex-start; min-width: 0; flex: 1; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+.storebtn:focus-visible { outline: 2px solid var(--line); outline-offset: 4px; border-radius: 8px; }
+.storebtn .chev { color: var(--faint); font-size: 20px; line-height: 1.1; transition: transform .2s; }
+.storebtn .chev.open { transform: rotate(90deg); }
+.mixed { color: var(--muted); }
+.txlist { margin: 0 0 8px 22px; padding-left: 12px; border-left: 2px solid var(--line); border-bottom: 1px solid var(--line); }
+.txrow { padding: 6px 0; font-size: 14px; }
+.txrow:last-child { border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .storebtn .chev { transition: none; } }

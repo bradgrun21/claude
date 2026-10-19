@@ -164,7 +164,7 @@
     var giving = p.givingPct ? Math.round(p.paycheck * p.givingPct / 100) : 0;
     if (giving) rows.push({ label: 'Giving (' + p.givingPct + '%)', amount: giving, kind: 'give' });
     p.bills.forEach(function (b) { if (+b.amount > 0) rows.push({ label: b.name || 'Bill', amount: b.amount / ppm, kind: 'bill' }); });
-    if (+p.fun > 0) rows.push({ label: 'Fun money (wants)', amount: p.fun / ppm, kind: 'fun' });
+    if (+p.fun > 0) rows.push({ label: 'Fun money (wants)' + (p.funEst ? ' \u00b7 estimate' : ''), amount: p.fun / ppm, kind: 'fun' });
     // the snowball keeps the total debt budget fixed: a paid-off debt's minimum rolls into the next one
     var mins = sum(p.debts, function (d) { return d.min; });
     if (mins) rows.push({ label: 'Debt minimums', amount: mins / ppm, kind: 'min' });
@@ -440,10 +440,10 @@
       { title: 'Find your number', read: ['Most of us don\u2019t have a spending problem as much as a seeing problem. Money leaves in small, quiet amounts, and we never add it up.', 'Today you only have to look. What comes in each paycheck, and what already has a job? No judgment. You can\u2019t change what you can\u2019t see.', 'Open your Payday Plan and read every line. Notice what surprises you.'], action: ['See my Payday Plan', 'plan'] },
       { title: 'Sort your spending', read: ['A need keeps you housed, fed, healthy and getting to work. A want makes life more fun. Both are fine. Problems start when wants hide inside needs.', 'Today you\u2019ll sort your own spending, store by store. You decide what\u2019s a need. Be honest, not harsh.'], action: ['Sort my spending', 'spend'] },
       { title: 'Wants, on purpose', read: ['Cutting every want rarely lasts. What lasts is choosing your wants ahead of time, so the money you spend on fun is money you meant to spend.', 'Pick a monthly fun-money number you can live with. The difference between that and last month is money found.'], action: ['Set my fun money', 'fun'] },
-      { title: 'Your $1,000 cushion', read: ['The first thing to build is a small wall between you and life. A flat tire or a vet bill shouldn\u2019t go on a credit card.', 'That wall is $1,000. Not forever, just first. If you\u2019re not there yet, a short sprint gets you there faster than you think.'], action: ['Start the Cushion Sprint', 'challenges'] },
+      { title: 'Your $1,000 cushion', read: ['The first thing to build is a small wall between you and life. A flat tire or a vet bill shouldn\u2019t go on a credit card.', 'That wall is $1,000. Not forever, just first. Add what you have saved today. If you\u2019re not there yet, finishing today unlocks Challenges, and the Cushion Sprint gets you there faster than you think.'], action: ['Add my savings', 'savings'] },
       { title: 'Smallest debt first', read: ['List every debt, smallest balance to largest. Pay minimums on everything, then throw every extra dollar at the smallest one.', 'It isn\u2019t always the cheapest math, but it\u2019s the math people finish. Quick wins build momentum, and each paid-off payment rolls into the next.'], action: ['Check my debts', 'debts'] },
       { title: 'Name your dream', read: ['Saying no is easier when you know what you\u2019re saying yes to. A trip, a car that runs, a Christmas without a credit card.', 'Name one goal and give it a dollar amount. We\u2019ll give it a date.'], action: ['Add a goal', 'goalnew'] },
-      { title: 'Make it a payday habit', read: ['Plans don\u2019t fail on day one. They fail on the third payday, when life gets busy.', 'Put your payday check-ins on your calendar. Two minutes, every payday: update your balances, watch your date move and celebrate the win.'], action: ['Add check-ins to my calendar', 'ics'] }
+      { title: 'Make it a payday habit', read: ['Plans don\u2019t fail on day one. They fail on the third payday, when life gets busy.', 'Put your payday check-ins on your calendar. Two minutes, every payday: update your balances, watch your date move and celebrate the win.'], action: ['Set up my payday habit', 'habit'] }
     ]
   }];
   function planDef(id) { return PLANS.filter(function (p) { return p.id === id; })[0]; }

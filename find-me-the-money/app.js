@@ -50,11 +50,17 @@
       bills: [{ name: 'Rent or housing', amount: '' }, { name: 'Utilities', amount: '' }, { name: 'Phone', amount: '' }, { name: 'Insurance', amount: '' }, { name: 'Groceries', amount: '' }, { name: 'Gas & transportation', amount: '' }],
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
-      challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0 };
+      challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false };
   }
   var storageOk = true;
   function load() {
-    try { var raw = localStorage.getItem(CONFIG.storageKey); return raw ? Object.assign(blank(), JSON.parse(raw)) : blank(); }
+    try {
+      var raw = localStorage.getItem(CONFIG.storageKey); if (!raw) return blank();
+      var d = JSON.parse(raw);
+      // plans saved before features unlocked gradually keep everything they already had
+      if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
+      return Object.assign(blank(), d);
+    }
     catch (e) { storageOk = false; return blank(); }
   }
   function save() { try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); storageOk = true; } catch (e) { storageOk = false; } }
@@ -64,12 +70,19 @@
   // a numeric copy of the saved data for the math, with a missed payday rolled forward
   function profile() {
     return {
-      paycheck: num(P.paycheck), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: P.givingPct, savings: num(P.savings), fun: num(P.fun),
-      bills: P.bills.map(function (b) { return { name: b.name, amount: num(b.amount) }; }),
-      debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: num(d.apr) }; }),
+      paycheck: num(P.paycheck), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: P.givingPct, savings: num(P.savings),
+      // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
+      fun: funSet() ? num(P.fun) : Math.round(num(P.paycheck) * F.FREQS[P.freq].perMonth * 0.1 / 10) * 10, funEst: !funSet(),
+      // one "bills and basics" number until the person lists bills one by one
+      bills: itemized() ? P.bills.map(function (b) { return { name: b.name, amount: num(b.amount) }; }) : [{ name: 'Bills and basics', amount: num(P.basics) }],
+      // interest is optional; a blank rate is estimated at 20%
+      debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind, months: g.months, per: g.per || 0, saved: num(g.saved) }; })
     };
   }
+  function funSet() { return P.fun !== '' && P.fun != null; }
+  function itemized() { return P.bills.some(function (b) { return num(b.amount) > 0; }); }
+  function savingsSet() { return P.savings !== '' && P.savings != null; }
   function standalone() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
   function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
 
@@ -78,12 +91,13 @@
   var app = document.getElementById('app');
   var TABS = [['home', 'Home', 'home'], ['plans', 'Plans', 'book'], ['challenges', 'Challenges', 'flag'], ['milestones', 'Milestones', 'medal']];
   function render() {
-    var tabbed = P.setupDone && TABS.some(function (t) { return t[0] === U.screen; });
-    if (tabbed || U.screen === 'wins') refresh();
+    if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === U.screen; }))) refresh();
+    var tabs = TABS.filter(function (t) { return t[0] === 'home' || t[0] === 'plans' || (P.unlocked && P.unlocked[t[0]]); });
+    var tabbed = P.setupDone && tabs.some(function (t) { return t[0] === U.screen; });
     var html = (V[U.screen] || V.home)();
     if (tabbed) {
       var news = P.unseen.length;
-      html += '<nav class="tabbar" aria-label="Sections">' + TABS.map(function (t) {
+      html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
         var on = U.screen === t[0];
         return '<button type="button" data-a="go" data-v="' + t[0] + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'milestones' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
       }).join('') + '</nav>';
@@ -115,20 +129,30 @@
       (opts.list ? ' data-list="' + opts.list + '" data-i="' + opts.i + '" data-k="' + opts.k + '"' : '') + ' value="' + esc(v) + '" placeholder="' + esc(opts.ph || '') + '"' + (opts.min != null ? ' min="' + opts.min + '"' : '') + ' autocomplete="off"></label>';
   }
   function wizardHead(n, title, sub) {
-    return '<div style="display:flex;align-items:center;gap:12px">' + back(P.setupDone ? 'settings' : n === 1 ? 'welcome' : WIZ[n - 2]) +
-      '<div class="bar"><i style="width:' + (n / WIZ.length * 100) + '%"></i></div><span style="font-size:13px;font-weight:600;color:var(--faint)">' + n + ' of ' + WIZ.length + '</span></div>' +
+    var top = P.setupDone ? '<div>' + back(U.wizReturn || 'settings') + '</div>'
+      : '<div style="display:flex;align-items:center;gap:12px">' + back(n === 1 ? 'welcome' : WIZ[n - 2]) +
+        '<div class="bar"><i style="width:' + (n / WIZ.length * 100) + '%"></i></div><span style="font-size:13px;font-weight:600;color:var(--faint)">' + n + ' of ' + WIZ.length + '</span></div>';
+    return top +
       '<div class="stack" style="gap:8px;margin-top:4px"><h2>' + title + '</h2><p>' + sub + '</p></div>';
   }
-  var WIZ = ['pay', 'bills', 'debts', 'savings', 'fun'];
-  function wizNext(n) { return '<div class="push">' + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') + '<button type="button" class="primary" data-a="wiz" data-v="' + n + '">' + (P.setupDone ? 'Save' : 'Next') + '</button></div>'; }
+  var WIZ = ['pay', 'basics', 'debts'];
+  function wizNext(n) { return '<div class="push">' + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') + '<button type="button" class="primary" data-a="wiz" data-v="' + n + '">' + (P.setupDone ? 'Save' : n === WIZ.length ? 'See my countdown' : 'Next') + '</button></div>'; }
 
   // needs vs wants from the imported transactions, scaled to one month
   function spending() {
     var days = F.spanDays(P.txFrom, P.txTo), scale = 30.44 / days, t = { need: 0, want: 0, skip: 0, unsorted: 0 };
-    var stores = F.storeTotals(P.tx);
-    stores.forEach(function (s) { t[P.sorted[s.m] || 'unsorted'] += s.total; });
-    return { stores: stores, t: t, days: days, scale: scale, monthly: { need: t.need * scale, want: t.want * scale }, unsorted: stores.filter(function (s) { return !P.sorted[s.m]; }) };
+    var stores = F.storeTotals(P.tx), by = {};
+    stores.forEach(function (s) { s.split = { need: 0, want: 0, skip: 0, unsorted: 0 }; s.tx = []; by[s.m] = s; });
+    P.tx.forEach(function (x, i) { var k = bucketOf(x); t[k] += x.amount; by[x.merchant].split[k] += x.amount; by[x.merchant].tx.push(i); });
+    stores.forEach(function (s) {
+      var ks = ['need', 'want', 'skip', 'unsorted'].filter(function (k) { return s.split[k]; });
+      s.bucket = ks.length === 1 ? ks[0] : ks.length ? 'mixed' : (P.sorted[s.m] || 'unsorted');
+    });
+    return { stores: stores, t: t, days: days, scale: scale, monthly: { need: t.need * scale, want: t.want * scale }, unsorted: stores.filter(function (s) { return s.split.unsorted > 0; }) };
   }
+  // A single purchase can override its store (a Target run can be groceries or decor).
+  function bucketOf(x) { return x.b || P.sorted[x.merchant] || 'unsorted'; }
+  function storeTx(m) { return P.tx.filter(function (x) { return x.merchant === m; }); }
   function splitHtml(t) {
     var keys = ['need', 'want', 'unsorted'].filter(function (k) { return t[k] > 0; }), all = t.need + t.want + t.unsorted || 1;
     return '<span class="split" role="img" aria-label="Needs ' + Math.round(t.need / all * 100) + '%, wants ' + Math.round(t.want / all * 100) + '%' + (t.unsorted ? ', not sorted ' + Math.round(t.unsorted / all * 100) + '%' : '') + '">' +
@@ -168,40 +192,86 @@
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
         field('Next payday', 'nextPay', { type: 'date' }) + '</div>' + wizNext(1);
     },
+    basics: function () {
+      var picks = [1500, 2000, 2500, 3000, 3500];
+      return wizardHead(2, 'Bills and basics', 'About how much goes to rent, utilities, phone, insurance, groceries and gas each month? A rough number is fine. You can list bills one by one later.') +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Each month, about', 'basics', { ph: '2000', min: 0 }) +
+        '<div class="chips">' + picks.map(function (v) { var on = num(P.basics) === v; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="basicpick" data-v="' + v + '">' + money(v) + '</button>'; }).join('') + '</div>' +
+        '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' + wizNext(2);
+    },
     bills: function () {
       var total = P.bills.reduce(function (t, b) { return t + num(b.amount); }, 0);
-      return wizardHead(2, 'Monthly bills and basics', 'Monthly amounts. Include groceries and gas here. Leave anything blank that you don’t pay. Skip debt payments; those come next.') +
+      return wizardHead(0, 'Your bills, one by one', 'Monthly amounts. Include groceries and gas here. Leave anything blank that you don’t pay. Skip debt payments; those come next.') +
         '<div class="card stack" style="padding:16px 18px;gap:12px">' + P.bills.map(function (b, i) {
           return '<div class="rowedit"><input type="text" aria-label="Bill name" data-f="x" data-list="bills" data-i="' + i + '" data-k="name" value="' + esc(b.name) + '" placeholder="Bill">' +
             '<input type="number" inputmode="decimal" aria-label="' + esc(b.name || 'Bill') + ' per month" data-f="x" data-list="bills" data-i="' + i + '" data-k="amount" value="' + esc(b.amount) + '" placeholder="$0">' +
             '<button type="button" class="x" data-a="rm" data-v="bills" data-i="' + i + '" aria-label="Remove ' + esc(b.name || 'bill') + '">×</button></div>';
         }).join('') + '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="add" data-v="bills">+ Add a bill</button>' +
-        '<div class="row" style="border:0;padding:4px 0 0"><span style="color:var(--muted)">Total per month</span><b data-total="bills">' + money(total) + '</b></div></div>' + wizNext(2);
+        '<div class="row" style="border:0;padding:4px 0 0"><span style="color:var(--muted)">Total per month</span><b data-total="bills">' + money(total) + '</b></div></div>' + wizNext(0);
     },
     debts: function () {
-      return wizardHead(3, 'Your debts', 'Credit cards, car loan, student loans, buy-now-pay-later, medical bills. Not your home; that’s Step 6. Your card and loan apps show each balance and minimum.') +
+      return wizardHead(3, 'Your debts', 'Credit cards, car loan, student loans, buy-now-pay-later, medical bills. Not your home; that’s Step 6. Your card and loan apps show each balance and minimum. Interest is optional.') +
         (P.debts.length ? P.debts.map(function (d, i) {
           var at = function (k, label, ph, type) { return '<label class="field" style="font-size:13px">' + label + '<input type="' + (type || 'number') + '"' + (type ? '' : ' inputmode="decimal"') + ' data-f="x" data-list="debts" data-i="' + i + '" data-k="' + k + '" value="' + esc(d[k]) + '" placeholder="' + ph + '"></label>'; };
           return '<div class="card stack" style="padding:14px 18px;gap:10px">' + at('name', 'Name', 'Credit card', 'text') +
-            '<div class="grid3">' + at('bal', 'Balance', '$0') + at('min', 'Minimum / mo', '$0') + at('apr', 'Interest %', '0') + '</div>' +
+            '<div class="grid3">' + at('bal', 'Balance', '$0') + at('min', 'Minimum / mo', '$0') + at('apr', 'Interest %', 'Not sure') + '</div>' +
             '<button type="button" class="textbtn" style="min-height:32px;font-size:13px;align-self:flex-start;padding:0" data-a="rm" data-v="debts" data-i="' + i + '">Remove</button></div>';
         }).join('') : '<div class="note">' + ICON.info + '<span>No debts? That’s great. Tap Next.</span></div>') +
         '<button type="button" class="outline" style="min-height:48px" data-a="add" data-v="debts">+ Add a debt</button>' + wizNext(3);
     },
     savings: function () {
-      return wizardHead(4, 'Savings and giving', 'Money set aside for emergencies, not retirement. Under $1,000? You’ll start on Step 1.') +
+      return wizardHead(0, 'Savings and giving', 'Money set aside for emergencies, not retirement. Under $1,000? You’ll start on Step 1.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Emergency savings right now', 'savings', { ph: '0', min: 0 }) +
         '<div class="field">Include giving in your plan?<div class="seg" role="group" aria-label="Giving">' + [[0, 'Not now'], [2, '2%'], [5, '5%'], [10, '10%']].map(function (g) {
           return '<button type="button" class="' + (P.givingPct === g[0] ? 'on' : '') + '" aria-pressed="' + (P.givingPct === g[0]) + '" data-a="giving" data-v="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div></div>' +
-        '<p style="font-size:13px">Giving comes off the top of each paycheck. You can change it anytime.</p></div>' + wizNext(4);
+        '<p style="font-size:13px">Giving comes off the top of each paycheck. You can change it anytime.</p></div>' + wizNext(0);
     },
     fun: function () {
-      return wizardHead(5, 'Fun money', 'Eating out, coffee, subscriptions, shopping, entertainment: your wants for a month. Not sure? Import your bank file next and we’ll help you see it.') +
-        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Fun money per month', 'fun', { ph: '300', min: 0 }) + '</div>' + wizNext(5);
+      return wizardHead(0, 'Fun money', 'Eating out, coffee, subscriptions, shopping, entertainment: your wants for a month. Not sure? Import a bank file and we’ll help you see it.') +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Fun money per month', 'fun', { ph: '300', min: 0 }) + '</div>' + wizNext(0);
+    },
+
+    reveal: function () {
+      var p = profile(), o = F.outlook(p, today()), pl = o.plan, rows = [];
+      var head, sub;
+      if (o.target) {
+        var gap = o.debtFree && o.debtFreeMins ? F.daysBetween(o.debtFree, o.debtFreeMins) : 0;
+        head = o.debtFree ? 'Debt-free by ' + shortDate(o.debtFree) : 'Let\u2019s find more room';
+        sub = o.debtFree ? (o.debtFreeMins ? (gap > 0 ? span(gap) + ' sooner than paying minimums.' : 'Right on schedule.') : 'Minimum payments alone would never get you there.') : 'Right now your paycheck doesn\u2019t cover everything. We\u2019ll find the money together.';
+        if (o.step === 1 && o.cushion) rows.push(['First: your $1,000 cushion', shortDate(o.cushion)]);
+        if (o.targetDone) rows.push(['Then ' + esc(o.target.name) + ' is gone', longDate(o.targetDone)]);
+      } else {
+        head = 'No debt to pay off'; sub = 'Nice. Your plan starts with savings.';
+        if (o.cushion && o.step === 1) rows.push(['Your $1,000 cushion', shortDate(o.cushion)]);
+        if (o.safetyNet) rows.push(['Full safety net (3 months)', shortDate(o.safetyNet)]);
+      }
+      return '<div class="eyebrow" style="margin-top:20px">Your countdown</div>' +
+        '<div class="lime pop"><div style="font-weight:600">Find Me the Money</div><div style="font-family:var(--display);font-size:38px;font-weight:500;line-height:1.1;margin-top:8px">' + head + '</div><div style="font-weight:600;margin-top:8px">' + sub + '</div></div>' +
+        (rows.length ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
+        '<div class="note">' + ICON.info + '<span>This is an estimate from three answers. It sharpens as you add your savings and fun money; the 7-Day Money Reset walks you through it, a couple of minutes a day.</span></div>' +
+        (pl.tight ? '<p style="font-size:14px;color:var(--warn)">Your paycheck doesn\u2019t cover everything yet. That\u2019s exactly what we\u2019re here to fix.</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button><button type="button" class="textbtn" data-a="go" data-v="debts">Change my answers</button></div>';
+    },
+    install: function () {
+      var ios = isIOS();
+      return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><h2>Add it to your Home Screen</h2><p>' + (ios ? 'On iPhone, Safari can clear saved data from websites you haven\u2019t opened in about a week. Apps on your Home Screen are safe, and they open like a real app.' : 'It opens like a real app and is one tap away on payday.') + '</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' + (ios ? [
+          ['1', 'Tap ' + ICON.share + ' <b>Share</b> at the bottom of Safari.'], ['2', 'Scroll down and tap <b>Add to Home Screen</b>.'], ['3', 'Tap <b>Add</b>, then open Find Me the Money from your Home Screen.']]
+          : [['1', 'Open your browser\u2019s menu (the \u22ee or \u2026 button).'], ['2', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.'], ['3', 'Open Find Me the Money from your Home Screen.']]).map(function (x) {
+          return '<div class="check" style="align-items:center"><span class="dot today" aria-hidden="true">' + x[0] + '</span><span>' + x[1] + '</span></div>'; }).join('') + '</div>' +
+        '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
+        '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
+    },
+    habit: function () {
+      return back('planday') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day 7 \u00b7 Make it a payday habit</div><h2>Two minutes, every payday</h2><p>Set it up once and payday reminds you.</p></div>' +
+        '<button type="button" class="choice best" data-a="ics"><div class="ic">' + ICON.flame + '</div><div><b>Add payday check-ins to my calendar</b><span class="d">A reminder every payday at 9 a.m., on your schedule.</span></div></button>' +
+        (standalone() ? '' : '<button type="button" class="choice" data-a="edit" data-v="install"><div class="ic">' + ICON.home + '</div><div><b>Add the app to my Home Screen</b><span class="d">One tap away, and your plan stays safe.</span></div></button>') +
+        '<button type="button" class="choice" data-a="backup"><div class="ic">' + ICON.file + '</div><div><b>Save a backup file</b><span class="d">In case you ever switch phones.</span></div></button>' +
+        '<div class="push"><button type="button" class="outline" data-a="go" data-v="planday">Back to day 7</button></div>';
     },
 
     import: function () {
-      return back(P.setupDone ? 'home' : 'fun') + '<div class="stack" style="gap:6px"><div class="eyebrow">Optional · about a minute</div><h2>See where your money went</h2>' +
+      return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><div class="eyebrow">Optional · about a minute</div><h2>See where your money went</h2>' +
         '<p>Download last month’s transactions from your bank or card as a CSV file, then pick it here. The file is read on this phone and never uploaded.</p></div>' +
         '<label class="choice best" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Choose a CSV file</b><span class="d">From your bank’s website or app: Activity → Download → CSV.</span></div>' +
         '<input type="file" accept=".csv,text/csv,text/comma-separated-values,application/vnd.ms-excel" data-file="csv" class="sr"></label>' +
@@ -212,7 +282,7 @@
           '<span>Look for <b>Download</b>, <b>Export</b> or a download icon on your account activity. Pick <b>CSV</b> and the last 30 days.</span>' +
           '<span>Apple Card: Wallet → Apple Card → Card Balance → a monthly statement → Export Transactions → CSV.</span>' +
           '<span>Use the account you spend from most. You can add another file later.</span></div>' : '') +
-        '<div class="push"><button type="button" class="textbtn" data-a="go" data-v="' + (P.setupDone ? 'home' : 'plan') + '">Skip for now</button></div>';
+        '<div class="push"><button type="button" class="textbtn" data-a="go" data-v="' + (U.wizReturn || 'home') + '">Skip for now</button></div>';
     },
     sort: function () {
       var q = spending().unsorted, done = U.sortHist.length, total = q.length + done, cur = q[0];
@@ -246,18 +316,28 @@
     },
     spend: function () {
       var s = spending(), f = U.filter, t = s.t, all = t.need + t.want + t.unsorted || 1;
-      var shown = s.stores.filter(function (x) { var b = P.sorted[x.m] || 'unsorted'; return b !== 'skip' && (f === 'all' || b === f); }).sort(function (a, b) { return b.total - a.total; });
+      var shown = s.stores.filter(function (x) { return x.bucket !== 'skip' && (f === 'all' || x.split[f] > 0); }).sort(function (a, b) { return b.total - a.total; });
+      var seg = function (label, cur, attrs) {
+        return '<div class="seg mini" role="group" aria-label="' + label + ': need or want">' + ['need', 'want'].map(function (v) {
+          return '<button type="button" class="' + (cur === v ? 'on ' + v : '') + '" aria-pressed="' + (cur === v) + '" ' + attrs + ' data-v="' + v + '">' + (v === 'need' ? 'Need' : 'Want') + '</button>'; }).join('') + '</div>';
+      };
       var row = function (k, label) { return '<div class="row" style="padding:8px 0"><div><span class="key c-' + (k === 'unsorted' ? 'uns' : k) + '"></span>' + label + '</div><b>' + money(t[k] * s.scale) + '/mo <span style="font-weight:400;color:var(--faint)">' + Math.round(t[k] / all * 100) + '%</span></b></div>'; };
-      return back(P.setupDone ? 'home' : 'found') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + s.days + ' days · ' + P.tx.length + ' transactions</div><h2>Needs vs wants</h2><p>Sorted by you. Change any store with its toggle.</p></div>' +
+      return back(P.setupDone ? 'home' : 'found') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + s.days + ' days · ' + P.tx.length + ' transactions</div><h2>Needs vs wants</h2><p>Sorted by you. Change any store with its toggle, or tap a store to sort each purchase.</p></div>' +
         (s.unsorted.length ? '<button type="button" class="primary" data-a="sortstart">Sort ' + plural(s.unsorted.length, 'store') + ' left</button>' : '') +
         '<div class="card stack" style="padding:18px;gap:8px">' + splitHtml(t) + row('need', 'Needs') + row('want', 'Wants') + (t.unsorted ? row('unsorted', 'Not sorted yet') : '') + '</div>' +
         '<div class="seg" role="group" aria-label="Show" style="align-self:flex-start">' + [['all', 'All'], ['need', 'Needs'], ['want', 'Wants']].map(function (o) {
           return '<button type="button" class="' + (f === o[0] ? 'on' : '') + '" aria-pressed="' + (f === o[0]) + '" data-a="filter" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
         '<div class="card">' + (shown.length ? shown.map(function (x) {
-          var b = P.sorted[x.m];
-          return '<div class="row" style="padding:10px 0"><div style="min-width:0">' + esc(x.m) + '<small>' + plural(x.count, 'purchase') + ' · ' + money2(x.total) + '</small></div>' +
-            '<div class="seg mini" role="group" aria-label="' + esc(x.m) + ': need or want">' + ['need', 'want'].map(function (v) {
-              return '<button type="button" class="' + (b === v ? 'on ' + v : '') + '" aria-pressed="' + (b === v) + '" data-a="tog" data-m="' + esc(x.m) + '" data-v="' + v + '">' + (v === 'need' ? 'Need' : 'Want') + '</button>'; }).join('') + '</div></div>';
+          var open = U.openStore === x.m;
+          var sub = plural(x.count, 'purchase') + ' · ' + money2(x.total) + (x.bucket === 'mixed' ? ' · <span class="mixed">Mixed: ' + money(x.split.need) + ' need, ' + money(x.split.want) + ' want</span>' : '');
+          var head = '<div class="row" style="padding:10px 0' + (open ? ';border-bottom:0' : '') + '"><button type="button" class="storebtn" data-a="storeopen" data-m="' + esc(x.m) + '" aria-expanded="' + open + '">' +
+            '<span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span><span style="min-width:0">' + esc(x.m) + '<small>' + sub + '</small></span></button>' +
+            seg(esc(x.m), x.bucket, 'data-a="tog" data-m="' + esc(x.m) + '"') + '</div>';
+          if (!open) return head;
+          return head + '<div class="txlist">' + x.tx.slice().sort(function (a, b) { return P.tx[a].date < P.tx[b].date ? 1 : -1; }).map(function (i) {
+            var tx = P.tx[i], k = bucketOf(tx);
+            return '<div class="row txrow"><div>' + dayMonth(F.fromIso(tx.date)) + '<small>' + money2(tx.amount) + '</small></div>' + seg(esc(x.m) + ', ' + dayMonth(F.fromIso(tx.date)), k, 'data-a="ttog" data-i="' + i + '"') + '</div>';
+          }).join('') + '</div>';
         }).join('') : '<p style="padding:12px 0">Nothing here yet.</p>') + '</div>' +
         '<button type="button" class="outline" data-a="go" data-v="import">Import another file</button>';
     },
@@ -315,7 +395,6 @@
         (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
         (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + '</div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
-      var install = !standalone() && isIOS() ? '<div class="note" style="border-color:rgba(255,159,122,.6)">' + ICON.info + '<span><b>Keep your plan safe:</b> tap ' + ICON.share + ' Share, then <b>Add to Home Screen</b>. Safari can clear saved data from websites you haven’t opened in a week, but not from Home Screen apps.</span></div>' : '';
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       var payday = '<div class="card stack" style="padding:14px 18px"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + (due ? (F.daysBetween(F.fromIso(F.paydayFor(P.nextPay, P.freq, now)), now) > 0 ? 'Check-in time' : 'It’s payday!') : 'Next payday') + '</b><span style="font-size:14px;color:var(--muted)">' + dayMonth(due ? F.fromIso(F.paydayFor(P.nextPay, P.freq, now)) : next) + '</span></div>' +
         '<div style="font-size:14px;color:var(--muted)">' + money(p.paycheck) + ' in · ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
@@ -344,19 +423,25 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + install + toast + celebration(1) + hero + streakCard() + payday + goals + snow + nw +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + payday + streakCard() + checklist() + goals + snow + nw +
         '<button type="button" class="card" data-a="go" data-v="plan" style="text-align:left;width:100%;padding:16px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--display);font-weight:600;font-size:18px">Payday Plan</span><span style="font-size:13px;color:var(--faint)">' + (pl.tight ? 'Needs attention ›' : 'Every dollar has a job ›') + '</span></button>' +
-        '<div class="card" style="padding:14px 18px"><h3 style="margin-bottom:6px">Your 7 steps</h3>' + ladderHtml(step) + '</div>' +
+        '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
+        '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
     },
 
     checkin: function () {
       var o = F.outlook(profile(), today());
       return back('home') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (F.paydayFor(P.nextPay, P.freq, today()) ? 'Payday check-in' : 'Balance update') + ' \u00b7 2 minutes</div><h2>What do your balances say today?</h2>' +
-        '<p>Open your bank and card apps and type what they show. We\u2019ll count your wins: debt paid, money saved and days stolen back.</p></div>' +
+        '<p>Already filled in with last time\u2019s numbers. Check your bank and card apps and change only what\u2019s different. We\u2019ll count your wins.</p></div>' +
         (P.debts.length ? '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Debts</b>' + P.debts.map(function (d, i) {
-          return '<label class="field">' + esc(d.name) + ' balance<input type="number" inputmode="decimal" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>'; }).join('') + '</div>' : '') +
+          var ppm = o.plan.ppm, bal = num(d.bal), isT = o.target && o.target.id === d.id && o.step === 2;
+          var quick = bal > 0 ? '<div class="chips">' + (isT ? '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm - Math.max(0, o.plan.extra))) + '">Paid the plan</button>' : '') +
+            '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm)) + '">Paid the minimum</button>' +
+            '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="0">Paid it off!</button></div>' : '';
+          return '<label class="field">' + esc(d.name) + ' balance<input type="number" inputmode="decimal" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>' + quick; }).join('') + '</div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Savings</b>' + field('Emergency savings', 'savings') +
+        ((o.step === 1 || o.step === 3) && o.plan.extra > 0 ? '<div class="chips"><button type="button" class="chip" data-a="quick" data-k="savings" data-v="' + Math.round(num(P.savings) + o.plan.extra) + '">Added the plan amount (' + money(o.plan.extra) + ')</button></div>' : '') +
         P.goals.map(function (g, i) { return '<label class="field">Saved for ' + esc(g.name) + '<input type="number" inputmode="decimal" data-f="x" data-list="goals" data-i="' + i + '" data-k="saved" value="' + esc(g.saved || 0) + '"></label>'; }).join('') + '</div>' +
         '<p style="font-size:13px">Paycheck different this time, or a bill changed? <button type="button" class="textbtn" style="min-height:0;padding:0;font-size:13px;text-decoration:underline" data-a="go" data-v="settings">Edit your numbers</button></p>' +
         '<div class="push"><button type="button" class="primary" data-a="checkdone">Update my countdown</button></div>' + (o ? '' : '');
@@ -456,7 +541,7 @@
           }).join('') + '</div></div>';
       }).join('');
       return '<div style="margin-top:8px"><div class="eyebrow">One small step a day</div><h2>Plans</h2><p style="margin-top:6px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' +
-        celebration(1, 'plan') + list + '<p class="fine">More plans are coming.</p>';
+        celebration(2, ['plan', 'unlock']) + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
       var run = P.plans.filter(function (p) { return p.uid === U.planUid; })[0], def = F.planDef(run.id), i = U.planDay, d = def.days[i], done = (run.done || []).indexOf(i) >= 0;
@@ -496,8 +581,8 @@
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
       return back('home') + '<h2>Settings</h2>' +
-        '<div class="card">' + [['pay', 'Paycheck and payday'], ['bills', 'Bills and basics'], ['debts', 'Debts'], ['savings', 'Savings and giving'], ['fun', 'Fun money'], ['import', 'Import a bank file']].map(function (x) {
-          return '<button type="button" class="row linkrow" data-a="go" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
+        '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Savings and giving'], ['fun', 'Fun money'], ['import', 'Import a bank file'], ['install', 'Add to Home Screen']].map(function (x) {
+          return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">Everything is saved only on this phone. Save a backup file now and then, in case you switch phones or clear your browser.</p>' +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Restore from a backup</button>' +
@@ -605,25 +690,34 @@
       pl.ended = 'done'; pl.endedOn = iso; P.plansDone = (P.plansDone || 0) + 1; P.unseen.push({ type: 'plan', id: pl.uid }); changed = true;
     });
     f.challengesDone = P.challengesDone || 0; f.plansDone = P.plansDone || 0;
+    // features unlock one at a time, so a new plan isn't a wall of tabs
+    var reset = (P.plans || []).filter(function (p) { return p.id === 'reset7'; }), rdone = [];
+    reset.forEach(function (p) { rdone = rdone.concat(p.done || []); });
+    P.unlocked = P.unlocked || {};
+    if (!P.unlocked.milestones && (rdone.indexOf(1) >= 0 || f.checkins >= 1)) { P.unlocked.milestones = true; P.unseen.push({ type: 'unlock', id: 'milestones' }); changed = true; }
+    if (!P.unlocked.challenges && (rdone.indexOf(3) >= 0 || f.checkins >= 1 || P.challenges.length)) { P.unlocked.challenges = true; P.unseen.push({ type: 'unlock', id: 'challenges' }); changed = true; }
     F.BADGES.forEach(function (b) { if (!P.badges[b.id] && b.test(f)) { P.badges[b.id] = iso; P.unseen.push({ type: 'badge', id: b.id }); changed = true; } });
     if (P.challenges.length > 40) P.challenges = P.challenges.filter(function (c) { return !c.ended; }).concat(P.challenges.filter(function (c) { return c.ended; }).slice(-30));
     if (changed) save();
   }
   function unseenItem(u) {
     if (u.type === 'badge') { var b = F.BADGES.filter(function (x) { return x.id === u.id; })[0]; return b ? { eyebrow: 'New milestone', title: b.title, desc: b.desc, share: 'sharebadge', v: b.id } : null; }
+    if (u.type === 'unlock') return u.id === 'challenges'
+      ? { eyebrow: 'New: Challenges', title: 'Small sprints, real wins', desc: 'Start with the Cushion Sprint or Cook at Home 7. Finish one and you get a card to share.', share: 'openunlock', v: 'challenges', label: 'Take a look' }
+      : { eyebrow: 'New: Milestones', title: 'Your wins, all in one place', desc: 'Little milestones along the way, from your first $250 saved to debt-free.', share: 'openunlock', v: 'milestones', label: 'Take a look' };
     if (u.type === 'plan') { var pl = P.plans.filter(function (x) { return x.uid === u.id; })[0]; if (!pl) return null; var pd = F.planDef(pl.id); return { eyebrow: 'Plan complete', title: pd.title, desc: pd.share, share: 'shareplan', v: pl.uid }; }
     var c = P.challenges.filter(function (x) { return x.uid === u.id; })[0]; if (!c) return null;
     var d = F.challengeDef(c.id); return { eyebrow: 'Challenge complete', title: d.title, desc: d.share, share: 'sharech', v: c.uid };
   }
   // the sunrise "you did it" card; shows up to max new wins of one type (or any)
   function celebration(max, type) {
-    var items = P.unseen.filter(function (u) { return !type || u.type === type; }).slice(0, max).map(function (u) { return [u, unseenItem(u)]; }).filter(function (x) { return x[1]; });
+    var items = P.unseen.filter(function (u) { return !type || (Array.isArray(type) ? type.indexOf(u.type) >= 0 : u.type === type); }).slice(0, max).map(function (u) { return [u, unseenItem(u)]; }).filter(function (x) { return x[1]; });
     if (!items.length) return '';
     var more = P.unseen.length - items.length;
     return '<div class="sunburst" aria-hidden="true"></div>' + items.map(function (x, i) {
       var it = x[1];
       return '<div class="toast win stack" role="status" style="gap:8px"><span style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.8">' + it.eyebrow + '</span><b>' + it.title + '</b><span>' + it.desc + '</span>' +
-        '<div style="display:flex;gap:10px;margin-top:4px"><button type="button" class="sharebtn" data-a="' + it.share + '" data-v="' + it.v + '">' + ICON.share + ' Share</button><button type="button" class="sharebtn ghost" data-a="seen" data-v="' + x[0].type + ':' + x[0].id + '">Nice!</button></div>' +
+        '<div style="display:flex;gap:10px;margin-top:4px"><button type="button" class="sharebtn" data-a="' + it.share + '" data-v="' + it.v + '">' + (it.label || ICON.share + ' Share') + '</button><button type="button" class="sharebtn ghost" data-a="seen" data-v="' + x[0].type + ':' + x[0].id + '">Nice!</button></div>' +
         (i === items.length - 1 && more > 0 && max === 1 ? '<span style="font-size:13px">+' + more + ' more in Milestones</span>' : '') + '</div>';
     }).join('');
   }
@@ -673,6 +767,33 @@
     var extra = d.kind === 'amount' && c.amount ? ['$' + Math.round(c.amount) + ' found'] : [];
     var len = [(d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + '-day challenge')];
     return { eyebrow: 'Challenge complete', title: d.title, sub: d.share, chips: len.concat(extra, streakChips()).slice(0, 3), chipsNoAmt: len.concat(streakChips()).slice(0, 3), caption: 'Challenge complete: ' + d.title + '!' };
+  }
+  // the next Money Reset day, as the home screen's daily nudge
+  function todayStep() {
+    var run = (P.plans || []).filter(function (p) { return p.id === 'reset7' && !p.ended; })[0];
+    if (!run) return '';
+    var st = F.planStatus(run, today());
+    if (st.next < 0 || !st.days[st.next].open) return '';
+    return '<button type="button" class="card" data-a="planopen" data-v="' + run.uid + '" data-i="' + st.next + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;gap:14px;align-items:center">' +
+      '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Today \u00b7 Day ' + (st.next + 1) + ' of 7</span>' +
+      '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + st.def.days[st.next].title + '</span><span style="font-size:13px;color:var(--muted)">2 minutes \u00b7 one small step</span></span><span aria-hidden="true">\u203a</span></button>';
+  }
+  // what's still an estimate, one tap each
+  function checklist() {
+    var items = [
+      ['savings', 'Add your emergency savings', 'Sharpens your $1,000 cushion date', savingsSet()],
+      ['fun', 'Set your fun money', 'Right now we\u2019re guessing 10% of your pay', funSet()],
+      ['import', 'See where your money goes', 'Import a bank file and sort it', P.tx.length > 0],
+      ['bills', 'List your bills one by one', 'Optional: more exact than one number', itemized()]
+    ];
+    if (!standalone()) items.push(['install', 'Add to your Home Screen', isIOS() ? 'Keeps your plan safe on iPhone' : 'One tap away on payday', !!P.installSeen]);
+    var done = items.filter(function (x) { return x[3]; }).length;
+    if (done === items.length) return '';
+    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Make it more accurate</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + items.length + '</span></div>' +
+      items.map(function (x) {
+        return x[3] ? '<div class="planrow locked"><span class="dot on" aria-hidden="true">' + ICON.check('#fff', 12) + '</span><span style="flex:1"><s style="color:var(--faint)">' + x[1] + '</s></span></div>'
+          : '<button type="button" class="planrow" data-a="edit" data-v="' + x[0] + '"><span class="dot today" aria-hidden="true"></span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">' + x[1] + '</span><small style="color:var(--faint)">' + x[2] + '</small></span><span aria-hidden="true">\u203a</span></button>';
+      }).join('') + '</div>';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
   function streakCard() {
@@ -724,8 +845,8 @@
         if (U.err) { render(); break; }
         if (n === 3) P.debts.forEach(function (d) { if (num(d.bal) > num(d.orig)) d.orig = num(d.bal); });
         save();
-        if (P.setupDone) { snapshot(); save(); go('settings'); }
-        else go(n < WIZ.length ? WIZ[n] : 'import');
+        if (P.setupDone) { snapshot(); save(); go(U.wizReturn || 'settings'); }
+        else go(n < WIZ.length ? WIZ[n] : 'reveal');
         break;
       case 'help': U.showHelp = !U.showHelp; render(); break;
       case 'sortstart': U.sortHist = []; go('sort'); break;
@@ -734,10 +855,32 @@
         if (card && v !== 'skip') flyAndDecide(card, v); else decide(v);
         break;
       case 'undo': delete P.sorted[U.sortHist.pop()]; save(); render(); break;
-      case 'tog': P.sorted[b.getAttribute('data-m')] = v; save(); render(); break;
+      case 'tog': (function (m) { P.sorted[m] = v; storeTx(m).forEach(function (x) { delete x.b; }); })(b.getAttribute('data-m')); save(); render(); break;
+      case 'storeopen': (function (m) { U.openStore = U.openStore === m ? null : m; })(b.getAttribute('data-m')); render(); break;
+      case 'ttog': (function (x) {
+        x.b = v; var list = storeTx(x.merchant);
+        // Every purchase agrees again: fold it back into a plain store setting.
+        if (list.every(function (y) { return y.b === v; })) { P.sorted[x.merchant] = v; list.forEach(function (y) { delete y.b; }); }
+      })(P.tx[i]); save(); render(); break;
       case 'filter': U.filter = v; render(); break;
-      case 'setfun': P.fun = U.limit; save(); go(P.setupDone ? 'home' : 'plan'); break;
-      case 'finish': P.setupDone = true; snapshot(); save(); track('setup-done'); U.toast = ['Your plan is ready.', 'Check in each payday and watch the countdown move.', true]; go('home'); break;
+      case 'setfun': P.fun = U.limit; save(); go(U.wizReturn === 'planday' ? 'planday' : 'home'); break;
+      case 'finish':
+        P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today());
+        if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
+        snapshot(); save(); track('setup-done');
+        U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true]; go('home'); break;
+      case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
+      case 'basicpick': P.basics = v; save(); render(); break;
+      case 'ladder': U.showLadder = !U.showLadder; render(); break;
+      case 'installdone': P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
+      case 'openunlock': markSeen('unlock:' + v); go(v); break;
+      case 'quick':
+        var lst = b.getAttribute('data-l'), key = b.getAttribute('data-k');
+        if (lst) P[lst][i][key] = v; else P[key] = v;
+        save();
+        var inp2 = app.querySelector(lst ? '[data-list="' + lst + '"][data-i="' + i + '"][data-k="' + key + '"]' : '[data-f="' + key + '"]');
+        if (inp2) inp2.value = v;
+        break;
       case 'goalnew': U.form = { name: '', amount: '', kind: 'dream', months: 6 }; U.formErr = ''; U.back = U.screen; U.next = U.screen; go('goal'); break;
       case 'preset':
         var pr = U.presets[i], other = pr[0] === 'Something else';
@@ -802,7 +945,8 @@
       case 'planact':
         if (v === 'ics') { download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break; }
         if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6 }; U.formErr = ''; U.back = 'planday'; U.next = 'planday'; go('goal'); break; }
-        if (v === 'spend') { if (!P.tx.length) { go('import'); break; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); break; } }
+        if (v === 'spend') { U.wizReturn = 'planday'; if (!P.tx.length) { go('import'); break; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); break; } }
+        if (v === 'savings' || v === 'fun' || v === 'debts' || v === 'install') U.wizReturn = 'planday';
         go(v); break;
       case 'shareplan':
         markSeen('plan:' + v);
