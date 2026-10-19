@@ -10,6 +10,9 @@ the phone and never uploaded. There is no server, no account and no database.
 - Setup in 5 short steps: paycheck and schedule, monthly bills, debts, savings and giving, fun money
 - Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
 - The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
+- Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (% / $ per month / balance), kids and college, home and mortgage, giving. The reveal shows every step at a glance
+- Budget tab in the bottom bar: the Payday Plan per paycheck or per month, with quick links to change any part
+- Found money spells out the math (wants minus your fun limit) and where the money goes
 - Monthly bills in 10 groups (Home, Utilities, Food & household, Getting around, Health & insurance, Personal, Kids & family, Pets, Subscriptions, Other) with common items to add in one tap; yearly bills are set aside monthly
 - Payday Plan shows per paycheck or per month
 - Swipe deck: the person sorts each store into Need or Want (nothing is pre-tagged). "See the purchases" shows each one with the bank's own text, and stores with several purchases can be sorted one by one

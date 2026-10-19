@@ -200,6 +200,7 @@
     var giving = p.givingPct ? Math.round(p.paycheck * p.givingPct / 100) : 0;
     if (giving) rows.push({ label: 'Giving (' + p.givingPct + '%)', amount: giving, kind: 'give' });
     p.bills.forEach(function (b) { if (+b.amount > 0) rows.push({ label: b.name || 'Bill', amount: b.amount / ppm, kind: 'bill' }); });
+    (p.saveRows || []).forEach(function (r) { if (+r.amount > 0) rows.push({ label: r.label, amount: r.amount / ppm, kind: 'save' }); });
     if (+p.fun > 0) rows.push({ label: 'Fun money (wants)' + (p.funEst ? ' \u00b7 estimate' : ''), amount: p.fun / ppm, kind: 'fun' });
     // the snowball keeps the total debt budget fixed: a paid-off debt's minimum rolls into the next one
     var mins = sum(p.debts, function (d) { return d.min; });
@@ -211,7 +212,8 @@
     var used = sum(rows, function (r) { return r.amount; });
     var extra = p.paycheck - used;
     var monthlyLiving = sum(p.bills, function (b) { return b.amount; }) + (+p.fun || 0);
-    return { rows: rows, extra: extra, tight: extra < -0.5, ppm: ppm, safetyNet: Math.max(1000, Math.round(monthlyLiving * 3 / 100) * 100) };
+    var months = Math.max(3, Math.min(6, +p.efMonths || 3));
+    return { rows: rows, extra: extra, tight: extra < -0.5, ppm: ppm, monthlyLiving: monthlyLiving, safetyNet: Math.max(1000, Math.round(monthlyLiving * months / 100) * 100) };
   }
   function stepOf(s) {
     var open = s.debts.some(function (d) { return d.bal > 0; });
@@ -452,7 +454,7 @@
     ladder('days-100', '100 Days Back', 'Pulled my freedom date 100 days closer.', 'daysBack', 100),
     ladder('days-365', 'A Year Back', 'Pulled my freedom date a whole year closer.', 'daysBack', 365),
     { id: 'debt-free', title: 'Debt-Free', desc: 'Every debt paid off. Every one.', test: function (f) { return f.debtFree; } },
-    { id: 'safety-net', title: 'Full Safety Net', desc: '3 months of expenses saved.', test: function (f) { return f.safetyNet; } },
+    { id: 'safety-net', title: 'Full Safety Net', desc: '3 to 6 months of expenses saved.', test: function (f) { return f.safetyNet; } },
     ladder('goal-1', 'Dream Funded', 'Fully funded a goal without a credit card.', 'goalsFunded', 1),
     ladder('earned-500', 'Side Income $500', 'Earned $500 extra and put it to work.', 'earned', 500, 'money'),
     ladder('earned-1000', 'Side Income $1,000', 'Earned $1,000 extra and put it to work.', 'earned', 1000, 'money'),

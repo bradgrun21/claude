@@ -288,3 +288,26 @@ body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0p
 .toast.win .jfill { background: #2A6B66; }
 .toast.win .jnode.now b { background: #fff; border-color: #E8875F; color: #3B1D0E; box-shadow: 0 0 0 4px rgba(255,255,255,.35); }
 .toast.win .jnode.now b::after { border-color: rgba(255,255,255,.8); }
+/* setup answers */
+.choices { display: grid; gap: 10px; }
+.choice { min-height: 54px; border-radius: 18px; border: 1px solid var(--edge); background: var(--card); box-shadow: var(--glass-shadow); font: inherit; font-size: 16px; font-weight: 600; color: var(--ink); text-align: left; padding: 0 18px; }
+.choice.on { background: #2A6B66; border-color: #2A6B66; color: #fff; }
+.field .choices { margin-top: 8px; }
+.jnode.seen b { background: rgba(42,107,102,.16); border-color: transparent; color: #2A6B66; }
+input[type=range][data-ef] { width: 100%; accent-color: #2A6B66; }
+/* every step at a glance on the reveal */
+.glance { border-top: 1px solid var(--line); padding-top: 4px; }
+.glance .row { padding: 8px 0; font-size: 14px; }
+.glance .row:last-child { border-bottom: 0; }
+.glance .row.here { font-weight: 600; }
+.glance .gn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(42,107,102,.12); color: #2A6B66; font-size: 12px; font-weight: 700; margin-right: 10px; }
+.glance .row.here .gn { background: linear-gradient(135deg, #FF9A76, #FFD08A); color: #3B1D0E; }
+.glance .gs { color: var(--muted); text-align: right; white-space: nowrap; }
+.glance .gs.ok { color: #2A6B66; font-weight: 600; }
+/* found money: the math, spelled out */
+.math .row { padding: 8px 0; font-size: 15px; }
+.math .row.total { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 600; }
+.math .row.total b { color: #2A6B66; }
+input[type=range][data-range] { width: 100%; accent-color: #2A6B66; }
+.choice { display: flex; align-items: center; padding-block: 10px; line-height: 1.3; }
+.jnode.seen b { background: #D7E6E3; color: #2A6B66; }
