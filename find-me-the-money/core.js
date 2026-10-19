@@ -153,6 +153,42 @@
   }
   function spanDays(from, to) { return from && to ? Math.max(14, daysBetween(fromIso(from), fromIso(to)) + 1) : 30; }
 
+  // ---------- budget categories ----------
+  // Groups and common items, drawn from what popular budget apps start people with.
+  // Each item: [name, example amount, 'yr' if it's usually paid once a year]. Debt payments,
+  // savings, giving and fun money have their own places in the plan, so they aren't here.
+  var BUDGET = [
+    { id: 'home', label: 'Home', hint: 'Rent or mortgage and what keeps the place running', items: [['Rent', 1400], ['Mortgage', 1600], ['Renters insurance', 15], ['Homeowners insurance', 1800, 'yr'], ['HOA fees', 150], ['Property taxes', 3000, 'yr'], ['Home repairs', 1200, 'yr'], ['Furniture & home goods', 40]] },
+    { id: 'utilities', label: 'Utilities', hint: 'Lights, water, internet, phone', items: [['Electricity', 130], ['Water & sewer', 50], ['Natural gas', 60], ['Trash', 25], ['Internet', 70], ['Phone', 60]] },
+    { id: 'food', label: 'Food & household', hint: 'Eating out comes out of fun money', items: [['Groceries', 450], ['Household supplies', 40], ['Toiletries', 30], ['Work or school lunches', 80]] },
+    { id: 'transport', label: 'Getting around', hint: 'Car payments go in Debts', items: [['Gas', 160], ['Car insurance', 150], ['Car maintenance', 600, 'yr'], ['Registration & inspection', 150, 'yr'], ['Parking & tolls', 30], ['Public transit', 60], ['Rideshare', 40]] },
+    { id: 'health', label: 'Health & insurance', hint: 'Skip anything that already comes out of your paycheck', items: [['Health insurance', 300], ['Doctor & dental copays', 40], ['Prescriptions', 25], ['Glasses & contacts', 250, 'yr'], ['Life insurance', 25], ['Gym', 35]] },
+    { id: 'personal', label: 'Personal', hint: 'Regular costs of being you', items: [['Haircuts', 40], ['Clothing', 60], ['Laundry & dry cleaning', 25], ['Gifts & holidays', 800, 'yr'], ['Birthdays', 200, 'yr']] },
+    { id: 'kids', label: 'Kids & family', hint: 'Childcare, school and activities', items: [['Childcare', 900], ['Diapers & baby supplies', 80], ['School costs', 400, 'yr'], ['Kids’ activities', 60], ['Child support', 400], ['Helping family', 100]] },
+    { id: 'pets', label: 'Pets', hint: 'Food, vet and the rest', items: [['Pet food', 50], ['Vet visits', 400, 'yr'], ['Pet insurance', 35], ['Grooming', 40]] },
+    { id: 'subs', label: 'Subscriptions', hint: 'The ones you’ve decided to keep', items: [['Streaming', 25], ['Music', 11], ['Amazon Prime', 139, 'yr'], ['Cloud storage', 3], ['Apps & software', 10]] },
+    { id: 'other', label: 'Other bills', hint: 'Anything else that comes due', items: [['Tuition', 2000, 'yr'], ['Storage unit', 90], ['Taxes set aside (self-employed)', 300], ['Bank fees', 10], ['Professional dues', 200, 'yr']] }
+  ];
+  // Older plans saved bills without a group; place them by name.
+  var GROUP_HINTS = [[/rent|mortgage|housing|hoa|home|property/i, 'home'], [/utilit|electric|water|gas bill|natural gas|trash|internet|wifi|cable|phone|cell/i, 'utilities'],
+    [/grocer|food|household|toiletr|lunch/i, 'food'], [/gas|fuel|car|auto|transport|parking|toll|transit|uber|lyft|rideshare/i, 'transport'],
+    [/health|insur|doctor|dental|medic|prescri|gym|vision|glasses/i, 'health'], [/hair|cloth|laundry|gift|birthday|christmas/i, 'personal'],
+    [/child|daycare|kid|school|diaper|baby|family/i, 'kids'], [/pet|vet|dog|cat/i, 'pets'], [/netflix|hulu|spotify|stream|subscri|prime|music|app|cloud|icloud/i, 'subs']];
+  function groupFor(name) {
+    for (var g = 0; g < BUDGET.length; g++) for (var i = 0; i < BUDGET[g].items.length; i++) if (BUDGET[g].items[i][0].toLowerCase() === String(name || '').toLowerCase()) return BUDGET[g].id;
+    for (var h = 0; h < GROUP_HINTS.length; h++) if (GROUP_HINTS[h][0].test(name || '')) return GROUP_HINTS[h][1];
+    return 'other';
+  }
+  // A bill's monthly cost: yearly bills are set aside a twelfth at a time.
+  function billMonthly(b) { var a = +b.amount || 0; return b.per === 'yr' ? a / 12 : a; }
+  // Bills rolled up by group, in catalog order, for the plan.
+  function billGroups(bills) {
+    return BUDGET.map(function (g) {
+      var mine = bills.filter(function (b) { return (b.group || groupFor(b.name)) === g.id && billMonthly(b) > 0; });
+      return { id: g.id, name: g.label, amount: sum(mine, billMonthly), items: mine.map(function (b) { return b.name || 'Bill'; }) };
+    }).filter(function (g) { return g.amount > 0; });
+  }
+
   // ---------- the plan ----------
   function sum(list, f) { return list.reduce(function (t, x) { return t + (+f(x) || 0); }, 0); }
   function perCheck(g, ppm) { return g.saved >= g.amount ? 0 : g.kind === 'fund' ? g.amount / (g.months * ppm) : (g.per || 0); }
@@ -460,6 +496,7 @@
     CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
     nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
     parseCSV: parseCSV, toNumber: toNumber, parseDate: parseDate, readTransactions: readTransactions, cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
+    BUDGET: BUDGET, groupFor: groupFor, billMonthly: billMonthly, billGroups: billGroups,
     plan: plan, perCheck: perCheck, stateFrom: stateFrom, smallest: smallest, paycheck: paycheck, paychecksUntil: paychecksUntil, outlook: outlook };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FMTM = api;
 })(this);

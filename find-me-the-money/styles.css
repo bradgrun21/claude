@@ -221,3 +221,70 @@ body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0p
 @media (prefers-reduced-motion: reduce) { .storebtn .chev { transition: none; } }
 .peek { padding: 4px 18px; }
 .peek .raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .02em; overflow-wrap: anywhere; }
+/* monthly bills, grouped */
+.billgroup { padding: 4px 18px 14px; }
+.billgroup:not(:has(.stack)) { padding-bottom: 4px; }
+.grouphead { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; align-items: center; width: 100%; min-height: 56px; -webkit-tap-highlight-color: transparent; }
+.grouphead:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; border-radius: 10px; }
+.grouphead small { display: block; font-size: 13px; color: var(--faint); font-weight: 400; }
+.grouphead > b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grouphead .chev { color: var(--faint); font-size: 20px; transition: transform .2s; }
+.grouphead .chev.open { transform: rotate(90deg); }
+.rowedit.bill { grid-template-columns: minmax(0, 1fr) 76px 40px 32px; gap: 6px; }
+.rowedit.bill input { padding: 0 10px; }
+.rowedit.bill .x { width: 32px; height: 32px; }
+.rowedit input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.rowedit input[type=number]::-webkit-inner-spin-button, .rowedit input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.rowedit .per { min-height: 40px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.5); font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); }
+.permo { display: block; font-size: 12px; color: var(--faint); margin: 4px 0 0 4px; }
+.billgroup .chips { gap: 6px; }
+.billgroup .chips .chip { min-height: 36px; padding: 0 12px; font-size: 13px; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .grouphead .chev { transition: none; } }
+.billgroup .chips .chip { border-color: var(--line); }
+/* the 7-step journey: circles on a line that fill as you move up */
+.journey { padding: 6px 4px 2px; }
+.jline { position: relative; height: 34px; margin: 0 15px; }
+.jline::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; background: rgba(42,107,102,.14); }
+.jfill { position: absolute; left: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; background: linear-gradient(90deg, #2A6B66, #E8875F); }
+.jfill.anim { animation-name: jfill; animation-timing-function: linear; animation-fill-mode: both; }
+@keyframes jfill { from { width: var(--w0); } to { width: var(--w1); } }
+.jnode { position: absolute; top: 50%; transform: translate(-50%, -50%); }
+.jnode b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-size: 13px; font-weight: 700; background: rgba(255,255,255,.85); border: 1.5px solid rgba(42,107,102,.22); color: var(--faint); position: relative; z-index: 1; }
+.jnode b svg { width: 14px; height: 14px; }
+.jnode.done b { background: #2A6B66; border-color: #2A6B66; color: #fff; }
+.jnode.now b { background: linear-gradient(135deg, #FF9A76, #FFD08A); border-color: #fff; color: #3B1D0E; box-shadow: 0 0 0 4px rgba(255,154,118,.25); }
+.jnode.now b::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid rgba(255,154,118,.6); animation: jring 2.2s ease-out infinite; animation-delay: calc(var(--t, 0s) + .4s); }
+@keyframes jring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+.jnode.anim b { animation: jpop .55s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--t, 0s); }
+@keyframes jpop { 0% { background: rgba(255,255,255,.85); border-color: rgba(42,107,102,.22); color: var(--faint); box-shadow: none; transform: scale(.9); } 55% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.journey.small .jline { height: 26px; margin: 0 12px; }
+.journey.small .jnode b { width: 22px; height: 22px; font-size: 11px; }
+.journey.small .jnode b svg { width: 11px; height: 11px; }
+.journey.small .jnode.now b { box-shadow: 0 0 0 3px rgba(255,154,118,.25); }
+.confetti { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.confetti i { position: absolute; left: -3px; top: -4px; width: 7px; height: 9px; border-radius: 2px; opacity: 0; animation: conf 1.3s cubic-bezier(.15,.7,.3,1) both; }
+@keyframes conf { 0% { opacity: 1; transform: translate(0,0) scale(.5) rotate(0); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 26px)) scale(1) rotate(var(--r)); } }
+.toast.win .journey { margin: 4px 0 2px; }
+/* the path screen: the whole road, step by step */
+.path { padding: 6px 18px; }
+.pstep { display: grid; grid-template-columns: 34px 1fr; gap: 14px; position: relative; padding: 10px 0; }
+.pstep::before, .pstep::after { content: ''; position: absolute; left: 16px; top: 46px; bottom: -8px; width: 2px; border-radius: 1px; }
+.pstep::before { background: rgba(42,107,102,.14); }
+.pstep::after { background: linear-gradient(#2A6B66, #E8875F); transform-origin: top; }
+.pstep:last-child::before, .pstep:last-child::after { display: none; }
+.pdot b { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #2A6B66; color: #fff; font-weight: 700; font-size: 14px; }
+.pstep:last-child .pdot b { background: linear-gradient(135deg, #FF9A76, #FFD08A); color: #3B1D0E; }
+.pstep .t { font-weight: 600; }
+.pstep small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+.path.anim .pdot b { animation: jpop .55s cubic-bezier(.3,1.6,.5,1) both; animation-delay: var(--d); }
+.path.anim .pstep > div:last-child { animation: settle .5s ease-out both; animation-delay: var(--d); }
+.path.anim .pstep::after { animation: pgrow .42s linear both; animation-delay: calc(var(--d) + .12s); }
+@keyframes pgrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .jfill.anim, .jnode.anim b, .jnode.now b::after, .path.anim .pdot b, .path.anim .pstep > div:last-child, .path.anim .pstep::after { animation: none; }
+  .confetti { display: none; }
+}
+.toast.win .jline::before { background: rgba(59,29,14,.14); }
+.toast.win .jfill { background: #2A6B66; }
+.toast.win .jnode.now b { background: #fff; border-color: #E8875F; color: #3B1D0E; box-shadow: 0 0 0 4px rgba(255,255,255,.35); }
+.toast.win .jnode.now b::after { border-color: rgba(255,255,255,.8); }

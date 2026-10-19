@@ -191,4 +191,11 @@ test('Reading plan opens one day per calendar day, catch-up allowed', () => {
   assert.strictEqual(C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0, 1, 2, 3, 4, 5, 6] }, day(10, 30)).state, 'done');
 });
 
+test('Bills roll up into budget groups, yearly bills a twelfth a month', () => {
+  const g = C.billGroups([{ name: 'Rent', amount: 1200, group: 'home' }, { name: 'Amazon Prime', amount: 139, per: 'yr', group: 'subs' }, { name: 'Gas & transportation', amount: 200 }, { name: 'Electric', amount: 0, group: 'utilities' }]);
+  assert.deepStrictEqual(g.map(x => x.id), ['home', 'transport', 'subs']);
+  assert.ok(Math.abs(g[2].amount - 139 / 12) < 0.001);
+  assert.strictEqual(C.groupFor('Rent or housing'), 'home'); assert.strictEqual(C.groupFor('Netflix'), 'subs'); assert.strictEqual(C.groupFor('Mystery'), 'other');
+});
+
 console.log(`\n${passed} tests passed`);

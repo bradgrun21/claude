@@ -9,6 +9,9 @@ the phone and never uploaded. There is no server, no account and no database.
 ## What's in the beta
 - Setup in 5 short steps: paycheck and schedule, monthly bills, debts, savings and giving, fun money
 - Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
+- The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
+- Monthly bills in 10 groups (Home, Utilities, Food & household, Getting around, Health & insurance, Personal, Kids & family, Pets, Subscriptions, Other) with common items to add in one tap; yearly bills are set aside monthly
+- Payday Plan shows per paycheck or per month
 - Swipe deck: the person sorts each store into Need or Want (nothing is pre-tagged). "See the purchases" shows each one with the bank's own text, and stores with several purchases can be sorted one by one
 - Needs vs wants: tap any store to see each purchase and flip one on its own (a Target run can be half groceries, half decor)
 - "Found money": pick a new fun-money limit and see what it frees up

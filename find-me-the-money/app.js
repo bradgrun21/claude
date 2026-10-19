@@ -47,7 +47,7 @@
   // ---------- saved data ----------
   function blank() {
     return { v: 1, setupDone: false, paycheck: '', freq: 'biweekly', nextPay: F.isoDay(F.addDays(today(), 7)),
-      bills: [{ name: 'Rent or housing', amount: '' }, { name: 'Utilities', amount: '' }, { name: 'Phone', amount: '' }, { name: 'Insurance', amount: '' }, { name: 'Groceries', amount: '' }, { name: 'Gas & transportation', amount: '' }],
+      bills: [['Rent', 'home'], ['Electricity', 'utilities'], ['Internet', 'utilities'], ['Phone', 'utilities'], ['Groceries', 'food'], ['Gas', 'transport'], ['Car insurance', 'transport']].map(function (x) { return { name: x[0], amount: '', group: x[1] }; }),
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false };
@@ -59,6 +59,8 @@
       var d = JSON.parse(raw);
       // plans saved before features unlocked gradually keep everything they already had
       if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
+      // bills saved before budget groups existed get placed by name
+      (d.bills || []).forEach(function (b) { if (!b.group) b.group = F.groupFor(b.name); });
       return Object.assign(blank(), d);
     }
     catch (e) { storageOk = false; return blank(); }
@@ -74,14 +76,15 @@
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
       fun: funSet() ? num(P.fun) : Math.round(num(P.paycheck) * F.FREQS[P.freq].perMonth * 0.1 / 10) * 10, funEst: !funSet(),
       // one "bills and basics" number until the person lists bills one by one
-      bills: itemized() ? P.bills.map(function (b) { return { name: b.name, amount: num(b.amount) }; }) : [{ name: 'Bills and basics', amount: num(P.basics) }],
+      bills: itemized() ? F.billGroups(P.bills) : [{ name: 'Bills and basics', amount: num(P.basics) }],
       // interest is optional; a blank rate is estimated at 20%
       debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind, months: g.months, per: g.per || 0, saved: num(g.saved) }; })
     };
   }
   function funSet() { return P.fun !== '' && P.fun != null; }
-  function itemized() { return P.bills.some(function (b) { return num(b.amount) > 0; }); }
+  function itemized() { return P.bills.some(function (b) { return F.billMonthly(b) > 0; }); }
+  function billsTotal() { return P.bills.reduce(function (t, b) { return t + F.billMonthly(b); }, 0); }
   function savingsSet() { return P.savings !== '' && P.savings != null; }
   function standalone() { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; }
   function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
@@ -130,7 +133,7 @@
   }
   function wizardHead(n, title, sub) {
     var top = P.setupDone ? '<div>' + back(U.wizReturn || 'settings') + '</div>'
-      : '<div style="display:flex;align-items:center;gap:12px">' + back(n === 1 ? 'welcome' : WIZ[n - 2]) +
+      : '<div style="display:flex;align-items:center;gap:12px">' + back(n === 1 ? 'path' : WIZ[n - 2]) +
         '<div class="bar"><i style="width:' + (n / WIZ.length * 100) + '%"></i></div><span style="font-size:13px;font-weight:600;color:var(--faint)">' + n + ' of ' + WIZ.length + '</span></div>';
     return top +
       '<div class="stack" style="gap:8px;margin-top:4px"><h2>' + title + '</h2><p>' + sub + '</p></div>';
@@ -164,6 +167,52 @@
       return '<div class="rung' + cls + '"><div class="n">' + (n < current ? ICON.check('#fff') : n) + '</div><div><div class="t">' + st[0] + '</div><small>' + st[1] + '</small></div></div>';
     }).join('') + '</div>';
   }
+  // ---------- the 7-step journey ----------
+  var STEP_WHY = [
+    'A small buffer, so a flat tire or a doctor visit doesn’t turn into new debt.',
+    'List your debts smallest to largest. Knock out the smallest, then roll its payment into the next. Quick wins keep you going.',
+    'With no payments eating your paycheck, your cushion grows into 3 to 6 months of real security.',
+    'Put 15% of your income toward retirement, like a 401(k) or Roth IRA.',
+    'If you have kids, start saving for their college so they don’t start out in debt.',
+    'Throw extra at the mortgage. Imagine no house payment.',
+    'Keep building wealth, and give more than you ever thought you could.'
+  ];
+  var CONFETTI = ['#FF9A76', '#FFD08A', '#2A6B66', '#6E5FB5', '#E8875F', '#9AD0C2', '#FFFFFF'];
+  function confetti(n, delay) {
+    var out = '';
+    for (var k = 0; k < n; k++) {
+      var a = (k / n) * Math.PI * 2 + Math.random() * 0.5, d = 38 + Math.random() * 46;
+      out += '<i style="--dx:' + Math.round(Math.cos(a) * d) + 'px;--dy:' + Math.round(Math.sin(a) * d - 18) + 'px;--r:' + Math.round(Math.random() * 540 - 270) + 'deg;background:' + CONFETTI[k % CONFETTI.length] +
+        ';animation-delay:' + delay.toFixed(2) + 's' + (k % 3 === 0 ? ';border-radius:50%' : '') + '"></i>';
+    }
+    return '<span class="confetti" aria-hidden="true">' + out + '</span>';
+  }
+  // Seven circles on a line. With from/to it fills from one step to the next and celebrates on arrival.
+  // Each key animates once per visit, so a re-render doesn't replay it.
+  function journey(step, opts) {
+    opts = opts || {};
+    var to = Math.max(1, Math.min(step, 7)), anim = opts.key && !(U.anim = U.anim || {})[opts.key], from = anim ? Math.max(0, Math.min(opts.from == null ? 0 : opts.from, to)) : to;
+    if (opts.key) U.anim[opts.key] = true;
+    var seg = 0.6, lead = 0.35, pos = function (n) { return n <= 1 ? 0 : (n - 1) / 6 * 100; };
+    var arrive = function (n) { return n <= from ? 0 : lead + (n - Math.max(from, 1)) * seg; };
+    var nodes = F.STEPS.map(function (st, i) {
+      var n = i + 1, state = n < to ? 'done' : n === to ? 'now' : '', t = arrive(n);
+      return '<span class="jnode ' + state + (anim && state && n > from ? ' anim' : '') + '" style="left:' + pos(n) + '%' + (anim && state && n > from ? ';--t:' + t.toFixed(2) + 's' : '') + '">' +
+        '<b>' + (n < to ? ICON.check('#fff') : n) + '</b>' + (n === to && anim && opts.confetti !== false ? confetti(18, t + 0.15) : '') + '</span>';
+    }).join('');
+    // partway to the next circle, like a level bar
+    var part = to < 7 ? Math.max(0, Math.min(1, opts.progress || 0)) * 100 / 6 : 0, end = pos(to) + part;
+    var dur = anim ? Math.max(0.01, (to - Math.max(from, 1)) * seg + (part ? 0.8 : 0)) : 0;
+    return '<div class="journey' + (opts.small ? ' small' : '') + '" role="img" aria-label="Step ' + to + ' of 7: ' + F.STEPS[to - 1][0] + '">' +
+      '<div class="jline"><i class="jfill' + (anim ? ' anim' : '') + '" style="--w0:' + pos(Math.max(from, 1)) + '%;--w1:' + end + '%;width:' + end + '%' + (anim ? ';animation-duration:' + dur.toFixed(2) + 's;animation-delay:' + lead + 's' : '') + '"></i>' + nodes + '</div></div>';
+  }
+  // how far along the current step is, 0 to 1
+  function stepProgress(o) {
+    if (o.step === 1) return num(P.savings) / 1000;
+    if (o.step === 2) { var orig = 0, bal = 0; P.debts.forEach(function (d) { orig += Math.max(num(d.orig), num(d.bal)); bal += num(d.bal); }); return orig ? 1 - bal / orig : 0; }
+    if (o.step === 3) return o.plan.safetyNet ? num(P.savings) / o.plan.safetyNet : 0;
+    return 0;
+  }
   // the one date the home screen counts down to, by step
   function headline(o) {
     if (o.step === 1) return { kind: 'cushion', date: o.cushion, label: 'Step 1 · Starter Cushion full in' };
@@ -180,11 +229,20 @@
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
-        '<div class="push"><button type="button" class="primary" data-a="go" data-v="pay">Build my plan — about 5 minutes</button>' +
+        '<div class="push"><button type="button" class="primary" data-a="go" data-v="path">Build my plan — about 5 minutes</button>' +
         '<button type="button" class="textbtn" data-a="go" data-v="restore">I have a backup file</button>' +
         '<div class="fine">Beta · an educational budgeting tool, not financial advice</div></div>';
     },
 
+    path: function () {
+      var anim = !(U.anim = U.anim || {}).path; U.anim.path = true;
+      return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">The path</div><h2>7 steps from stressed to free</h2>' +
+        '<p>Everyone walks the same path, one step at a time. Three quick questions and we’ll show you where you are.</p></div>' +
+        '<div class="card path' + (anim ? ' anim' : '') + '">' + F.STEPS.map(function (st, i) {
+          return '<div class="pstep" style="--d:' + (0.25 + i * 0.42).toFixed(2) + 's"><div class="pdot"><b>' + (i + 1) + '</b></div><div><div class="t">' + st[0] + '</div><small>' + STEP_WHY[i] + '</small></div></div>';
+        }).join('') + '</div>' +
+        '<div class="push"><button type="button" class="primary" data-a="go" data-v="pay">Find my step</button></div>';
+    },
     pay: function () {
       return wizardHead(1, 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1600', min: 0 }) +
@@ -197,17 +255,35 @@
       return wizardHead(2, 'Bills and basics', 'About how much goes to rent, utilities, phone, insurance, groceries and gas each month? A rough number is fine. You can list bills one by one later.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Each month, about', 'basics', { ph: '2000', min: 0 }) +
         '<div class="chips">' + picks.map(function (v) { var on = num(P.basics) === v; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="basicpick" data-v="' + v + '">' + money(v) + '</button>'; }).join('') + '</div>' +
-        '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' + wizNext(2);
+        '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' +
+        '<button type="button" class="textbtn" data-a="go" data-v="bills" style="align-self:center">Or build it category by category</button>' + wizNext(2);
     },
     bills: function () {
-      var total = P.bills.reduce(function (t, b) { return t + num(b.amount); }, 0);
-      return wizardHead(0, 'Your bills, one by one', 'Monthly amounts. Include groceries and gas here. Leave anything blank that you don’t pay. Skip debt payments; those come next.') +
-        '<div class="card stack" style="padding:16px 18px;gap:12px">' + P.bills.map(function (b, i) {
-          return '<div class="rowedit"><input type="text" aria-label="Bill name" data-f="x" data-list="bills" data-i="' + i + '" data-k="name" value="' + esc(b.name) + '" placeholder="Bill">' +
-            '<input type="number" inputmode="decimal" aria-label="' + esc(b.name || 'Bill') + ' per month" data-f="x" data-list="bills" data-i="' + i + '" data-k="amount" value="' + esc(b.amount) + '" placeholder="$0">' +
-            '<button type="button" class="x" data-a="rm" data-v="bills" data-i="' + i + '" aria-label="Remove ' + esc(b.name || 'bill') + '">×</button></div>';
-        }).join('') + '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="add" data-v="bills">+ Add a bill</button>' +
-        '<div class="row" style="border:0;padding:4px 0 0"><span style="color:var(--muted)">Total per month</span><b data-total="bills">' + money(total) + '</b></div></div>' + wizNext(0);
+      var total = billsTotal(), monthPay = num(P.paycheck) * F.FREQS[P.freq].perMonth;
+      return wizardHead(2, 'Your monthly bills', 'Pick what you pay from each group and add an amount. Yearly bills get set aside a little every month, so they never surprise you. Leave out debt payments; those come next.') +
+        F.BUDGET.map(function (g) {
+          var rows = [], used = {};
+          P.bills.forEach(function (b, i) { if (b.group === g.id) { rows.push(i); used[String(b.name).toLowerCase()] = 1; } });
+          var sub = rows.reduce(function (t, i) { return t + F.billMonthly(P.bills[i]); }, 0);
+          var open = U.billOpen ? !!U.billOpen[g.id] : rows.length > 0;
+          var head = '<button type="button" class="grouphead" data-a="billgrp" data-v="' + g.id + '" aria-expanded="' + open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">›</span>' +
+            '<span style="flex:1;min-width:0"><b>' + g.label + '</b><small>' + (rows.length ? plural(rows.length, 'item') : g.hint) + '</small></span><b data-gtotal="' + g.id + '">' + (sub ? money(sub) + '/mo' : '') + '</b></button>';
+          if (!open) return '<div class="card billgroup">' + head + '</div>';
+          var picks = g.items.filter(function (it) { return !used[it[0].toLowerCase()]; });
+          return '<div class="card billgroup">' + head + '<div class="stack" style="gap:10px;padding-top:4px">' + rows.map(function (i) {
+            var b = P.bills[i], it = g.items.filter(function (x) { return x[0].toLowerCase() === String(b.name).toLowerCase(); })[0], yr = b.per === 'yr';
+            return '<div><div class="rowedit bill"><input type="text" aria-label="Bill name" data-f="x" data-list="bills" data-i="' + i + '" data-k="name" value="' + esc(b.name) + '" placeholder="Bill name">' +
+              '<input type="number" inputmode="decimal" aria-label="' + esc(b.name || 'Bill') + (yr ? ' per year' : ' per month') + '" data-f="x" data-list="bills" data-i="' + i + '" data-k="amount" value="' + esc(b.amount) + '" placeholder="' + (it ? '~' + it[1] : '$0') + '">' +
+              '<button type="button" class="per" data-a="billper" data-i="' + i + '" aria-label="' + (yr ? 'Paid yearly. Switch to monthly' : 'Paid monthly. Switch to yearly') + '">' + (yr ? '/yr' : '/mo') + '</button>' +
+              '<button type="button" class="x" data-a="rm" data-v="bills" data-i="' + i + '" aria-label="Remove ' + esc(b.name || 'bill') + '">×</button></div>' +
+              (yr ? '<small class="permo" data-permo="' + i + '">' + (num(b.amount) ? 'Sets aside ' + money(num(b.amount) / 12) + ' a month' : 'Enter the yearly cost') + '</small>' : '') + '</div>';
+          }).join('') +
+            '<div class="chips">' + picks.map(function (it) {
+              return '<button type="button" class="chip" data-a="billadd" data-g="' + g.id + '" data-v="' + esc(it[0]) + '"' + (it[2] ? ' data-per="yr"' : '') + '>+ ' + esc(it[0]) + (it[2] ? ' <span style="color:var(--faint)">yearly</span>' : '') + '</button>';
+            }).join('') + '<button type="button" class="chip" data-a="billadd" data-g="' + g.id + '" data-v="">+ Something else</button></div></div></div>';
+        }).join('') +
+        '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><span style="color:var(--muted)">Bills per month</span><b data-total="bills">' + money(total) + '</b></div>' +
+        (monthPay ? '<small style="color:var(--faint)" data-totalpct>' + Math.round(total / monthPay * 100) + '% of your ' + money(monthPay) + ' monthly take-home</small>' : '') + '</div>' + wizNext(2);
     },
     debts: function () {
       return wizardHead(3, 'Your debts', 'Credit cards, car loan, student loans, buy-now-pay-later, medical bills. Not your home; that’s Step 6. Your card and loan apps show each balance and minimum. Interest is optional.') +
@@ -247,6 +323,8 @@
       }
       return '<div class="eyebrow" style="margin-top:20px">Your countdown</div>' +
         '<div class="lime pop"><div style="font-weight:600">Find Me the Money</div><div style="font-family:var(--display);font-size:38px;font-weight:500;line-height:1.1;margin-top:8px">' + head + '</div><div style="font-weight:600;margin-top:8px">' + sub + '</div></div>' +
+        '<div class="card stack" style="padding:18px 18px 16px;gap:12px"><div class="eyebrow">Where you are on the path</div>' + journey(o.step, { key: 'reveal', from: 0, progress: stepProgress(o) }) +
+        '<div><b>Step ' + Math.min(o.step, 7) + ': ' + F.STEPS[Math.min(o.step, 7) - 1][0] + '</b><small style="display:block;color:var(--muted);font-size:14px;margin-top:2px">' + STEP_WHY[Math.min(o.step, 7) - 1] + '</small></div></div>' +
         (rows.length ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
         '<div class="note">' + ICON.info + '<span>This is an estimate from three answers. It sharpens as you add your savings and fun money; the 7-Day Money Reset walks you through it, a couple of minutes a day.</span></div>' +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">Your paycheck doesn\u2019t cover everything yet. That\u2019s exactly what we\u2019re here to fix.</p>' : '') +
@@ -356,11 +434,16 @@
     plan: function () {
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step;
       var last = step === 1 ? 'Starter Cushion' : step === 2 ? 'Snowball → ' + esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'Future You (investing)';
-      var rows = pl.rows.map(function (r) { return { label: esc(r.label), amount: r.amount, strong: r.kind === 'give' || r.kind === 'goal' }; }).concat([{ label: last, amount: Math.max(0, pl.extra), hero: true }]);
-      return back(P.setupDone ? 'home' : 'import') + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>Every paycheck: ' + money(p.paycheck) + '. Every dollar has a job.</h2>' +
+      var mo = !!U.planMonth, k = mo ? pl.ppm : 1, inside = {};
+      p.bills.forEach(function (b) { if (b.items && b.items.length) inside[b.name] = b.items.join(', '); });
+      var rows = pl.rows.map(function (r) { return { label: esc(r.label), sub: r.kind === 'bill' && inside[r.label] ? esc(inside[r.label]) : '', amount: r.amount * k, strong: r.kind === 'give' || r.kind === 'goal' }; }).concat([{ label: last, amount: Math.max(0, pl.extra) * k, hero: true }]);
+      return back(P.setupDone ? 'home' : 'import') + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>' + (mo ? 'Every month: ' + money(p.paycheck * k) : 'Every paycheck: ' + money(p.paycheck)) + '. Every dollar has a job.</h2>' +
         '<p style="font-size:14px">' + (step === 1 ? 'First, $1,000 for emergencies, so a flat tire doesn’t go on a credit card. Then every spare dollar attacks debt.' : step === 2 ? 'Your cushion is in place. Every spare dollar goes to your smallest debt first.' : step === 3 ? 'No debt to attack. Every spare dollar builds 3 months of expenses.' : 'Debt-free with a full safety net. Time to invest 15% and give generously.') + '</p>' +
-        '<div class="card">' + rows.map(function (r) { return '<div class="row' + (r.hero ? ' hero-row' : '') + '" style="padding-block:10px"><span style="' + (r.strong || r.hero ? 'font-weight:600' : 'color:var(--muted)') + '">' + r.label + '</span><b>' + money(r.amount) + '</b></div>'; }).join('') + '</div>' +
-        '<div class="left' + (pl.tight ? ' tight' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '–' + money(-pl.extra) : '$0 ✓') + '</span></div>' +
+        '<div class="seg" role="group" aria-label="Show the plan" style="align-self:flex-start">' + [['check', 'Per paycheck'], ['month', 'Per month']].map(function (o) {
+          var on = (o[0] === 'month') === mo; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="plview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+        (mo ? '<p style="font-size:13px;margin-top:-6px">' + (pl.ppm === 1 ? 'You’re paid monthly, so this matches your paycheck.' : 'About ' + (Math.round(pl.ppm * 100) / 100) + ' paychecks a month on average. Some months bring an extra one.') + '</p>' : '') +
+        '<div class="card">' + rows.map(function (r) { return '<div class="row' + (r.hero ? ' hero-row' : '') + '" style="padding-block:10px"><span style="min-width:0;' + (r.strong || r.hero ? 'font-weight:600' : 'color:var(--muted)') + '">' + r.label + (r.sub ? '<small>' + r.sub + '</small>' : '') + '</span><b>' + money(r.amount) + '</b></div>'; }).join('') + '</div>' +
+        '<div class="left' + (pl.tight ? ' tight' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '–' + money(-pl.extra * k) : '$0 ✓') + '</span></div>' +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or look for money in your bank file.</p>' : '') +
         '<button type="button" class="textbtn" data-a="goalnew" style="align-self:center">' + (P.goals.length ? 'Your goals: ' + P.goals.length + ' of 3 · add another' : '+ Add a goal: a trip, a car, a gift') + '</button>' +
         '<div class="push"><button type="button" class="primary" data-a="' + (P.setupDone ? 'go" data-v="home' : 'finish') + '">' + (P.setupDone ? 'Done' : 'Start my plan') + '</button></div>';
@@ -437,7 +520,7 @@
         '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + payday + streakCard() + checklist() + goals + snow + nw +
         '<button type="button" class="card" data-a="go" data-v="plan" style="text-align:left;width:100%;padding:16px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--display);font-weight:600;font-size:18px">Payday Plan</span><span style="font-size:13px;color:var(--faint)">' + (pl.tight ? 'Needs attention ›' : 'Every dollar has a job ›') + '</span></button>' +
         '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
-        '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
+        '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
     },
 
@@ -707,12 +790,17 @@
     P.unlocked = P.unlocked || {};
     if (!P.unlocked.milestones && (rdone.indexOf(1) >= 0 || f.checkins >= 1)) { P.unlocked.milestones = true; P.unseen.push({ type: 'unlock', id: 'milestones' }); changed = true; }
     if (!P.unlocked.challenges && (rdone.indexOf(3) >= 0 || f.checkins >= 1 || P.challenges.length)) { P.unlocked.challenges = true; P.unseen.push({ type: 'unlock', id: 'challenges' }); changed = true; }
+    // a new step on the path is the biggest win of all
+    var stepNow = F.outlook(profile(), now).step;
+    if (P.topStep == null) P.topStep = stepNow;
+    else if (stepNow > P.topStep) { P.unseen.unshift({ type: 'level', id: String(stepNow), from: P.topStep }); P.topStep = stepNow; changed = true; }
     F.BADGES.forEach(function (b) { if (!P.badges[b.id] && b.test(f)) { P.badges[b.id] = iso; P.unseen.push({ type: 'badge', id: b.id }); changed = true; } });
     if (P.challenges.length > 40) P.challenges = P.challenges.filter(function (c) { return !c.ended; }).concat(P.challenges.filter(function (c) { return c.ended; }).slice(-30));
     if (changed) save();
   }
   function unseenItem(u) {
     if (u.type === 'badge') { var b = F.BADGES.filter(function (x) { return x.id === u.id; })[0]; return b ? { eyebrow: 'New milestone', title: b.title, desc: b.desc, share: 'sharebadge', v: b.id } : null; }
+    if (u.type === 'level') { var sn = Math.min(+u.id, 7); return { eyebrow: 'Level up · Step ' + sn + ' of 7', title: 'Welcome to ' + F.STEPS[sn - 1][0], desc: STEP_WHY[sn - 1], share: 'levelgo', v: u.id, label: 'See my new plan', journey: journey(sn, { key: 'level' + u.id, from: u.from }) }; }
     if (u.type === 'unlock') return u.id === 'challenges'
       ? { eyebrow: 'New: Challenges', title: 'Small sprints, real wins', desc: 'Start with the Cushion Sprint or Cook at Home 7. Finish one and you get a card to share.', share: 'openunlock', v: 'challenges', label: 'Take a look' }
       : { eyebrow: 'New: Milestones', title: 'Your wins, all in one place', desc: 'Little milestones along the way, from your first $250 saved to debt-free.', share: 'openunlock', v: 'milestones', label: 'Take a look' };
@@ -727,7 +815,7 @@
     var more = P.unseen.length - items.length;
     return '<div class="sunburst" aria-hidden="true"></div>' + items.map(function (x, i) {
       var it = x[1];
-      return '<div class="toast win stack" role="status" style="gap:8px"><span style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.8">' + it.eyebrow + '</span><b>' + it.title + '</b><span>' + it.desc + '</span>' +
+      return '<div class="toast win stack" role="status" style="gap:8px"><span style="font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.8">' + it.eyebrow + '</span>' + (it.journey || '') + '<b>' + it.title + '</b><span>' + it.desc + '</span>' +
         '<div style="display:flex;gap:10px;margin-top:4px"><button type="button" class="sharebtn" data-a="' + it.share + '" data-v="' + it.v + '">' + (it.label || ICON.share + ' Share') + '</button><button type="button" class="sharebtn ghost" data-a="seen" data-v="' + x[0].type + ':' + x[0].id + '">Nice!</button></div>' +
         (i === items.length - 1 && more > 0 && max === 1 ? '<span style="font-size:13px">+' + more + ' more in Milestones</span>' : '') + '</div>';
     }).join('');
@@ -851,6 +939,16 @@
         else P.debts.push({ id: uid(), name: '', bal: '', orig: '', min: '', apr: '' });
         save(); render(); break;
       case 'rm': P[v].splice(i, 1); save(); render(); break;
+      case 'billadd': (function (g) {
+        P.bills.push({ name: v, amount: '', group: g, per: b.getAttribute('data-per') || '' }); save(); render();
+        var ins = app.querySelectorAll('[data-list=bills][data-i="' + (P.bills.length - 1) + '"]'); if (ins.length) ins[v ? 1 : 0].focus();
+      })(b.getAttribute('data-g')); break;
+      case 'billper': P.bills[i].per = P.bills[i].per === 'yr' ? '' : 'yr'; save(); render(); break;
+      case 'billgrp': (function () {
+        if (!U.billOpen) { U.billOpen = {}; P.bills.forEach(function (x) { U.billOpen[x.group] = true; }); }
+        U.billOpen[v] = !U.billOpen[v];
+      })(); render(); break;
+      case 'plview': U.planMonth = v === 'month'; render(); break;
       case 'wiz':
         var n = +v; U.err = validate(n);
         if (U.err) { render(); break; }
@@ -882,7 +980,7 @@
       case 'filter': U.filter = v; render(); break;
       case 'setfun': P.fun = U.limit; save(); go(U.wizReturn === 'planday' ? 'planday' : 'home'); break;
       case 'finish':
-        P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today());
+        P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
         if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
         snapshot(); save(); track('setup-done');
         U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true]; go('home'); break;
@@ -891,6 +989,7 @@
       case 'ladder': U.showLadder = !U.showLadder; render(); break;
       case 'installdone': P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
       case 'openunlock': markSeen('unlock:' + v); go(v); break;
+      case 'levelgo': markSeen('level:' + v); go('plan'); break;
       case 'quick':
         var lst = b.getAttribute('data-l'), key = b.getAttribute('data-k');
         if (lst) P[lst][i][key] = v; else P[key] = v;
@@ -1011,7 +1110,18 @@
       else P[t.getAttribute('data-f')] = t.value;
       save();
       var tot = app.querySelector('[data-total="bills"]');
-      if (tot) tot.textContent = money(P.bills.reduce(function (s, b) { return s + num(b.amount); }, 0));
+      if (tot) {
+        var all = billsTotal(), mp = num(P.paycheck) * F.FREQS[P.freq].perMonth, pct = app.querySelector('[data-totalpct]');
+        tot.textContent = money(all);
+        if (pct && mp) pct.textContent = Math.round(all / mp * 100) + '% of your ' + money(mp) + ' monthly take-home';
+        F.BUDGET.forEach(function (g) {
+          var el = app.querySelector('[data-gtotal="' + g.id + '"]'); if (!el) return;
+          var sub = P.bills.reduce(function (t, x) { return t + (x.group === g.id ? F.billMonthly(x) : 0); }, 0);
+          el.textContent = sub ? money(sub) + '/mo' : '';
+        });
+        var bi = t.getAttribute('data-list') === 'bills' ? +t.getAttribute('data-i') : -1, pm = bi >= 0 && app.querySelector('[data-permo="' + bi + '"]');
+        if (pm) pm.textContent = num(P.bills[bi].amount) ? 'Sets aside ' + money(num(P.bills[bi].amount) / 12) + ' a month' : 'Enter the yearly cost';
+      }
       return;
     }
     if (t.hasAttribute('data-g')) { U.form[t.getAttribute('data-g')] = t.value; return; }
