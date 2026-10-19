@@ -288,13 +288,24 @@
       var q = spending().unsorted, done = U.sortHist.length, total = q.length + done, cur = q[0];
       if (!cur) return V.found();
       return back(P.setupDone ? 'home' : 'import') + '<div class="stack" style="gap:6px"><div class="eyebrow">Sort your spending · ' + (done + 1) + ' of ' + total + '</div><h2>Need or want?</h2>' +
-        '<p>You decide. Swipe right for a need, left for a want. Every purchase at this store gets sorted the same way.</p></div>' +
+        '<p>You decide. Swipe right for a need, left for a want. Every purchase at this store gets sorted the same way' + (cur.count > 1 ? ', unless you sort them one by one below' : '') + '.</p></div>' +
         '<div class="bar" style="flex:none"><i style="width:' + (done / total * 100) + '%"></i></div>' +
         '<div class="swipe-wrap">' + (q[1] ? '<div class="swipe-next" aria-hidden="true"></div>' : '') +
         '<div class="swipe-card" data-swipe="1"><span class="swipe-hint want" aria-hidden="true">Want</span><span class="swipe-hint need" aria-hidden="true">Need</span>' +
         '<span style="font-family:var(--display);font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.15">' + esc(cur.m) + '</span>' +
         '<span class="big" style="font-size:52px">' + money2(cur.total) + '</span>' +
         '<span style="color:var(--muted);font-size:15px">' + plural(cur.count, 'purchase') + '</span></div></div>' +
+        (function () {
+          var open = U.sortOpen === cur.m, ids = cur.tx.slice().sort(function (a, b) { return P.tx[a].date < P.tx[b].date ? 1 : -1; });
+          var html = '<button type="button" class="textbtn" data-a="sortpeek" data-m="' + esc(cur.m) + '" aria-expanded="' + open + '" style="align-self:center">' + (open ? 'Hide the purchases' : cur.count > 1 ? 'See the ' + cur.count + ' purchases' : 'See the purchase') + '</button>';
+          if (!open) return html;
+          return html + '<div class="card peek">' + ids.map(function (i) {
+            var tx = P.tx[i], k = tx.b, raw = tx.desc && tx.desc.toUpperCase() !== cur.m.toUpperCase() ? '<small class="raw">' + esc(tx.desc) + '</small>' : '';
+            return '<div class="row txrow"><div style="min-width:0">' + dayMonth(F.fromIso(tx.date)) + ' · <b>' + money2(tx.amount) + '</b>' + raw + '</div>' +
+              (cur.count > 1 ? '<div class="seg mini" role="group" aria-label="' + dayMonth(F.fromIso(tx.date)) + ': need or want">' + ['need', 'want'].map(function (v) {
+                return '<button type="button" class="' + (k === v ? 'on ' + v : '') + '" aria-pressed="' + (k === v) + '" data-a="ttog" data-i="' + i + '" data-v="' + v + '">' + (v === 'need' ? 'Need' : 'Want') + '</button>'; }).join('') + '</div>' : '') + '</div>';
+          }).join('') + '</div>';
+        })() +
         '<div class="sortbtns"><button type="button" class="sortbtn want" data-a="pick" data-v="want">← Want</button><button type="button" class="sortbtn need" data-a="pick" data-v="need">Need →</button></div>' +
         '<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap">' +
         '<button type="button" class="textbtn" data-a="pick" data-v="skip">Not spending (a transfer or payment)</button>' +
@@ -854,13 +865,19 @@
         var card = app.querySelector('[data-swipe]');
         if (card && v !== 'skip') flyAndDecide(card, v); else decide(v);
         break;
-      case 'undo': delete P.sorted[U.sortHist.pop()]; save(); render(); break;
+      case 'undo': (function (m) { delete P.sorted[m]; storeTx(m).forEach(function (x) { delete x.b; }); })(U.sortHist.pop()); save(); render(); break;
+      case 'sortpeek': (function (m) { U.sortOpen = U.sortOpen === m ? null : m; })(b.getAttribute('data-m')); render(); break;
       case 'tog': (function (m) { P.sorted[m] = v; storeTx(m).forEach(function (x) { delete x.b; }); })(b.getAttribute('data-m')); save(); render(); break;
       case 'storeopen': (function (m) { U.openStore = U.openStore === m ? null : m; })(b.getAttribute('data-m')); render(); break;
       case 'ttog': (function (x) {
         x.b = v; var list = storeTx(x.merchant);
         // Every purchase agrees again: fold it back into a plain store setting.
         if (list.every(function (y) { return y.b === v; })) { P.sorted[x.merchant] = v; list.forEach(function (y) { delete y.b; }); }
+        // Sorting purchase by purchase in the deck: once the store is fully sorted, move on.
+        if (U.screen === 'sort' && list.every(function (y) { return bucketOf(y) !== 'unsorted'; })) {
+          U.sortHist.push(x.merchant); save();
+          if (!spending().unsorted.length) { U.limit = null; track('sorted'); go('found'); return; }
+        }
       })(P.tx[i]); save(); render(); break;
       case 'filter': U.filter = v; render(); break;
       case 'setfun': P.fun = U.limit; save(); go(U.wizReturn === 'planday' ? 'planday' : 'home'); break;
@@ -1021,7 +1038,7 @@
       var r = F.readTransactions(text);
       if (r.error) { U.err = r.error; render(); return; }
       if (!r.tx.length) { U.err = 'We found the file, but no spending in it. Try the account you spend from.'; render(); return; }
-      P.tx = r.tx.map(function (x) { return { date: x.date, merchant: x.merchant, amount: x.amount }; }); P.txFrom = r.from; P.txTo = r.to;
+      P.tx = r.tx.map(function (x) { return { date: x.date, desc: x.desc, merchant: x.merchant, amount: x.amount }; }); P.txFrom = r.from; P.txTo = r.to;
       save(); track('import'); U.sortHist = []; U.limit = null; go('sort');
     });
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {

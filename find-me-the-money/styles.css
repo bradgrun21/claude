@@ -219,3 +219,5 @@ body.has-tabs #app { padding-bottom: calc(110px + env(safe-area-inset-bottom, 0p
 .txrow { padding: 6px 0; font-size: 14px; }
 .txrow:last-child { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .storebtn .chev { transition: none; } }
+.peek { padding: 4px 18px; }
+.peek .raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .02em; overflow-wrap: anywhere; }
