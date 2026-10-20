@@ -153,12 +153,13 @@ test('Wins: debt paid down and money saved since the last check-in', () => {
 
 // ---------- challenges and milestones ----------
 const day = (m, d) => new Date(2026, m - 1, d);
-test('Daily challenge: done after all 7 days are marked, missed if the window passes', () => {
+test('Daily challenge: done after all 7 days are marked, no waiting and no deadline', () => {
   const marks = [...Array(7)].map((_, i) => C.isoDay(C.addDays(day(10, 19), i)));
   assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks }, day(10, 25)).state, 'done');
   const half = C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks: marks.slice(0, 3) }, day(10, 21));
   assert.strictEqual(half.state, 'active'); assert.strictEqual(half.label, '3 of 7 days'); assert.strictEqual(half.dots.length, 7);
-  assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks: marks.slice(0, 3) }, day(10, 28)).state, 'missed');
+  assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks: marks.slice(0, 3) }, day(10, 28)).state, 'active');
+  assert.strictEqual(C.challengeStatus({ id: 'cook7', start: '2026-10-19', marks }, day(10, 19)).state, 'done');
 });
 test('Clean challenge counts the days and reports a slip honestly', () => {
   assert.strictEqual(C.challengeStatus({ id: 'nofees30', start: '2026-10-01' }, day(10, 11)).label, 'Day 11 of 30');
@@ -185,9 +186,9 @@ test('Earn challenge adds up the log and finishes at the target', () => {
   assert.strictEqual(C.challengeStatus({ id: 'drive500', start: '2026-10-01', log: [{ amt: 500 }] }, day(10, 10)).state, 'done');
   assert.strictEqual(C.challengeStatus({ id: 'drive500', start: '2026-10-01', log: [{ amt: 100 }] }, day(11, 1)).state, 'missed');
 });
-test('Reading plan opens one day per calendar day, catch-up allowed', () => {
-  const st = C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0] }, day(10, 22));
-  assert.strictEqual(st.open, 4); assert.strictEqual(st.next, 1); assert.strictEqual(st.state, 'active');
+test('Reading plan: every day is open from the start', () => {
+  const st = C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0] }, day(10, 19));
+  assert.strictEqual(st.open, 7); assert.strictEqual(st.next, 1); assert.strictEqual(st.state, 'active');
   assert.strictEqual(C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0, 1, 2, 3, 4, 5, 6] }, day(10, 30)).state, 'done');
 });
 

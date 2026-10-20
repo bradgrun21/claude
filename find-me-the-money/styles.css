@@ -381,3 +381,51 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 .clegend span { display: inline-flex; align-items: center; gap: 6px; }
 .calsel { background: rgba(255,255,255,.6); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .calsel div { display: flex; align-items: center; gap: 8px; }
+/* back to your plan: shows on any screen a plan day sent you to */
+.planbar { position: sticky; top: max(8px, env(safe-area-inset-top, 0px)); z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 10px; border-radius: 18px; background: rgba(255,255,255,.88); border: 1px solid var(--edge); box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.pb-back { all: unset; cursor: pointer; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.pb-back > span:first-child { font-size: 24px; color: #2A6B66; line-height: 1; }
+.pb-back > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pb-back small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.pb-check { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px 0 10px; border-radius: 20px; border: 2px solid #2A6B66; background: #fff; color: #2A6B66; font: inherit; font-size: 14px; font-weight: 700; }
+.pb-check.on { background: #2A6B66; color: #fff; }
+.pb-back:focus-visible, .pb-check:focus-visible { outline: 2px solid #2A6B66; outline-offset: 2px; border-radius: 12px; }
+/* CSV how-to: a drawn phone with a tapping finger */
+.csvg { padding: 16px; }
+.csv-stage { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; align-items: center; animation: settle .45s ease-out; }
+.phone { width: 132px; height: 248px; border-radius: 26px; background: #1B2E2D; padding: 7px; box-shadow: 0 12px 28px rgba(30,62,66,.25); }
+.ph-screen { position: relative; height: 100%; border-radius: 20px; background: #F7FAF9; overflow: hidden; padding: 12px 9px; display: flex; flex-direction: column; gap: 6px; font-size: 9px; color: #1B2E2D; }
+.ph-url { background: #E6ECEB; border-radius: 8px; padding: 4px 6px; font-size: 8px; color: #50625F; text-align: center; }
+.ph-title { font-weight: 800; font-size: 11px; display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.ph-item { display: flex; justify-content: space-between; background: #fff; border-radius: 7px; padding: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.ph-item span { color: #50625F; }
+.ph-dl { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: #2A6B66; color: #fff; font-size: 12px; }
+.ph-sheet { margin-top: auto; background: #fff; border-radius: 14px 14px 8px 8px; padding: 9px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 -4px 14px rgba(0,0,0,.1); animation: phup .5s ease-out both; }
+.ph-opt { border: 1px solid #DCE4E2; border-radius: 7px; padding: 5px 6px; }
+.ph-opt.on { border-color: #2A6B66; background: rgba(42,107,102,.1); font-weight: 700; animation: phpick 4s ease both; }
+.ph-range { color: #50625F; padding: 2px 2px; }
+.ph-btn { background: #2A6B66; color: #fff; text-align: center; border-radius: 8px; padding: 6px; font-weight: 700; }
+.ph-file { display: grid; grid-template-columns: 24px 1fr; grid-template-rows: auto auto; column-gap: 6px; background: #fff; border-radius: 8px; padding: 6px; align-items: center; font-weight: 600; }
+.ph-file small { grid-column: 2; font-weight: 400; color: #50625F; font-size: 8px; }
+.ph-ic { grid-row: span 2; display: grid; place-items: center; height: 24px; border-radius: 5px; background: #2A6B66; color: #fff; font-size: 7px; font-weight: 800; }
+.ph-ic.pdf { background: #C9584A; }
+.ph-file.new { animation: phin .6s .6s ease-out both; }
+.ph-file.new.later { animation-delay: 1.8s; }
+.ph-card { background: #E9F2F0; border: 1.5px solid #2A6B66; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.ph-card small { color: #50625F; font-size: 8px; }
+.ph-finger { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: rgba(232,135,95,.35); border: 2px solid rgba(232,135,95,.9); animation: phtap 4.2s ease-in-out infinite; pointer-events: none; }
+@keyframes phtap { 0%, 12% { opacity: 0; transform: translate(18px, 40px) scale(1); } 30% { opacity: 1; transform: translate(0, 0) scale(1); } 38% { transform: scale(.7); background: rgba(232,135,95,.7); } 46% { transform: scale(1); } 75% { opacity: 1; } 90%, 100% { opacity: 0; } }
+@keyframes phup { from { transform: translateY(60%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes phin { from { transform: translateY(-8px); opacity: 0; background: #FFF3D6; } to { transform: none; opacity: 1; } }
+@keyframes phpick { 0%, 30% { border-color: #DCE4E2; background: #fff; font-weight: 400; } 40%, 100% { border-color: #2A6B66; background: rgba(42,107,102,.1); font-weight: 700; } }
+.tapme { animation: phpulse 4.2s ease both; }
+@keyframes phpulse { 0%, 34% { box-shadow: 0 0 0 0 rgba(232,135,95,0); } 40% { box-shadow: 0 0 0 4px rgba(232,135,95,.45); } 60%, 100% { box-shadow: 0 0 0 0 rgba(232,135,95,0); } }
+.csv-copy { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.csv-copy b { font-size: 17px; line-height: 1.25; }
+.csv-copy p { font-size: 14px; }
+.csv-dots { display: flex; gap: 6px; margin-top: 4px; }
+.csv-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px; background: rgba(42,107,102,.22); }
+.csv-dots button.on { width: 22px; background: #2A6B66; }
+.csv-nav { display: flex; gap: 8px; margin-top: 6px; }
+@media (max-width: 340px) { .csv-stage { grid-template-columns: 1fr; justify-items: center; text-align: center; } .csv-dots, .csv-nav { justify-content: center; } }
+@media (prefers-reduced-motion: reduce) { .csv-stage, .ph-sheet, .ph-file.new, .ph-opt.on, .tapme { animation: none; } .ph-finger { animation: none; opacity: .9; } }

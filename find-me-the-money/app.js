@@ -150,7 +150,9 @@
     var u = P.unlocked || {};
     var tabs = TABS.filter(function (t) { return t[0] !== 'wins' || u.challenges || u.milestones; });
     var tabbed = P.setupDone && U.screen !== 'wins' && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
+    if (U.screen === 'plans' || U.screen === 'planday') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
+    if (U.planCtx) html = planBar() + html;
     if (tabbed) {
       var news = P.unseen.length;
       html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
@@ -159,7 +161,46 @@
       }).join('') + '</nav>';
     }
     app.innerHTML = html;
+    if (U.screen === 'import') { if (!csvTimer) csvAutoplay(); } else if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
     document.body.classList.toggle('has-tabs', tabbed);
+  }
+  // ---------- the CSV how-to: five short animated scenes on a drawn phone ----------
+  var CSV_SCENES = [
+    ['Log in to your bank\u2019s website', 'Use Safari or a computer. Most bank apps can\u2019t export a file.',
+      '<div class="ph-url">\uD83D\uDD12 yourbank.com</div><div class="ph-title">Accounts</div><div class="ph-item tapme">Everyday Checking<span>$1,284.50</span></div><div class="ph-item">Savings<span>$300.00</span></div><div class="ph-item">Credit card<span>$412.08</span></div>', [50, 47]],
+    ['Open Activity, then tap Download', 'It might be a \u2913 icon, or say Export.',
+      '<div class="ph-url">\uD83D\uDD12 yourbank.com</div><div class="ph-title">Activity<span class="ph-dl tapme">\u2913</span></div><div class="ph-item">Kroger<span>\u2212$71.30</span></div><div class="ph-item">DoorDash<span>\u2212$24.10</span></div><div class="ph-item">Shell<span>\u2212$41.00</span></div><div class="ph-item">Paycheck<span>+$970.00</span></div>', [84, 30]],
+    ['Pick CSV and the last 30 days', 'It might be called Spreadsheet or Excel instead.',
+      '<div class="ph-sheet"><div class="ph-title">Download activity</div><div class="ph-opt">PDF</div><div class="ph-opt on tapme">CSV (spreadsheet)</div><div class="ph-opt">Quicken</div><div class="ph-range">Last 30 days \u25BE</div><div class="ph-btn">Download</div></div>', [50, 50]],
+    ['It saves to Files \u2192 Downloads', 'On a computer? AirDrop or email it to yourself.',
+      '<div class="ph-title">Downloads</div><div class="ph-file new"><span class="ph-ic">CSV</span>activity.csv<small>Just now</small></div><div class="ph-file"><span class="ph-ic pdf">PDF</span>statement.pdf<small>Sep 30</small></div>', [50, 34]],
+    ['Come back here and choose it', 'Tap Choose a CSV file, then Browse \u2192 Downloads.',
+      '<div class="ph-card tapme"><b>Choose a CSV file</b><small>Read on this phone, never uploaded</small></div><div class="ph-file new later"><span class="ph-ic">CSV</span>activity.csv<small>Tap to import</small></div>', [50, 28]]
+  ];
+  function csvScene(i) {
+    var sc = CSV_SCENES[i];
+    return '<div class="csv-stage" key="' + i + '"><div class="phone"><div class="ph-screen">' + sc[2] + '<i class="ph-finger" style="left:' + sc[3][0] + '%;top:' + sc[3][1] + '%"></i></div></div>' +
+      '<div class="csv-copy"><div class="eyebrow">Step ' + (i + 1) + ' of ' + CSV_SCENES.length + '</div><b>' + sc[0] + '</b><p>' + sc[1] + '</p>' +
+      '<div class="csv-dots">' + CSV_SCENES.map(function (x, j) { return '<button type="button" class="' + (j === i ? 'on' : '') + '" data-a="csvstep" data-v="' + j + '" aria-label="Step ' + (j + 1) + '"></button>'; }).join('') + '</div>' +
+      '<div class="csv-nav"><button type="button" class="sharebtn ghost" data-a="csvstep" data-v="' + ((i + CSV_SCENES.length - 1) % CSV_SCENES.length) + '" aria-label="Previous step">\u2039</button><button type="button" class="sharebtn" data-a="csvstep" data-v="' + ((i + 1) % CSV_SCENES.length) + '">' + (i === CSV_SCENES.length - 1 ? 'Watch again' : 'Next \u203a') + '</button></div></div></div>';
+  }
+  // plays on its own, one scene every few seconds, while the import screen is open (not with reduced motion)
+  var csvTimer = null;
+  function csvAutoplay() {
+    clearInterval(csvTimer); csvTimer = null;
+    if (U.screen !== 'import' || U.csvPaused) return;
+    try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+    csvTimer = setInterval(function () {
+      var el = app.querySelector('[data-csvguide]'); if (!el || U.screen !== 'import') { clearInterval(csvTimer); csvTimer = null; return; }
+      U.csvStep = ((U.csvStep || 0) + 1) % CSV_SCENES.length; el.innerHTML = csvScene(U.csvStep);
+    }, 4200);
+  }
+  // "‹ Day 1 · Find your number  ○": a way back to today's plan, and a check to finish it from here
+  function planBar() {
+    var run = P.plans.filter(function (p) { return p.uid === U.planCtx.uid; })[0]; if (!run) { U.planCtx = null; return ''; }
+    var d = F.planDef(run.id).days[U.planCtx.day], done = (run.done || []).indexOf(U.planCtx.day) >= 0;
+    return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your plan</small>Day ' + (U.planCtx.day + 1) + ' \u00b7 ' + d.title + '</span></button>' +
+      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark day ' + (U.planCtx.day + 1) + ' complete">' + ICON.check(done ? '#fff' : '#2A6B66', 16) + '<span>Done</span></button></div>';
   }
   function go(s) { U.screen = s; U.err = ''; render(); window.scrollTo(0, 0); }
 
@@ -670,12 +711,15 @@
         '<label class="choice best" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Choose a CSV file</b><span class="d">From your bank’s website or app: Activity → Download → CSV.</span></div>' +
         '<input type="file" accept=".csv,text/csv,text/comma-separated-values,application/vnd.ms-excel" data-file="csv" class="sr"></label>' +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
-        '<button type="button" class="textbtn" data-a="help" style="align-self:flex-start">' + (U.showHelp ? 'Hide tips' : 'How do I download a CSV?') + '</button>' +
-        (U.showHelp ? '<div class="card stack" style="padding:14px 18px;font-size:14px;color:var(--muted);gap:8px">' +
-          '<span>Most banks only offer this on their <b>website</b>, not the app. Log in on a computer or in your phone’s browser.</span>' +
-          '<span>Look for <b>Download</b>, <b>Export</b> or a download icon on your account activity. Pick <b>CSV</b> and the last 30 days.</span>' +
-          '<span>Apple Card: Wallet → Apple Card → Card Balance → a monthly statement → Export Transactions → CSV.</span>' +
-          '<span>Use the account you spend from most. You can add another file later.</span></div>' : '') +
+        '<div class="eyebrow" style="margin-top:6px">How to get the file \u00b7 30 seconds</div>' +
+        '<div class="csvg card" data-csvguide>' + csvScene(U.csvStep || 0) + '</div>' +
+        '<button type="button" class="textbtn" data-a="help" style="align-self:flex-start">' + (U.showHelp ? 'Hide tips' : 'Still stuck? Tips for common banks') + '</button>' +
+        (U.showHelp ? '<div class="card stack" style="padding:14px 18px;font-size:14px;color:var(--muted);gap:10px">' +
+          '<span><b>No download button in your bank\u2019s app?</b> Most banks only offer it on their <b>website</b>. In Safari, log in to your bank, tap <b>aA</b> in the address bar, then <b>Request Desktop Website</b>.</span>' +
+          '<span><b>Look for</b> Download, Export, or a \u2913 icon on your account activity. The format might be called CSV, Spreadsheet or Excel. Pick the last 30 days.</span>' +
+          '<span><b>On a computer?</b> Download it there, then AirDrop or email it to yourself and save it to Files. Import it here on your phone, where your plan lives.</span>' +
+          '<span><b>Apple Card:</b> Wallet \u2192 Apple Card \u2192 Card Balance \u2192 a monthly statement \u2192 Export Transactions \u2192 CSV.</span>' +
+          '<span><b>Still can\u2019t find it?</b> Search your bank\u2019s help for \u201cexport transactions CSV.\u201d Use the account you spend from most. You can add another file later.</span></div>' : '') +
         '<div class="push"><button type="button" class="textbtn" data-a="go" data-v="' + (U.wizReturn || 'home') + '">Skip for now</button></div>';
     },
     sort: function () {
@@ -896,13 +940,14 @@
         var st = F.challengeStatus(c, now, f), d = st.def, act = ACTION[d.id] || '';
         var body = '';
         if (d.kind === 'daily') body = '<div class="dots" role="group" aria-label="Days">' + st.dots.map(function (x, i) {
-          var tap = !x.future && F.daysBetween(F.fromIso(x.iso), now) <= 1;
+          var tap = true;
           return tap ? '<button type="button" class="dot' + (x.done ? ' on' : '') + (x.today ? ' today' : '') + '" aria-pressed="' + x.done + '" aria-label="Day ' + (i + 1) + (x.done ? ', done' : '') + '" data-a="chdot" data-v="' + c.uid + '" data-d="' + x.iso + '">' + (x.done ? ICON.check('#fff', 12) : i + 1) + '</button>'
             : '<span class="dot' + (x.done ? ' on' : '') + (x.future ? ' future' : '') + '" aria-label="Day ' + (i + 1) + (x.done ? ', done' : '') + '">' + (x.done ? ICON.check('#fff', 12) : i + 1) + '</span>';
-        }).join('') + '</div>' + (st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chdot" data-v="' + c.uid + '" data-d="' + F.isoDay(now) + '">I did it today</button>' : st.marked ? '<p style="font-size:13px">Today\u2019s done. See you tomorrow.</p>' : '');
+        }).join('') + '</div>' + (st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chdot" data-v="' + c.uid + '" data-d="' + F.isoDay(now) + '">I did it today</button>' : st.marked && st.canMark ? '<p style="font-size:13px">Today\u2019s checked. Tap any other day above to check it off.</p>' : '');
         else if (d.kind === 'count') body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chplus" data-v="' + c.uid + '">+1 \u00b7 ' + act + '</button>' : '';
         else if (d.kind === 'clean') body = U.slip === c.uid ? '<div class="grid2"><button type="button" class="outline" data-a="chslipno">Never mind</button><button type="button" class="primary danger" data-a="chslip" data-v="' + c.uid + '">Yes, it happened</button></div>'
-          : '<button type="button" class="textbtn" style="align-self:flex-start;min-height:36px;padding:0" data-a="chslipask" data-v="' + c.uid + '">' + act + '</button>';
+          : '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><button type="button" class="textbtn" style="min-height:36px;padding:0" data-a="chslipask" data-v="' + c.uid + '">' + act + '</button>' +
+            '<button type="button" class="sharebtn" data-a="chcomplete" data-v="' + c.uid + '">' + ICON.check('#2A6B66', 14) + ' I made it</button></div>';
         else if (d.kind === 'earn') {
           var log = c.log || [];
           body = ('<div class="rowedit" style="grid-template-columns:minmax(0,1fr) 96px auto"><input type="text" aria-label="What you earned it from" placeholder="From what?" data-earnnote="' + c.uid + '"><input type="number" inputmode="decimal" aria-label="Amount earned" placeholder="$0" data-earnamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="earnadd" data-v="' + c.uid + '">Add</button></div>') +
@@ -948,12 +993,13 @@
         return '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + def.title + '</h3><span style="font-size:13px;color:var(--faint)">' + st.doneCount + ' of ' + def.days.length + '</span></div>' +
           '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(2, st.progress * 100) + '%"></i></div>' +
           '<div>' + st.days.map(function (d, i) {
-            var when = d.done ? 'Done' : d.open ? (i === st.next ? 'Up next' : 'Catch up') : 'Opens ' + dayMonth(F.addDays(F.fromIso(run.start), i));
+            var when = d.done ? 'Done' : i === st.next ? 'Up next' : 'Open';
             var inner = '<span class="dot' + (d.done ? ' on' : '') + (d.open && !d.done ? ' today' : '') + (!d.open ? ' future' : '') + '" aria-hidden="true">' + (d.done ? ICON.check('#fff', 12) : i + 1) + '</span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">Day ' + (i + 1) + ': ' + d.title + '</span><small style="color:var(--faint)">' + when + '</small></span>';
             return d.open ? '<button type="button" class="planrow" data-a="planopen" data-v="' + run.uid + '" data-i="' + i + '">' + inner + '<span aria-hidden="true">\u203a</span></button>' : '<div class="planrow locked">' + inner + '</div>';
           }).join('') + '</div></div>';
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
+        (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
         celebration(2, ['plan', 'unlock']) + goalsCard() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
@@ -1306,6 +1352,7 @@
         if (!U.billOpen) { U.billOpen = {}; P.bills.forEach(function (x) { U.billOpen[x.group] = true; }); }
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
+      case 'csvstep': U.csvStep = +v; U.csvPaused = true; clearInterval(csvTimer); csvTimer = null; (function () { var el = app.querySelector('[data-csvguide]'); if (el) el.innerHTML = csvScene(U.csvStep); })(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
@@ -1393,6 +1440,7 @@
         if (at >= 0) cd.marks.splice(at, 1); else cd.marks.push(dd);
         save(); render(); break;
       case 'chplus': var cp = P.challenges.filter(function (c) { return c.uid === v; })[0]; cp.marks.push(F.isoDay(today()) + '#' + cp.marks.length); save(); render(); break;
+      case 'chcomplete': P.challenges.filter(function (c) { return c.uid === v; })[0].complete = F.isoDay(today()); save(); render(); break;
       case 'chonce': P.challenges.filter(function (c) { return c.uid === v; })[0].done = F.isoDay(today()); save(); render(); break;
       case 'chadd':
         var inp = app.querySelector('[data-chamt="' + v + '"]'), add = inp ? num(inp.value) : 0;
@@ -1422,10 +1470,15 @@
       case 'planstart': P.plans.push({ uid: uid(), id: v, start: F.isoDay(today()), done: [] }); save(); track('plan-start'); render(); break;
       case 'planopen': U.planUid = v; U.planDay = i; go('planday'); break;
       case 'planmark':
+        if (U.planCtx) { U.planUid = U.planCtx.uid; U.planDay = U.planCtx.day; }
         var rp = P.plans.filter(function (p) { return p.uid === U.planUid; })[0];
         if (rp.done.indexOf(U.planDay) < 0) rp.done.push(U.planDay);
+        U.planCtx = null; U.wizReturn = null;
+        U.planToast = 'Day ' + (U.planDay + 1) + ' complete. Nice work.';
         save(); track('plan-day'); go('plans'); break;
+      case 'planback': if (U.planCtx) { U.planUid = U.planCtx.uid; U.planDay = U.planCtx.day; } U.planCtx = null; go('planday'); break;
       case 'planact':
+        U.planCtx = { uid: U.planUid, day: U.planDay };
         if (v === 'ics') { download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break; }
         if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6 }; U.formErr = ''; U.back = 'planday'; U.next = 'planday'; go('goal'); break; }
         if (v === 'spend') { U.wizReturn = 'planday'; if (!P.tx.length) { go('import'); break; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); break; } }

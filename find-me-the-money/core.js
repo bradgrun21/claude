@@ -393,8 +393,8 @@
     var st = { def: def, dayN: dayN, daysLeft: Math.max(0, def.days - dayN + 1), state: 'active', progress: 0, label: '', canMark: false, marked: marks.indexOf(todayIso) >= 0 };
     if (def.kind === 'daily') {
       st.progress = marks.length / def.days; st.label = marks.length + ' of ' + def.days + ' days';
-      st.canMark = dayN <= def.days && !st.marked;
-      if (marks.length >= def.days) st.state = 'done'; else if (dayN > def.days + 1) st.state = 'missed';
+      st.canMark = !st.marked && marks.length < def.days;
+      if (marks.length >= def.days) st.state = 'done';
       st.dots = [];
       for (var i = 0; i < def.days; i++) { var di = isoDay(addDays(fromIso(c.start), i)); st.dots.push({ iso: di, done: marks.indexOf(di) >= 0, today: di === todayIso, future: daysBetween(today, fromIso(di)) > 0 }); }
     } else if (def.kind === 'count') {
@@ -405,7 +405,7 @@
       var clean = c.slipped ? daysBetween(fromIso(c.start), fromIso(c.slipped)) : Math.min(def.days, dayN - 1);
       st.progress = clean / def.days; st.label = 'Day ' + Math.min(dayN, def.days) + ' of ' + def.days;
       if (c.slipped) { st.state = 'slipped'; st.label = clean + ' clean ' + (clean === 1 ? 'day' : 'days'); }
-      else if (dayN > def.days) st.state = 'done';
+      else if (dayN > def.days || c.complete) { st.state = 'done'; st.progress = 1; }
     } else if (def.kind === 'cushion') {
       var sv = facts ? facts.savings : 0;
       st.progress = Math.min(1, sv / CUSHION); st.label = '$' + Math.round(sv).toLocaleString('en-US') + ' of $1,000';
@@ -487,7 +487,8 @@
   function planDef(id) { return PLANS.filter(function (p) { return p.id === id; })[0]; }
   // p = { id, start, done: [day index] }
   function planStatus(p, today) {
-    var def = planDef(p.id), open = Math.min(def.days.length, daysBetween(fromIso(p.start), today) + 1), done = p.done || [];
+    // every day is open from the start: go at your own pace
+    var def = planDef(p.id), open = def.days.length, done = p.done || [];
     var next = -1;
     for (var i = 0; i < def.days.length; i++) if (done.indexOf(i) < 0) { next = i; break; }
     return { def: def, open: open, doneCount: done.length, next: next, state: done.length >= def.days.length ? 'done' : 'active', progress: done.length / def.days.length,
