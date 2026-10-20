@@ -50,14 +50,16 @@ python3 -m http.server 8000
 ```
 Open http://localhost:8000
 
-## Put it online (about 5 minutes, free)
-**Netlify Drop (easiest):**
-1. Go to https://app.netlify.com/drop and sign up (free).
-2. Drag the whole `find-me-the-money` folder onto the page. You get a link like `https://something.netlify.app`.
-3. Optional: Site settings → Domain management → add your own domain.
+## Where it lives
+Live at **https://findmethemoney.netlify.app**. Netlify deploys automatically from the
+`claude/find-me-the-money-mvp` branch of the GitHub repository (settings in `netlify.toml` at the repo root),
+so every push goes live in about a minute. No uploading.
 
-**Updating later:** drag the folder onto your site's Deploys page again. Before each update, change
-`VERSION` at the top of `sw.js` (any new text) so phones pick up the new files.
+Before each update, change `VERSION` at the top of `sw.js` (any new text) so phones pick up the new files.
+If a phone still shows the old version, close the app completely and open it again.
+
+The repository is public because Netlify's free plan only builds private repositories from one recognized
+contributor. Nothing secret is in it: it's the same code anyone can see by visiting the site.
 
 ## Before you send it to friends and family
 - [ ] Optional: set `shareUrl` at the top of `app.js` (your domain) so it prints on share cards
