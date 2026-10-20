@@ -517,9 +517,12 @@
     var q = P.quick || {}, pay = num(q.pay), exp = num(q.exp), debt = num(q.debt), min = num(q.min), noJob = Math.round(pay - exp - min);
     return { pay: pay, exp: exp, debt: debt, min: Math.round(min), noJob: noJob, total: Math.max(0, Math.round(min + Math.max(0, noJob))) };
   }
+  function quickMonthNote() {
+    var m = num(P.paycheck) * F.FREQS[P.freq].perMonth;
+    return m > 0 ? '\u2248 ' + money(m) + ' a month after taxes' : 'What actually lands in your account after taxes.';
+  }
   function quickApply() {
-    P.quick = { pay: num(P.qPay), exp: num(P.qExp), debt: num(P.qDebt), min: num(P.qMin) };
-    if (!num(P.paycheck) || P.payAuto) { P.paycheck = String(Math.round(P.quick.pay / F.FREQS[P.freq].perMonth)); P.payAuto = true; }
+    P.quick = { pay: num(P.paycheck) * F.FREQS[P.freq].perMonth, exp: num(P.qExp), debt: num(P.qDebt), min: num(P.qMin) };
     if (P.quick.exp && (!num(P.basics) || P.basicsAuto)) { P.basics = String(P.quick.exp); P.basicsAuto = true; }
     // one starter line for debts; the debt step asks them to split it into each card and loan
     var ph = P.debts.filter(function (d) { return d.quick; })[0];
@@ -569,8 +572,10 @@
     quick: function () {
       return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">30 seconds \u00b7 rough numbers are fine</div><h2>Let\u2019s find your money</h2>' +
         '<p>Three quick numbers. We\u2019ll show you how much is slipping away each month.</p></div>' +
-        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per month', 'qPay', { ph: '3500', min: 0 }) +
-        '<small class="qhint">What actually lands in your account after taxes. Paid every two weeks? Use about 2\u00bc paychecks.</small>' +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1000', min: 0 }) +
+        '<div class="field" style="margin-top:-4px">How often?<div class="seg wrap" role="group" aria-label="How often you\u2019re paid">' + Object.keys(F.FREQS).map(function (k) {
+          return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
+        '<small class="qhint" data-live="qmonth">' + quickMonthNote() + '</small>' +
         field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Rent, utilities, phone, groceries, gas, insurance, subscriptions. Leave out debt payments.</small>' +
         '<div class="grid2">' + field('Total debt', 'qDebt', { ph: '0', min: 0 }) + field('Debt payments / mo', 'qMin', { ph: '0', min: 0 }) + '</div>' +
         '<small class="qhint">Credit cards, car, student loans, buy-now-pay-later. Not your home.</small></div>' +
@@ -593,7 +598,7 @@
         '<button type="button" class="textbtn" data-a="claimshare">Share this</button><button type="button" class="textbtn" data-a="go" data-v="quick">Change my numbers</button></div>';
     },
     pay: function () {
-      return wizardHead('pay', 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.' + (P.quick && num(P.quick.pay) ? ' We started from your ' + money(num(P.quick.pay)) + ' a month.' : '')) +
+      return wizardHead('pay', 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.' + (P.quick && num(P.quick.pay) ? ' Already filled in from your quick numbers. Just add your next payday.' : '')) +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1600', min: 0 }) +
         '<div class="field">How often are you paid?<div class="seg wrap" role="group" aria-label="How often">' + Object.keys(F.FREQS).map(function (k) {
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
@@ -1377,9 +1382,9 @@
     var a = b.getAttribute('data-a'), v = b.getAttribute('data-v'), i = +b.getAttribute('data-i');
     switch (a) {
       case 'go': if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
-      case 'freq': P.freq = v; if (P.payAuto && P.quick) P.paycheck = String(Math.round(num(P.quick.pay) / F.FREQS[v].perMonth)); save(); render(); break;
+      case 'freq': P.freq = v; save(); render(); break;
       case 'quickgo':
-        if (!(num(P.qPay) > 0)) { U.err = 'Enter your take-home pay per month. A rough number is fine.'; render(); break; }
+        if (!(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); break; }
         U.err = ''; quickApply(); save(); track('quick-done'); go('claim'); break;
       case 'claimgo': track('claim'); go('path'); break;
       case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', subNoAmt: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
@@ -1588,7 +1593,6 @@
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
     if (t.hasAttribute('data-f')) {
       if (t.hasAttribute('data-list')) P[t.getAttribute('data-list')][+t.getAttribute('data-i')][t.getAttribute('data-k')] = t.value;
-      if (t.getAttribute('data-f') === 'paycheck') P.payAuto = false;
       if (t.getAttribute('data-f') === 'basics') P.basicsAuto = false;
       if (t.getAttribute('data-list') === 'debts' && P.debts[+t.getAttribute('data-i')]) delete P.debts[+t.getAttribute('data-i')].quick;
       if (t.getAttribute('data-list') === 'funParts') {
@@ -1599,6 +1603,7 @@
       else P[t.getAttribute('data-f')] = t.value;
       save();
       var sl = app.querySelector('[data-live="savings"]'); if (sl) sl.textContent = savingsNote();
+      var qm = app.querySelector('[data-live="qmonth"]'); if (qm) qm.textContent = quickMonthNote();
       if (t.getAttribute('data-f') === 'savings') Array.prototype.forEach.call(app.querySelectorAll('[data-a=savepick]'), function (c) { var on = t.value !== '' && +c.getAttribute('data-v') === num(t.value); c.classList.toggle('on', on); c.setAttribute('aria-pressed', on); });
       var po = app.querySelector('[data-live="payoff"]'); if (po) po.textContent = payoffNote();
       var tot = app.querySelector('[data-total="bills"]');
