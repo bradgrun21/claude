@@ -512,11 +512,10 @@
       '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div></div>';
   }
   // ---------- the 30-second "find my money" ----------
-  // interest uses a typical credit-card-and-loan rate; it's labeled an estimate on screen
+  // the money to reclaim: debt payments you keep once the debt is gone, plus money that has no job yet
   function quickMath() {
-    var q = P.quick || {}, pay = num(q.pay), exp = num(q.exp), debt = num(q.debt), min = num(q.min), rate = 20;
-    var interest = debt * rate / 100 / 12, noJob = pay - exp - min;
-    return { pay: pay, exp: exp, debt: debt, min: min, rate: rate, interest: Math.round(interest), noJob: Math.round(noJob), total: Math.max(0, Math.round(interest + Math.max(0, noJob))) };
+    var q = P.quick || {}, pay = num(q.pay), exp = num(q.exp), debt = num(q.debt), min = num(q.min), noJob = Math.round(pay - exp - min);
+    return { pay: pay, exp: exp, debt: debt, min: Math.round(min), noJob: noJob, total: Math.max(0, Math.round(min + Math.max(0, noJob))) };
   }
   function quickApply() {
     P.quick = { pay: num(P.qPay), exp: num(P.qExp), debt: num(P.qDebt), min: num(P.qMin) };
@@ -581,7 +580,7 @@
     claim: function () {
       var q = quickMath(), short = q.noJob < 0;
       var rows = [];
-      if (q.interest > 0) rows.push(['Lost to interest', money(q.interest) + '/mo', 'About ' + money(q.debt) + ' of debt at a typical ' + q.rate + '% rate. The snowball wins this back.']);
+      if (q.min > 0) rows.push(['Debt payments you\u2019d keep', money(q.min) + '/mo', (q.debt ? 'On ' + money(q.debt) + ' of debt. ' : '') + 'Pay it off, stay out of it, and this money is yours every month.']);
       if (q.noJob > 0) rows.push(['Money with no job yet', money(q.noJob) + '/mo', 'What\u2019s left after expenses and debt payments. Money without a plan usually disappears.']);
       if (short) rows.push(['Short each month', money(-q.noJob) + '/mo', 'Your expenses and payments are more than your pay. Let\u2019s close that gap.']);
       var big = short && q.total <= 0 ? money(-q.noJob) : money(q.total);
@@ -1383,7 +1382,7 @@
         if (!(num(P.qPay) > 0)) { U.err = 'Enter your take-home pay per month. A rough number is fine.'; render(); break; }
         U.err = ''; quickApply(); save(); track('quick-done'); go('claim'); break;
       case 'claimgo': track('claim'); go('path'); break;
-      case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Money I was losing to interest or letting slip away. Now it gets a job.', subNoAmt: 'Money I was losing to interest or letting slip away. Now it gets a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
+      case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', subNoAmt: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
       case 'giving': P.givingPct = +v; save(); render(); break;
       case 'answer': P[b.getAttribute('data-k')] = v; save(); render(); break;
       case 'savepick': P.savings = v; save(); render(); break;

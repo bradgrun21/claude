@@ -9,7 +9,7 @@ the phone and never uploaded. There is no server, no account and no database.
 ## What's in the beta
 - Setup in 5 short steps: paycheck and schedule, monthly bills, debts, savings and giving, fun money
 - Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
-- Find my money in 30 seconds: take-home pay, expenses, debt and payments, then "We found $X a month" (interest lost plus money with no job), "Want it back?" and Reclaim my money. The answers fill in the detailed setup
+- Find my money in 30 seconds: take-home pay, expenses, debt and payments, then "We found $X a month" (debt payments you keep once debt-free, plus money with no job), "Want it back?" and Reclaim my money. The answers fill in the detailed setup
 - The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
 - Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (% / $ per month / balance), kids and college, home and mortgage, giving. The reveal shows every step at a glance
 - Community tab: what's inside the Skool community and a Join button (set `communityUrl` in `app.js`); every share card gets "Post it in the community". Challenges and Milestones share one Wins tab
