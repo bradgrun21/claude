@@ -52,7 +52,7 @@
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '',
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -511,6 +511,25 @@
       '<div class="cgrid">' + cells + '</div>' + sel +
       '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div></div>';
   }
+  // ---------- the 30-second "find my money" ----------
+  // interest uses a typical credit-card-and-loan rate; it's labeled an estimate on screen
+  function quickMath() {
+    var q = P.quick || {}, pay = num(q.pay), exp = num(q.exp), debt = num(q.debt), min = num(q.min), rate = 20;
+    var interest = debt * rate / 100 / 12, noJob = pay - exp - min;
+    return { pay: pay, exp: exp, debt: debt, min: min, rate: rate, interest: Math.round(interest), noJob: Math.round(noJob), total: Math.max(0, Math.round(interest + Math.max(0, noJob))) };
+  }
+  function quickApply() {
+    P.quick = { pay: num(P.qPay), exp: num(P.qExp), debt: num(P.qDebt), min: num(P.qMin) };
+    if (!num(P.paycheck) || P.payAuto) { P.paycheck = String(Math.round(P.quick.pay / F.FREQS[P.freq].perMonth)); P.payAuto = true; }
+    if (P.quick.exp && (!num(P.basics) || P.basicsAuto)) { P.basics = String(P.quick.exp); P.basicsAuto = true; }
+    // one starter line for debts; the debt step asks them to split it into each card and loan
+    var ph = P.debts.filter(function (d) { return d.quick; })[0];
+    if (P.quick.debt > 0) {
+      var min = P.quick.min || Math.max(25, Math.round(P.quick.debt * 0.03));
+      if (ph) { ph.bal = String(P.quick.debt); ph.orig = String(P.quick.debt); ph.min = String(min); }
+      else if (!P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: String(P.quick.debt), orig: String(P.quick.debt), min: String(min), apr: '', quick: true });
+    } else if (ph) P.debts.splice(P.debts.indexOf(ph), 1);
+  }
   // how far along the current step is, 0 to 1
   function stepProgress(o) {
     if (o.step === 1) return num(P.savings) / 1000;
@@ -534,22 +553,48 @@
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
-        '<div class="push"><button type="button" class="primary" data-a="go" data-v="path">Build my plan — about 5 minutes</button>' +
+        '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
         '<button type="button" class="textbtn" data-a="go" data-v="restore">I have a backup file</button>' +
         '<div class="fine">Beta · an educational budgeting tool, not financial advice</div></div>';
     },
 
     path: function () {
       var anim = !(U.anim = U.anim || {}).path; U.anim.path = true;
-      return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">The path</div><h2>7 steps from stressed to free</h2>' +
+      return back(P.quick ? 'claim' : 'welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">The path</div><h2>7 steps from stressed to free</h2>' +
         '<p>Everyone walks the same path, one step at a time. Three quick questions and we’ll show you where you are.</p></div>' +
         '<div class="card path' + (anim ? ' anim' : '') + '">' + F.STEPS.map(function (st, i) {
           return '<div class="pstep" style="--d:' + (0.25 + i * 0.42).toFixed(2) + 's"><div class="pdot"><b>' + (i + 1) + '</b></div><div><div class="t">' + st[0] + '</div><small>' + STEP_WHY[i] + '</small></div></div>';
         }).join('') + '</div>' +
         '<div class="push"><button type="button" class="primary" data-a="go" data-v="savings">Find my step</button></div>';
     },
+    quick: function () {
+      return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">30 seconds \u00b7 rough numbers are fine</div><h2>Let\u2019s find your money</h2>' +
+        '<p>Three quick numbers. We\u2019ll show you how much is slipping away each month.</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per month', 'qPay', { ph: '3500', min: 0 }) +
+        '<small class="qhint">What actually lands in your account after taxes. Paid every two weeks? Use about 2\u00bc paychecks.</small>' +
+        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Rent, utilities, phone, groceries, gas, insurance, subscriptions. Leave out debt payments.</small>' +
+        '<div class="grid2">' + field('Total debt', 'qDebt', { ph: '0', min: 0 }) + field('Debt payments / mo', 'qMin', { ph: '0', min: 0 }) + '</div>' +
+        '<small class="qhint">Credit cards, car, student loans, buy-now-pay-later. Not your home.</small></div>' +
+        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="quickgo">Show me</button></div>';
+    },
+    claim: function () {
+      var q = quickMath(), short = q.noJob < 0;
+      var rows = [];
+      if (q.interest > 0) rows.push(['Lost to interest', money(q.interest) + '/mo', 'About ' + money(q.debt) + ' of debt at a typical ' + q.rate + '% rate. The snowball wins this back.']);
+      if (q.noJob > 0) rows.push(['Money with no job yet', money(q.noJob) + '/mo', 'What\u2019s left after expenses and debt payments. Money without a plan usually disappears.']);
+      if (short) rows.push(['Short each month', money(-q.noJob) + '/mo', 'Your expenses and payments are more than your pay. Let\u2019s close that gap.']);
+      var big = short && q.total <= 0 ? money(-q.noJob) : money(q.total);
+      return '<div class="eyebrow" style="margin-top:20px">' + (short && q.total <= 0 ? 'Here\u2019s the gap' : 'We found') + '</div>' +
+        '<div class="lime pop"><div style="font-weight:600">Find Me the Money</div><div class="big" style="font-size:60px;margin-top:6px">' + big + '<span style="font-size:22px"> a month</span></div>' +
+        '<div style="font-weight:600;font-size:18px">' + (short && q.total <= 0 ? 'to find, so every bill is covered' : 'That\u2019s ' + money(q.total * 12) + ' a year.') + '</div></div>' +
+        (rows.length ? '<div class="card stack" style="padding:6px 18px">' + rows.map(function (r) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + r[0] + '</b><small style="color:var(--muted);font-size:13px;margin-top:2px">' + r[2] + '</small></div><b style="color:#2A6B66">' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
+        '<h2 style="text-align:center;margin-top:6px">' + (short && q.total <= 0 ? 'Want to find it?' : 'Want it back?') + '</h2>' +
+        '<div class="push"><button type="button" class="primary" data-a="claimgo">' + (short && q.total <= 0 ? 'Find my money \u203a' : 'Reclaim my money \u203a') + '</button>' +
+        '<button type="button" class="textbtn" data-a="claimshare">Share this</button><button type="button" class="textbtn" data-a="go" data-v="quick">Change my numbers</button></div>';
+    },
     pay: function () {
-      return wizardHead('pay', 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.') +
+      return wizardHead('pay', 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.' + (P.quick && num(P.quick.pay) ? ' We started from your ' + money(num(P.quick.pay)) + ' a month.' : '')) +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1600', min: 0 }) +
         '<div class="field">How often are you paid?<div class="seg wrap" role="group" aria-label="How often">' + Object.keys(F.FREQS).map(function (k) {
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
@@ -591,7 +636,9 @@
         (monthPay ? '<small style="color:var(--faint)" data-totalpct>' + Math.round(total / monthPay * 100) + '% of your ' + money(monthPay) + ' monthly take-home</small>' : '') + '</div>' + wizNext('basics');
     },
     debts: function () {
-      return wizardHead('debts', 'What do you owe?', 'List everything except your home: credit cards, car loan, student loans, buy-now-pay-later, medical bills. We line them up smallest to largest and knock them out one at a time. Your card and loan apps show each balance and minimum. Interest is optional.') +
+      var hasQuick = P.debts.some(function (d) { return d.quick; });
+      return (hasQuick ? '' : '') + wizardHead('debts', 'What do you owe?', 'List everything except your home: credit cards, car loan, student loans, buy-now-pay-later, medical bills. We line them up smallest to largest and knock them out one at a time. Your card and loan apps show each balance and minimum. Interest is optional.') +
+        (hasQuick ? '<div class="note">' + ICON.info + '<span>We started with your total. <b>Split it into each card and loan</b> (rename this one, then + Add a debt) so the snowball can knock out the smallest first.</span></div>' : '') +
         (P.debts.length ? P.debts.map(function (d, i) {
           var at = function (k, label, ph, type) { return '<label class="field" style="font-size:13px">' + label + '<input type="' + (type || 'number') + '"' + (type ? '' : ' inputmode="decimal"') + ' data-f="x" data-list="debts" data-i="' + i + '" data-k="' + k + '" value="' + esc(d[k]) + '" placeholder="' + ph + '"></label>'; };
           return '<div class="card stack" style="padding:14px 18px;gap:10px">' + at('name', 'Name', 'Credit card', 'text') +
@@ -1331,7 +1378,12 @@
     var a = b.getAttribute('data-a'), v = b.getAttribute('data-v'), i = +b.getAttribute('data-i');
     switch (a) {
       case 'go': if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
-      case 'freq': P.freq = v; save(); render(); break;
+      case 'freq': P.freq = v; if (P.payAuto && P.quick) P.paycheck = String(Math.round(num(P.quick.pay) / F.FREQS[v].perMonth)); save(); render(); break;
+      case 'quickgo':
+        if (!(num(P.qPay) > 0)) { U.err = 'Enter your take-home pay per month. A rough number is fine.'; render(); break; }
+        U.err = ''; quickApply(); save(); track('quick-done'); go('claim'); break;
+      case 'claimgo': track('claim'); go('path'); break;
+      case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Money I was losing to interest or letting slip away. Now it gets a job.', subNoAmt: 'Money I was losing to interest or letting slip away. Now it gets a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
       case 'giving': P.givingPct = +v; save(); render(); break;
       case 'answer': P[b.getAttribute('data-k')] = v; save(); render(); break;
       case 'savepick': P.savings = v; save(); render(); break;
@@ -1399,7 +1451,7 @@
         snapshot(); save(); track('setup-done');
         U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true]; go('home'); break;
       case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
-      case 'basicpick': P.basics = v; save(); render(); break;
+      case 'basicpick': P.basicsAuto = false; P.basics = v; save(); render(); break;
       case 'ladder': U.showLadder = !U.showLadder; render(); break;
       case 'installdone': P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
       case 'openunlock': markSeen('unlock:' + v); go(v); break;
@@ -1537,6 +1589,9 @@
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
     if (t.hasAttribute('data-f')) {
       if (t.hasAttribute('data-list')) P[t.getAttribute('data-list')][+t.getAttribute('data-i')][t.getAttribute('data-k')] = t.value;
+      if (t.getAttribute('data-f') === 'paycheck') P.payAuto = false;
+      if (t.getAttribute('data-f') === 'basics') P.basicsAuto = false;
+      if (t.getAttribute('data-list') === 'debts' && P.debts[+t.getAttribute('data-i')]) delete P.debts[+t.getAttribute('data-i')].quick;
       if (t.getAttribute('data-list') === 'funParts') {
         var fsum = (P.funParts || []).reduce(function (a, x) { return a + num(x.amount); }, 0);
         if (fsum > 0) P.fun = String(fsum);
