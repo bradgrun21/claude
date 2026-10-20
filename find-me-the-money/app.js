@@ -1052,7 +1052,10 @@
     if (goal) goal.celebrated = true;
     U.result = { w: w, daysBack: daysBack, counted: !!sr && !sr.repeat, repeat: !!(sr && sr.repeat), streak: sr ? sr.out : null, paid: paid, goal: goal ? goal.name : null };
     P.history.push({ date: F.isoDay(now), debt: P.debts.reduce(function (t, d) { return t + num(d.bal); }, 0), savings: num(P.savings), debtPaid: w.debtPaid, saved: w.saved, daysBack: daysBack, payday: pd });
-    snapshot(); save(); track(sr && !sr.repeat ? 'checkin-payday' : 'checkin-update'); U.toast = null; go('wins');
+    snapshot(); save(); track(sr && !sr.repeat ? 'checkin-payday' : 'checkin-update');
+    // the beta's key number: people who come back for a second payday
+    if (sr && !sr.repeat && P.history.filter(function (h) { return h.payday; }).length === 2) track('second-payday');
+    U.toast = null; go('wins');
   }
   // remembers where things stood, so the next check-in can count what changed
   function snapshot() {
@@ -1241,7 +1244,7 @@
     var b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
     var a = b.getAttribute('data-a'), v = b.getAttribute('data-v'), i = +b.getAttribute('data-i');
     switch (a) {
-      case 'go': if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
+      case 'go': if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;
       case 'giving': P.givingPct = +v; save(); render(); break;
       case 'answer': P[b.getAttribute('data-k')] = v; save(); render(); break;
