@@ -311,3 +311,4 @@ input[type=range][data-ef] { width: 100%; accent-color: #2A6B66; }
 input[type=range][data-range] { width: 100%; accent-color: #2A6B66; }
 .choice { display: flex; align-items: center; padding-block: 10px; line-height: 1.3; }
 .jnode.seen b { background: #D7E6E3; color: #2A6B66; }
+a.primary { text-decoration: none; display: grid; place-items: center; }

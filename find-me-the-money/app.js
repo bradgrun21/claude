@@ -8,6 +8,7 @@
     feedbackUrl: '',            // e.g. a Google Form link; the Feedback button hides while this is empty
     storageKey: 'fmtm.v1',
     shareUrl: '',               // e.g. 'findmethemoney.app'; printed on share cards when set
+    communityUrl: '',           // your Skool community link; the Community tab's join button opens it
     // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
     // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
     partners: {
@@ -50,7 +51,7 @@
       bills: [['Rent', 'home'], ['Electricity', 'utilities'], ['Internet', 'utilities'], ['Phone', 'utilities'], ['Groceries', 'food'], ['Gas', 'transport'], ['Car insurance', 'transport']].map(function (x) { return { name: x[0], amount: '', group: x[1] }; }),
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
-      challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false,
+      challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false,
       efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '',
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
@@ -140,17 +141,21 @@
   // ---------- screen state (not saved) ----------
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans', 'book'], ['challenges', 'Challenges', 'flag'], ['milestones', 'Milestones', 'medal']];
+  // Challenges and Milestones share the Wins tab, so the bar stays at five
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans', 'book'], ['wins', 'Wins', 'medal'], ['community', 'Community', 'people']];
+  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'wins' : screen; }
+  function winsHome() { return P.unlocked && P.unlocked.challenges ? 'challenges' : 'milestones'; }
   function render() {
-    if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === U.screen; }))) refresh();
-    var tabs = TABS.filter(function (t) { return t[0] === 'home' || t[0] === 'plan' || t[0] === 'plans' || (P.unlocked && P.unlocked[t[0]]); });
-    var tabbed = P.setupDone && tabs.some(function (t) { return t[0] === U.screen; });
+    if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
+    var u = P.unlocked || {};
+    var tabs = TABS.filter(function (t) { return t[0] !== 'wins' || u.challenges || u.milestones; });
+    var tabbed = P.setupDone && U.screen !== 'wins' && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
     var html = (V[U.screen] || V.home)();
     if (tabbed) {
       var news = P.unseen.length;
       html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
-        var on = U.screen === t[0];
-        return '<button type="button" data-a="go" data-v="' + t[0] + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'milestones' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
+        var on = tabOf(U.screen) === t[0];
+        return '<button type="button" data-a="go" data-v="' + (t[0] === 'wins' ? winsHome() : t[0]) + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'wins' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
       }).join('') + '</nav>';
     }
     app.innerHTML = html;
@@ -169,10 +174,16 @@
     home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>',
     flag: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
     wallet: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7a2 2 0 012-2h11v4"/><path d="M4 7v11a2 2 0 002 2h13a1 1 0 001-1V10a1 1 0 00-1-1H6a2 2 0 01-2-2z"/><circle cx="16" cy="14.5" r="1.2" fill="currentColor"/></svg>',
+    people: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.6a3.2 3.2 0 010 6.3M18 14.3c1.8.8 3 2.6 3 4.7"/></svg>',
     book: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 21V5M8 7h7"/></svg>',
     medal: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M8.5 9.2L6 3h4l2 4 2-4h4l-2.5 6.2"/><path d="M10 14l1.5 1.5L14.5 12"/></svg>',
     share: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>'
   };
+  function winsSwitch(cur) {
+    if (!(P.unlocked && P.unlocked.challenges && P.unlocked.milestones)) return '';
+    return '<div class="seg" role="group" aria-label="Wins" style="align-self:flex-start;margin-top:8px">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
+      var on = cur === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="go" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+  }
   function back(to) { return '<button type="button" class="back" data-a="go" data-v="' + to + '" aria-label="Back">' + ICON.back + '</button>'; }
   function field(label, key, opts) {
     opts = opts || {};
@@ -733,7 +744,7 @@
           '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
       };
       var earnPick = pick.filter(function (d) { return d.tag === 'Earn'; }), restPick = pick.filter(function (d) { return d.tag !== 'Earn'; });
-      return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
+      return winsSwitch('challenges') + '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
         (active.length ? active.map(card).join('') : '<div class="note">' + ICON.info + '<span>No challenge running. Start one below; the 7-day ones are a great first win.</span></div>') +
         (active.length >= 3 ? '<p style="margin-top:10px">You\u2019re running 3. Finish or stop one to start another.</p>' : '') +
         (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t. Track every dollar and put it to work.</p>' + earnPick.map(startCard).join('') : '') +
@@ -776,9 +787,25 @@
           : '<button type="button" class="primary" data-a="planmark">Mark day ' + (i + 1) + ' complete</button>') + '</div>';
     },
 
+    community: function () {
+      var url = CONFIG.communityUrl, joined = P.communityJoined, latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? -1 : 1; }).pop();
+      var inside = [
+        ['Payday check-ins, together', 'Every payday, a thread where everyone shares how it went. Streaks are easier with company.'],
+        ['Live challenges', 'Run the Cushion Sprint or a No-Spend Weekend with a group, and cheer each other on.'],
+        ['Ask anything', 'Stuck on a bill, a debt or a tough month? Ask people walking the same path.'],
+        ['Coaching', 'Group and one-on-one coaching with a certified financial coach.']
+      ];
+      return '<div style="margin-top:8px"><div class="eyebrow">The Find Me the Money community</div><h2>You don’t have to do this alone</h2>' +
+        '<p style="margin-top:6px">People who stick with a plan usually have someone in their corner. Join others working the same 7 steps.</p></div>' +
+        '<div class="card stack" style="padding:6px 18px">' + inside.map(function (x) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + x[0] + '</b><small style="color:var(--muted);font-size:14px;margin-top:2px">' + x[1] + '</small></div></div>'; }).join('') + '</div>' +
+        (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the community') + '</a>'
+          : '<button type="button" class="primary" disabled>Community opening soon</button>') +
+        (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
+        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget and numbers stay on this phone. Only what you choose to post is shared.</span></div>';
+    },
     milestones: function () {
       var f = facts(), earned = F.BADGES.filter(function (b) { return P.badges[b.id]; }), locked = F.BADGES.filter(function (b) { return !P.badges[b.id]; });
-      return '<div style="margin-top:8px"><div class="eyebrow">' + earned.length + ' of ' + F.BADGES.length + ' earned</div><h2>Milestones</h2><p style="margin-top:6px">Little wins along the way. Tap one to share it.</p></div>' + celebration(9, 'badge') +
+      return winsSwitch('milestones') + '<div style="margin-top:8px"><div class="eyebrow">' + earned.length + ' of ' + F.BADGES.length + ' earned</div><h2>Milestones</h2><p style="margin-top:6px">Little wins along the way. Tap one to share it.</p></div>' + celebration(9, 'badge') +
         (earned.length ? '<div class="grid2">' + earned.map(function (b) {
           return '<button type="button" class="tile medal-tile" data-a="sharebadge" data-v="' + b.id + '"><span class="medal on">' + ICON.medal + '</span><b>' + b.title + '</b><span class="k">' + b.desc + '</span><span class="k" style="color:var(--sun-ink)">' + ICON.share + ' Share</span></button>';
         }).join('') + '</div>' : '') +
@@ -796,6 +823,7 @@
         (hasAmt ? '<div class="field">Dollar amounts<div class="seg" role="group" aria-label="Dollar amounts" style="align-self:flex-start">' + [['1', 'Show'], ['0', 'Hide']].map(function (o) {
           var on = (U.showAmt ? '1' : '0') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="shareamt" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' : '') +
         '<button type="button" class="primary" data-a="doshare"' + (U.cardImg ? '' : ' disabled') + '>' + ICON.share + ' Share</button>' +
+        (CONFIG.communityUrl ? '<button type="button" class="outline" data-a="postcommunity"' + (U.cardImg ? '' : ' disabled') + '>Post it in the community</button>' : '') +
         '<button type="button" class="outline" data-a="saveimg"' + (U.cardImg ? '' : ' disabled') + '>Save image</button>' +
         '<div class="card stack" style="padding:14px 18px;gap:8px"><span style="font-size:13px;color:var(--faint)">Caption</span><span id="caption">' + esc(caption()) + '</span>' +
         '<button type="button" class="textbtn" style="align-self:flex-start;min-height:32px;padding:0" data-a="copycap">' + (U.copied ? 'Copied' : 'Copy caption') + '</button></div>' +
@@ -1224,6 +1252,14 @@
         } else { U.shareErr = 'This browser can\u2019t share images directly. Use Save image, then share it from your photos.'; render(); }
         track('share'); break;
       case 'saveimg': P.shares = (P.shares || 0) + 1; save(); download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
+      case 'joincommunity': P.communityJoined = true; save(); track('community'); setTimeout(render, 300); break;
+      case 'postcommunity':
+        // Skool can't take a post from another site, so copy the caption, save the card, and open the community to paste it
+        try { navigator.clipboard.writeText(caption()); } catch (err) {}
+        track('post-community');
+        (function () { var a = document.createElement('a'); a.href = U.cardImg.url; a.download = 'find-me-the-money-win.png'; document.body.appendChild(a); a.click(); a.remove(); })();
+        window.open(CONFIG.communityUrl, '_blank', 'noopener');
+        U.shareErr = 'Caption copied and image saved. Paste them into a new post in the community.'; render(); break;
       case 'copycap':
         var txt = caption();
         var ok = function () { U.copied = true; render(); };
