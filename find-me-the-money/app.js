@@ -7,7 +7,7 @@
   var CONFIG = {
     feedbackUrl: '',            // e.g. a Google Form link; the Feedback button hides while this is empty
     storageKey: 'fmtm.v1',
-    shareUrl: '',               // e.g. 'findmethemoney.app'; printed on share cards when set
+    shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
     // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
     // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
@@ -287,18 +287,89 @@
   var BUDGET_SECTIONS = [['give', 'Giving'], ['need', 'Needs'], ['want', 'Wants'], ['save', 'Saving & goals']];
   var FUN_PARTS = ['Eating out & delivery', 'Coffee & treats', 'Shopping', 'Entertainment', 'Hobbies', 'Personal spending'];
   function funParts() { return (P.funParts || []).filter(function (x) { return num(x.amount) > 0; }); }
-  function budgetRows(pl, k, inside) {
-    var out = [];
+  // Each budget line knows how to edit itself. Amounts are stored monthly; d turns them into what's on screen.
+  function budgetRows(pl, mo) {
+    var out = [], d = mo ? 1 : pl.ppm, K = mo ? pl.ppm : 1;
+    var line = function (o) { o.amount = o.amount || 0; return o; };
     pl.rows.forEach(function (r) {
-      var cat = r.kind === 'give' ? 'give' : r.kind === 'bill' ? (r.group === 'subs' ? 'want' : 'need') : r.kind === 'min' ? 'need' : r.kind === 'fun' ? 'want' : 'save';
-      if (r.kind === 'fun' && funParts().length) {
-        funParts().forEach(function (x) { out.push({ cat: 'want', label: esc(x.name || 'Fun money'), amount: num(x.amount) / pl.ppm * k }); });
-        return;
+      if (r.kind === 'give') return out.push(line({ cat: 'give', label: esc(r.label), amount: r.amount * K, strong: true, edit: 'give', raw: P.givingPct || 0, unit: '%' }));
+      if (r.kind === 'bill' && r.group) {
+        var kids = [];
+        P.bills.forEach(function (b, i) {
+          if (b.group !== r.group) return;
+          var yr = b.per === 'yr';
+          kids.push(line({ label: esc(b.name || 'Bill'), sub: yr ? 'Paid yearly \u00b7 set aside monthly' : '', amount: F.billMonthly(b) / d, edit: 'bill:' + i, raw: yr ? num(b.amount) : round2(num(b.amount) / d), unit: yr ? 'yr' : '', rm: ['bills', i] }));
+        });
+        return out.push(line({ cat: r.group === 'subs' ? 'want' : 'need', label: esc(r.label), amount: r.amount * K, open: 'g:' + r.group, kids: kids }));
       }
-      var sub = r.kind === 'bill' && inside[r.label] ? esc(inside[r.label]) : r.kind === 'fun' ? 'Eating out, coffee, shopping, fun. Spend it guilt-free, up to this amount. <button type="button" class="linkbtn" data-a="edit" data-v="fun">Break it down</button>' : r.kind === 'min' ? 'Required payments on every debt' : '';
-      out.push({ cat: cat, label: esc(r.kind === 'fun' ? 'Fun money' + (r.label.indexOf('estimate') >= 0 ? ' \u00b7 estimate' : '') : r.label), sub: sub, amount: r.amount * k, strong: r.kind === 'give' || r.kind === 'goal' });
+      if (r.kind === 'bill') return out.push(line({ cat: 'need', label: esc(r.label), sub: 'One number for now. Add needs below to list them one by one.', amount: r.amount * K, edit: 'basics', raw: round2(num(P.basics) / d) }));
+      if (r.kind === 'min') {
+        var dk = [];
+        P.debts.forEach(function (x, i) { if (num(x.bal) > 0) dk.push(line({ label: esc(x.name || 'Debt'), sub: money(num(x.bal)) + ' left', amount: num(x.min) / d, edit: 'dmin:' + i, raw: round2(num(x.min) / d) })); });
+        return out.push(line({ cat: 'need', label: 'Debt minimums', sub: 'Required payments on every debt', amount: r.amount * K, open: 'min', kids: dk }));
+      }
+      if (r.kind === 'fun') {
+        if (funParts().length) {
+          (P.funParts || []).forEach(function (x, i) { if (num(x.amount) > 0) out.push(line({ cat: 'want', label: esc(x.name || 'Fun money'), amount: num(x.amount) / d, edit: 'part:' + i, raw: round2(num(x.amount) / d), rm: ['funParts', i] })); });
+          return;
+        }
+        return out.push(line({ cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping, fun. Spend it guilt-free, up to this amount.', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
+      }
+      if (r.kind === 'save') return out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, edit: r.label === 'Retirement' ? 'retire' : 'college', raw: round2((r.label === 'Retirement' ? retireMonthly() : num(P.collegeMonthly)) / d) }));
+      out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, strong: true }));
     });
     return out;
+  }
+  function round2(n) { return Math.round(n * 100) / 100; }
+  // save one edited amount; v is what was typed, in the units on screen
+  function budgetCommit(key, raw) {
+    var pl = F.plan(profile()), d = U.planMonth ? 1 : pl.ppm, v = Math.max(0, num(raw)), m = String(round2(v * d)), parts = key.split(':'), i = +parts[1];
+    if (key === 'give') P.givingPct = Math.min(100, Math.round(v));
+    else if (key === 'basics') P.basics = m;
+    else if (parts[0] === 'bill') P.bills[i].amount = P.bills[i].per === 'yr' ? String(round2(v)) : m;
+    else if (parts[0] === 'dmin') P.debts[i].min = m;
+    else if (key === 'fun') P.fun = m;
+    else if (parts[0] === 'part') { P.funParts[i].amount = m; P.fun = String(funParts().reduce(function (t, x) { return t + num(x.amount); }, 0)); }
+    else if (key === 'retire') P.retireMonthly = m;
+    else if (key === 'college') P.collegeMonthly = m;
+    save();
+  }
+  // add a need (files itself into the right bill group) or a want (a part of fun money)
+  function budgetAdd(cat, name, raw) {
+    var pl = F.plan(profile()), d = U.planMonth ? 1 : pl.ppm, m = String(round2(Math.max(0, num(raw)) * d));
+    name = String(name || '').trim(); if (!name && !(num(raw) > 0)) return;
+    if (cat === 'need') {
+      // switching from one "bills and basics" number to a list keeps that number as "Everything else"
+      if (!itemized() && num(P.basics) > 0) P.bills.push({ name: 'Everything else', amount: String(num(P.basics)), group: 'other' });
+      var same = P.bills.filter(function (b) { return String(b.name).toLowerCase() === name.toLowerCase() && !(num(b.amount) > 0); })[0];
+      if (same) same.amount = m; else P.bills.push({ name: name || 'Bill', amount: m, group: F.groupFor(name) });
+      U.bOpen = U.bOpen || {}; U.bOpen['g:' + (same ? same.group : F.groupFor(name))] = true;
+    } else {
+      P.funParts = P.funParts || [];
+      if (!funParts().length && funSet() && num(P.fun) > 0) P.funParts.push({ name: 'Fun money', amount: String(num(P.fun)) });
+      P.funParts.push({ name: name || 'Want', amount: m });
+      P.fun = String(funParts().reduce(function (t, x) { return t + num(x.amount); }, 0));
+    }
+    save();
+  }
+  function budgetLine(r, mo) {
+    var unit = r.unit === '%' ? '%' : r.unit === 'yr' ? '/yr' : mo ? '/mo' : '/paycheck';
+    var amt = r.edit && U.bEdit === r.edit
+      ? '<span class="bedit"><input type="number" inputmode="decimal" min="0" step="any" data-bedit="' + r.edit + '" value="' + r.raw + '" aria-label="' + r.label + ' amount"><span>' + unit + '</span></span>'
+      : r.edit ? '<button type="button" class="bamt" data-a="bedit" data-v="' + r.edit + '" aria-label="Change ' + r.label + ', now ' + money(r.amount) + '">' + money(r.amount) + '</button>' : '<b>' + money(r.amount) + '</b>';
+    var open = r.open && U.bOpen && U.bOpen[r.open];
+    var name = r.open ? '<button type="button" class="bname" data-a="btoggle" data-v="' + r.open + '" aria-expanded="' + !!open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span>' + r.label + '</button>' : r.label;
+    return '<div class="row brow"><span style="min-width:0;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + '</span>' +
+      '<span class="bright">' + amt + (r.rm ? '<button type="button" class="x" data-a="rm" data-v="' + r.rm[0] + '" data-i="' + r.rm[1] + '" aria-label="Remove ' + r.label + '">\u00d7</button>' : '') + '</span></div>' +
+      (open ? '<div class="bkids">' + (r.kids.length ? r.kids.map(function (c) { return budgetLine(c, mo); }).join('') : '<p style="font-size:13px;padding:6px 0">Nothing here yet.</p>') + '</div>' : '');
+  }
+  function budgetAddRow(cat, mo) {
+    if (cat === 'save') return '<button type="button" class="baddbtn" data-a="goalnew">+ Add a goal</button>';
+    if (cat !== 'need' && cat !== 'want') return '';
+    if (U.bAdd !== cat) return '<button type="button" class="baddbtn" data-a="badd" data-v="' + cat + '">+ Add a ' + cat + '</button>';
+    return '<div class="badd"><input type="text" data-baddname placeholder="' + (cat === 'need' ? 'Like Rent, Gas or Daycare' : 'Like Concerts or Golf') + '" aria-label="Name">' +
+      '<input type="number" inputmode="decimal" min="0" data-baddamt placeholder="' + (mo ? '$ a month' : '$ a paycheck') + '" aria-label="Amount">' +
+      '<button type="button" class="sharebtn" data-a="baddsave" data-v="' + cat + '">Add</button><button type="button" class="x" data-a="baddcancel" aria-label="Cancel">\u00d7</button></div>';
   }
   // money found = what the bank file showed on wants, minus today's fun money
   function foundNow() { return P.found && P.found.from ? Math.max(0, P.found.from - num(P.fun)) : 0; }
@@ -636,28 +707,25 @@
     plan: function () {
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step;
       var last = step === 1 ? 'Starter Cushion' : step === 2 ? 'Snowball → ' + esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'Future You (investing)';
-      var mo = !!U.planMonth, k = mo ? pl.ppm : 1, inside = {};
-      p.bills.forEach(function (b) { if (b.items && b.items.length) inside[b.name] = b.items.join(', '); });
-      var rows = budgetRows(pl, k, inside), found = foundNow();
+      var mo = !!U.planMonth, k = mo ? pl.ppm : 1;
+      var rows = budgetRows(pl, mo), found = foundNow();
       var hero = { label: last, amount: Math.max(0, pl.extra) * k, sub: found && pl.extra > 0 ? 'Includes the ' + money(found / (mo ? 1 : pl.ppm)) + (mo ? ' a month' : ' a paycheck') + ' you found' : '' };
       return (P.setupDone ? '' : back('import')) + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>' + (mo ? 'Every month: ' + money(p.paycheck * k) : 'Every paycheck: ' + money(p.paycheck)) + '. Every dollar has a job.</h2>' +
-        '<p style="font-size:14px">' + (step === 1 ? 'First, $1,000 for emergencies, so a flat tire doesn’t go on a credit card. Then every spare dollar attacks debt.' : step === 2 ? 'Your cushion is in place. Every spare dollar goes to your smallest debt first.' : step === 3 ? 'No debt to attack. Every spare dollar builds 3 months of expenses.' : 'Debt-free with a full safety net. Time to invest 15% and give generously.') + '</p>' +
+        '<p style="font-size:14px">' + (step === 1 ? 'First, $1,000 for emergencies, so a flat tire doesn’t go on a credit card. Then every spare dollar attacks debt.' : step === 2 ? 'Your cushion is in place. Every spare dollar goes to your smallest debt first.' : step === 3 ? 'No debt to attack. Every spare dollar builds ' + efMonths() + ' months of expenses.' : 'Debt-free with a full safety net. Time to invest 15% and give generously.') + '</p>' +
         '<div class="seg" role="group" aria-label="Show the plan" style="align-self:flex-start">' + [['check', 'Per paycheck'], ['month', 'Per month']].map(function (o) {
           var on = (o[0] === 'month') === mo; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="plview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
         (mo ? '<p style="font-size:13px;margin-top:-6px">' + (pl.ppm === 1 ? 'You’re paid monthly, so this matches your paycheck.' : 'About ' + (Math.round(pl.ppm * 100) / 100) + ' paychecks a month on average. Some months bring an extra one.') + '</p>' : '') +
+        '<p style="font-size:13px;margin-top:-4px">Tap any amount to change it.</p>' +
         '<div class="card budget">' + BUDGET_SECTIONS.map(function (sec) {
-          var mine = rows.filter(function (r) { return r.cat === sec[0]; }); if (!mine.length) return '';
+          var mine = rows.filter(function (r) { return r.cat === sec[0]; }); if (!mine.length && sec[0] === 'give') return '';
           var tot = mine.reduce(function (t, r) { return t + r.amount; }, 0);
-          return '<div class="bhead"><span><span class="key c-' + sec[0] + '"></span>' + sec[1] + '</span><span>' + money(tot) + '</span></div>' + mine.map(function (r) {
-            return '<div class="row" style="padding-block:9px"><span style="min-width:0;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + r.label + (r.sub ? '<small>' + r.sub + '</small>' : '') + '</span><b>' + money(r.amount) + '</b></div>'; }).join('') +
-            (sec[0] === 'want' ? wantsNote(mo, pl.ppm) : '');
+          return '<div class="bhead"><span><span class="key c-' + sec[0] + '"></span>' + sec[1] + '</span><span>' + money(tot) + '</span></div>' + mine.map(function (r) { return budgetLine(r, mo); }).join('') +
+            (sec[0] === 'want' ? wantsNote(mo, pl.ppm) : '') + budgetAddRow(sec[0], mo);
         }).join('') + (hero.amount > 0 ? '<div class="row hero-row" style="padding-block:10px"><span style="min-width:0;font-weight:600">' + hero.label + (hero.sub ? '<small>' + hero.sub + '</small>' : '') + '</span><b>' + money(hero.amount) + '</b></div>' : '') + '</div>' +
         '<div class="left' + (pl.tight ? ' tight' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '–' + money(-pl.extra * k) : '$0 ✓') + '</span></div>' +
         (P.setupDone ? whatIfHtml(o, true) : '') +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or look for money in your bank file.</p>' : '') +
-        '<button type="button" class="textbtn" data-a="goalnew" style="align-self:center">' + (P.goals.length ? 'Your goals: ' + P.goals.length + ' of 3 · add another' : '+ Add a goal: a trip, a car, a gift') + '</button>' +
-        (P.setupDone ? '<div class="stack" style="gap:8px"><div class="eyebrow">Change your budget</div><div class="chips">' + [[itemized() ? 'bills' : 'basics', 'Bills'], ['fun', 'Fun money'], ['give', 'Giving'], ['debts', 'Debts'], ['savings', 'Savings'], ['retire', 'Retirement'], ['kids', 'College']].map(function (x) {
-          return '<button type="button" class="chip" data-a="edit" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' + (!itemized() ? '<button type="button" class="textbtn" data-a="edit" data-v="bills" style="align-self:flex-start;padding:0">List bills by category</button>' : '') + '</div>'
+        (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="settings" style="align-self:center">Debts, savings and other details</button>'
           : '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button></div>');
     },
 
@@ -1195,7 +1263,12 @@
         if (!U.billOpen) { U.billOpen = {}; P.bills.forEach(function (x) { U.billOpen[x.group] = true; }); }
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
-      case 'plview': U.planMonth = v === 'month'; render(); break;
+      case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
+      case 'bedit': U.bEdit = v; U.bAdd = null; render(); (function () { var inp = app.querySelector('[data-bedit]'); if (inp) { inp.focus(); inp.select(); } })(); break;
+      case 'btoggle': U.bOpen = U.bOpen || {}; U.bOpen[v] = !U.bOpen[v]; render(); break;
+      case 'badd': U.bAdd = v; U.bEdit = null; render(); (function () { var inp = app.querySelector('[data-baddname]'); if (inp) inp.focus(); })(); break;
+      case 'baddcancel': U.bAdd = null; render(); break;
+      case 'baddsave': (function () { var n = app.querySelector('[data-baddname]'), a = app.querySelector('[data-baddamt]'); budgetAdd(v, n && n.value, a && a.value); })(); U.bAdd = null; render(); break;
       case 'wiz':
         var n = +v; U.err = validate(n);
         if (U.err) { render(); break; }
@@ -1452,7 +1525,24 @@
     setTimeout(function () { decide(v); }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 230);
   }
   var drag = null;
+  app.addEventListener('focusout', function (e) {
+    var t = e.target; if (!t.hasAttribute || !t.hasAttribute('data-bedit')) return;
+    budgetCommit(t.getAttribute('data-bedit'), t.value);
+    U.bEdit = U.bNext || null; U.bNext = null; render();
+    var inp = app.querySelector('[data-bedit]'); if (inp) { inp.focus(); inp.select(); }
+  });
+  app.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t.hasAttribute && t.hasAttribute('data-bedit')) {
+      if (e.key === 'Enter') { e.preventDefault(); t.blur(); }
+      if (e.key === 'Escape') { U.bEdit = null; U.bNext = null; t.removeAttribute('data-bedit'); render(); }
+    }
+    if (t.hasAttribute && (t.hasAttribute('data-baddamt') || t.hasAttribute('data-baddname')) && e.key === 'Enter') { e.preventDefault(); var sb = app.querySelector('[data-a=baddsave]'); if (sb) sb.click(); }
+    if (t.hasAttribute && (t.hasAttribute('data-baddamt') || t.hasAttribute('data-baddname')) && e.key === 'Escape') { U.bAdd = null; render(); }
+  });
   app.addEventListener('pointerdown', function (e) {
+    var nx = e.target.closest && e.target.closest('[data-a=bedit]');
+    if (nx && U.bEdit) U.bNext = nx.getAttribute('data-v');
     var card = e.target.closest('[data-swipe]'); if (!card) return;
     drag = { card: card, x: e.clientX, dx: 0 }; card.classList.add('dragging');
     try { card.setPointerCapture(e.pointerId); } catch (err) {}
