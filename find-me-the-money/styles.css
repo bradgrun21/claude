@@ -318,3 +318,15 @@ a.primary { text-decoration: none; display: grid; place-items: center; }
 .sharewrap.wide { aspect-ratio: 16 / 9; }
 .seg.fmt { align-self: flex-start; margin-top: 8px; }
 .seg.fmt button { padding: 0 14px; }
+/* what if you found more */
+.whatif .wi-date { font-family: var(--display); font-size: 34px; font-weight: 500; letter-spacing: -.02em; line-height: 1.15; color: var(--ink); }
+input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
+/* budget sections: giving, needs, wants, saving */
+.c-give { background: #E8875F; } .c-save { background: #E3B04B; }
+.budget .bhead { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink); border-bottom: 1px solid var(--line); }
+.budget .bhead:first-child { padding-top: 6px; }
+.budget .bhead span:last-child { font-variant-numeric: tabular-nums; letter-spacing: 0; font-size: 14px; }
+.budget .row small { display: block; font-size: 13px; color: var(--faint); font-weight: 400; }
+.bnote { font-size: 13px; color: #4E3F8F; background: rgba(154,139,211,.14); border-radius: 12px; padding: 8px 12px; margin: 8px 0 4px; }
+.linkbtn { all: unset; cursor: pointer; color: #2A6B66; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:focus-visible { outline: 2px solid var(--line); border-radius: 4px; }
