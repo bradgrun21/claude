@@ -1,0 +1,11 @@
+# Netlify: serve the Find Me the Money app straight from its folder. No build step.
+[build]
+  base = "find-me-the-money"
+  publish = "."
+  command = ""
+
+# Always fetch the newest app shell, so updates show up right away
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
