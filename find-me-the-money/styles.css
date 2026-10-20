@@ -312,3 +312,9 @@ input[type=range][data-range] { width: 100%; accent-color: #2A6B66; }
 .choice { display: flex; align-items: center; padding-block: 10px; line-height: 1.3; }
 .jnode.seen b { background: #D7E6E3; color: #2A6B66; }
 a.primary { text-decoration: none; display: grid; place-items: center; }
+/* share cards in four shapes */
+.sharewrap.story { aspect-ratio: 9 / 16; width: 62%; align-self: center; }
+.sharewrap.square { aspect-ratio: 1 / 1; }
+.sharewrap.wide { aspect-ratio: 16 / 9; }
+.seg.fmt { align-self: flex-start; margin-top: 8px; }
+.seg.fmt button { padding: 0 14px; }
