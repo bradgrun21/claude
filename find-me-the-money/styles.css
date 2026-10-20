@@ -353,3 +353,31 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 .badd .x { width: 28px; height: 28px; border-radius: 14px; border: 1px solid var(--edge); background: rgba(255,255,255,.5); color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .bname .chev { transition: none; } }
 .bamt { border-bottom: 0; text-decoration: underline dashed rgba(42,107,102,.45); text-decoration-thickness: 1.5px; text-underline-offset: 5px; }
+/* payday, inside the countdown card */
+.pstrip { border-top: 1px solid rgba(255,255,255,.18); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.pstrip b { font-size: 16px; color: #fff; }
+.pstrip span { font-size: 14px; color: rgba(255,255,255,.72); }
+.pstrip .ps-sub { font-size: 14px; color: rgba(255,255,255,.85); }
+.sunbtn, .ghostbtn { min-height: 48px; border-radius: 16px; font: inherit; font-size: 16px; font-weight: 600; margin-top: 4px; }
+.sunbtn { border: 0; background: linear-gradient(135deg, #FF9A76, #FFD08A); color: #3B1D0E; }
+.ghostbtn { border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.1); color: #fff; }
+.tabbar button span { text-align: center; line-height: 1.1; }
+/* the activity calendar */
+.cal .calnav { width: 36px; height: 36px; font-size: 22px; line-height: 1; display: grid; place-items: center; }
+.cgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cdow { text-align: center; font-size: 11px; font-weight: 700; color: var(--faint); }
+.cday { all: unset; box-sizing: border-box; cursor: pointer; aspect-ratio: 1; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.cday > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; }
+.cday em { display: flex; gap: 2px; height: 6px; }
+.cday em i, .clegend i, .calsel i { display: inline-block; width: 6px; height: 6px; border-radius: 3px; }
+.cday.future { color: var(--faint); }
+.cday.pay > span { box-shadow: inset 0 0 0 2px #E8875F; }
+.cday.today > span { background: #2A6B66; color: #fff; }
+.cday.sel { background: rgba(42,107,102,.1); }
+.cday:focus-visible { outline: 2px solid #2A6B66; }
+.cal-pay { background: #E8875F; } .cal-check { background: #2A6B66; } .cal-mile { background: #E3B04B; } .cal-ch { background: #9A8BD3; } .cal-plan { background: #5AA8C8; } .cal-start { background: #FF9A76; }
+.clegend i.ring { background: transparent; box-shadow: inset 0 0 0 1.5px #E8875F; width: 8px; height: 8px; border-radius: 4px; }
+.clegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.clegend span { display: inline-flex; align-items: center; gap: 6px; }
+.calsel { background: rgba(255,255,255,.6); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.calsel div { display: flex; align-items: center; gap: 8px; }

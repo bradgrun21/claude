@@ -142,7 +142,7 @@
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans', 'book'], ['wins', 'Wins', 'medal'], ['community', 'Community', 'people']];
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans & Goals', 'book'], ['wins', 'Wins', 'medal'], ['community', 'Community', 'people']];
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'wins' : screen; }
   function winsHome() { return P.unlocked && P.unlocked.challenges ? 'challenges' : 'milestones'; }
   function render() {
@@ -418,6 +418,57 @@
       P.home === 'free' ? ['\u2713 Paid off', true] : P.home === 'mortgage' ? [num(P.mortgage) ? money(num(P.mortgage)) + ' left' + (payoffMonths() && payoffMonths() !== Infinity ? ' \u00b7 ' + F.addDays(today(), Math.round(payoffMonths() * 30.44)).getFullYear() : '') : 'Mortgage', false] : P.home === 'rent' ? ['Renting', false] : ['Later', false],
       P.givingPct ? ['Giving ' + P.givingPct + '%', true] : ['Someday', false]
     ];
+  }
+  // goals, with the tradeoff slider; lives on the Plans & Goals tab
+  function goalsCard() {
+    var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step;
+    var maxPer = Math.max(0, Math.min(500, Math.floor(Math.max(0, pl.extra + o.plan.rows.filter(function (r) { return r.kind === 'goal'; }).reduce(function (t2, r) { return t2 + r.amount; }, 0)) / 10) * 10));
+    var goals = '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Your goals</h3><span style="font-size:13px;color:var(--faint)">' + P.goals.length + ' of 3</span></div>' +
+      (P.goals.length ? P.goals.map(function (g, i) {
+        var go2 = o.goals[i], done = num(g.saved) >= g.amount;
+        var slider = g.kind === 'dream' && !done && step <= 2 ? (maxPer ? '<label class="field" style="font-weight:500;font-size:13px">Put toward it now: <b data-gv="' + g.id + '" style="color:var(--ink)">' + money(g.per || 0) + ' per paycheck</b>' +
+          '<input type="range" min="0" max="' + maxPer + '" step="10" value="' + Math.min(g.per || 0, maxPer) + '" data-slide="' + g.id + '"></label>' : '') : '';
+        return '<div class="debt"><div class="top"><span>' + esc(g.name) + '<span class="tag">' + (g.kind === 'fund' ? 'Plan-for-it' : 'Dream') + '</span></span><b>' + money(num(g.saved)) + ' of ' + money(g.amount) + '</b></div>' +
+          '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(1, num(g.saved) / g.amount * 100) + '%"></i></div>' +
+          '<div style="font-size:13px;color:var(--muted)" data-gp="' + g.id + '">' + (done ? 'Fully funded. Go enjoy it.' : goalText(g, go2, o)) + '</div>' + slider +
+          '<button type="button" class="textbtn" style="min-height:32px;font-size:13px;align-self:flex-start;padding:0" data-a="goaldel" data-i="' + i + '">Remove</button></div>';
+      }).join('') : '<p style="font-size:14px;padding:4px 0 2px">A trip, a car, a concert, a gift. Name it and we’ll give it a date.</p>') +
+      (P.goals.length < 3 ? '<button type="button" class="outline" style="min-height:44px;margin:8px 0 12px;font-size:15px" data-a="goalnew">+ Add a goal</button>' : '') + '</div>';
+    return goals;
+  }
+  // ---------- the activity calendar ----------
+  var CAL_KINDS = { payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
+  function calEvents(y, m) {
+    var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
+    // paydays: step from the next payday in both directions
+    var step = F.FREQS[P.freq].days, anchor = F.fromIso(P.nextPay), first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
+    var kMin = Math.floor(F.daysBetween(anchor, first) / step) - 1, kMax = Math.ceil(F.daysBetween(anchor, last) / step) + 1;
+    for (var k = kMin; k <= kMax; k++) add(F.isoDay(F.addDays(anchor, k * step)), 'payday', 'Payday');
+    (P.history || []).forEach(function (h) { add(h.date, 'checkin', h.payday ? 'Payday check-in' : 'Balance update'); });
+    Object.keys(P.badges || {}).forEach(function (id) { var b = F.BADGES.filter(function (x) { return x.id === id; })[0]; if (id === 'plan') add(P.badges[id], 'start', 'Started my plan'); else if (b) add(P.badges[id], 'milestone', b.title); });
+    (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
+    (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
+    return ev;
+  }
+  function calendarCard() {
+    var now = today(), cur = U.calMonth || [now.getFullYear(), now.getMonth()], y = cur[0], m = cur[1], ev = calEvents(y, m);
+    var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = first.getDay(), todayIso = F.isoDay(now), cells = '';
+    for (var b = 0; b < lead; b++) cells += '<span></span>';
+    for (var d = 1; d <= days; d++) {
+      var iso = F.isoDay(new Date(y, m, d)), e = ev[iso] || [], kinds = {}, isPay = e.some(function (x) { return x[0] === 'payday'; });
+      e.forEach(function (x) { if (x[0] !== 'payday') kinds[x[0]] = 1; });
+      var dots = Object.keys(kinds).slice(0, 3).map(function (k) { return '<i class="' + CAL_KINDS[k][1] + '"></i>'; }).join('');
+      var label = d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (e.length ? ': ' + e.map(function (x) { return x[1]; }).join(', ') : '');
+      cells += '<button type="button" class="cday' + (isPay ? ' pay' : '') + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(label) + '"><span>' + d + '</span><em>' + dots + '</em></button>';
+    }
+    var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
+    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday'; }).length; }, 0);
+    return '<div class="card stack cal" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
+      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
+      '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
+      '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="cgrid">' + cells + '</div>' + sel +
+      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div></div>';
   }
   // how far along the current step is, 0 to 1
   function stepProgress(o) {
@@ -762,29 +813,18 @@
         var gap = F.daysBetween(o.debtFree, o.debtFreeMins);
         vs = lead + (gap > 0 ? '<b style="color:var(--sun-soft)">' + span(gap) + ' sooner</b> than paying minimums' : 'right on schedule');
       } else if (o.debtFree && !o.debtFreeMins && step <= 2) vs = 'Debt-free ' + shortDate(o.debtFree) + '. Minimum payments alone would never get you there.';
+      var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
+      var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
+      var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
+        '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
+        '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
       var hero = '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">' + h.label + '</div>' +
         (cd ? '<div class="cd" style="grid-template-columns:repeat(' + cd.length + ',minmax(0,1fr))">' + cd.map(function (x) { return '<div><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div><div style="font-size:15px">on ' + longDate(h.date) + '</div>'
           : step >= 4 ? '<div style="font-family:var(--display);font-size:36px;line-height:1.1;color:var(--sun-soft)">Debt-free with a full safety net.</div>'
           : '<div style="font-family:var(--display);font-size:26px;color:var(--sun-soft)">Your plan needs a little more room. Check your Payday Plan.</div>') +
         (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
-        (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + '</div>';
+        (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + paydayStrip + '</div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
-      var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
-      var payday = '<div class="card stack" style="padding:14px 18px"><div style="display:flex;justify-content:space-between;align-items:center"><b>' + (due ? (F.daysBetween(F.fromIso(F.paydayFor(P.nextPay, P.freq, now)), now) > 0 ? 'Check-in time' : 'It’s payday!') : 'Next payday') + '</b><span style="font-size:14px;color:var(--muted)">' + dayMonth(due ? F.fromIso(F.paydayFor(P.nextPay, P.freq, now)) : next) + '</span></div>' +
-        '<div style="font-size:14px;color:var(--muted)">' + money(p.paycheck) + ' in · ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
-        '<button type="button" class="' + (due ? 'primary' : 'outline') + '" style="min-height:50px" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
-      var maxPer = Math.max(0, Math.min(500, Math.floor(Math.max(0, pl.extra + o.plan.rows.filter(function (r) { return r.kind === 'goal'; }).reduce(function (t2, r) { return t2 + r.amount; }, 0)) / 10) * 10));
-      var goals = '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Your goals</h3><span style="font-size:13px;color:var(--faint)">' + P.goals.length + ' of 3</span></div>' +
-        (P.goals.length ? P.goals.map(function (g, i) {
-          var go2 = o.goals[i], done = num(g.saved) >= g.amount;
-          var slider = g.kind === 'dream' && !done && step <= 2 ? (maxPer ? '<label class="field" style="font-weight:500;font-size:13px">Put toward it now: <b data-gv="' + g.id + '" style="color:var(--ink)">' + money(g.per || 0) + ' per paycheck</b>' +
-            '<input type="range" min="0" max="' + maxPer + '" step="10" value="' + Math.min(g.per || 0, maxPer) + '" data-slide="' + g.id + '"></label>' : '') : '';
-          return '<div class="debt"><div class="top"><span>' + esc(g.name) + '<span class="tag">' + (g.kind === 'fund' ? 'Plan-for-it' : 'Dream') + '</span></span><b>' + money(num(g.saved)) + ' of ' + money(g.amount) + '</b></div>' +
-            '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(1, num(g.saved) / g.amount * 100) + '%"></i></div>' +
-            '<div style="font-size:13px;color:var(--muted)" data-gp="' + g.id + '">' + (done ? 'Fully funded. Go enjoy it.' : goalText(g, go2, o)) + '</div>' + slider +
-            '<button type="button" class="textbtn" style="min-height:32px;font-size:13px;align-self:flex-start;padding:0" data-a="goaldel" data-i="' + i + '">Remove</button></div>';
-        }).join('') : '<p style="font-size:14px;padding:4px 0 2px">A trip, a car, a concert, a gift. Name it and we’ll give it a date.</p>') +
-        (P.goals.length < 3 ? '<button type="button" class="outline" style="min-height:44px;margin:8px 0 12px;font-size:15px" data-a="goalnew">+ Add a goal</button>' : '') + '</div>';
       var snow = o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
         o.state.debts.slice().sort(function (a, b) { return a.bal - b.bal; }).sort(function (a, b) { return (a.bal <= 0) - (b.bal <= 0); }).map(function (d) {
           var d0 = P.debts.filter(function (x) { return x.id === d.id; })[0], orig = Math.max(num(d0.orig), d.bal) || 1, paid = d.bal <= 0, isT = o.target && o.target.id === d.id && step === 2;
@@ -797,8 +837,7 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + payday + streakCard() + checklist() + goals + snow + nw +
-        '<button type="button" class="card" data-a="go" data-v="plan" style="text-align:left;width:100%;padding:16px 18px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--display);font-weight:600;font-size:18px">Payday Plan</span><span style="font-size:13px;color:var(--faint)">' + (pl.tight ? 'Needs attention ›' : 'Every dollar has a job ›') + '</span></button>' +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + streakCard() + calendarCard() + checklist() + snow + nw +
         '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
         '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
@@ -914,8 +953,9 @@
             return d.open ? '<button type="button" class="planrow" data-a="planopen" data-v="' + run.uid + '" data-i="' + i + '">' + inner + '<span aria-hidden="true">\u203a</span></button>' : '<div class="planrow locked">' + inner + '</div>';
           }).join('') + '</div></div>';
       }).join('');
-      return '<div style="margin-top:8px"><div class="eyebrow">One small step a day</div><h2>Plans</h2><p style="margin-top:6px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' +
-        celebration(2, ['plan', 'unlock']) + list + '<p class="fine">More plans are coming.</p>';
+      return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
+        celebration(2, ['plan', 'unlock']) + goalsCard() +
+        '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
       var run = P.plans.filter(function (p) { return p.uid === U.planUid; })[0], def = F.planDef(run.id), i = U.planDay, d = def.days[i], done = (run.done || []).indexOf(i) >= 0;
@@ -1266,6 +1306,8 @@
         if (!U.billOpen) { U.billOpen = {}; P.bills.forEach(function (x) { U.billOpen[x.group] = true; }); }
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
+      case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
+      case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
       case 'bedit': U.bEdit = v; U.bAdd = null; render(); (function () { var inp = app.querySelector('[data-bedit]'); if (inp) { inp.focus(); inp.select(); } })(); break;
       case 'btoggle': U.bOpen = U.bOpen || {}; U.bOpen[v] = !U.bOpen[v]; render(); break;
