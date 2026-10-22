@@ -177,7 +177,7 @@
       }).join('') + '</nav>' + (U.plusOpen ? plusSheet() : '');
     }
     app.innerHTML = html;
-    if (U.screen === 'import') { if (!csvTimer) csvAutoplay(); } else if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
+    csvAutoplay();
     document.body.classList.toggle('has-tabs', tabbed);
   }
   // ---------- the CSV how-to: five short animated scenes on a drawn phone ----------
@@ -193,22 +193,45 @@
     ['Come back here and choose it', 'Tap Choose a CSV file, then Browse \u2192 Downloads.',
       '<div class="ph-card tapme"><b>Choose a CSV file</b><small>Read on this phone, never uploaded</small></div><div class="ph-file new later"><span class="ph-ic">CSV</span>activity.csv<small>Tap to import</small></div>', [50, 28]]
   ];
-  function csvScene(i) {
-    var sc = CSV_SCENES[i];
-    return '<div class="csv-stage" key="' + i + '"><div class="phone"><div class="ph-screen">' + sc[2] + '<i class="ph-finger" style="left:' + sc[3][0] + '%;top:' + sc[3][1] + '%"></i></div></div>' +
-      '<div class="csv-copy"><div class="eyebrow">Step ' + (i + 1) + ' of ' + CSV_SCENES.length + '</div><b>' + sc[0] + '</b><p>' + sc[1] + '</p>' +
-      '<div class="csv-dots">' + CSV_SCENES.map(function (x, j) { return '<button type="button" class="' + (j === i ? 'on' : '') + '" data-a="csvstep" data-v="' + j + '" aria-label="Step ' + (j + 1) + '"></button>'; }).join('') + '</div>' +
-      '<div class="csv-nav"><button type="button" class="sharebtn ghost" data-a="csvstep" data-v="' + ((i + CSV_SCENES.length - 1) % CSV_SCENES.length) + '" aria-label="Previous step">\u2039</button><button type="button" class="sharebtn" data-a="csvstep" data-v="' + ((i + 1) % CSV_SCENES.length) + '">' + (i === CSV_SCENES.length - 1 ? 'Watch again' : 'Next \u203a') + '</button></div></div></div>';
+  var HS_ICON = '<img class="ph-icon" src="icons/icon-192.png" alt="">';
+  var HS_GRID = function (n) { var t = ''; for (var k = 0; k < 12; k++) t += k === n ? '<span class="ph-appwrap">' + HS_ICON.replace('ph-icon', 'ph-icon new tapme') + '<small>Find Money</small></span>' : '<span class="ph-appwrap"><i class="ph-blank"></i></span>'; return '<div class="ph-grid">' + t + '</div>'; };
+  var IOS_SCENES = [
+    ['Tap Share', 'In Safari, it\u2019s the square with an arrow, at the bottom of the screen.',
+      '<div class="ph-title">Find Me the Money</div><div class="ph-card"><b>We found $1,100 a month</b><small>Want it back?</small></div><div class="ph-safari"><span class="ph-url2">findmethemoney.netlify.app</span><div class="ph-tools"><span>\u2039</span><span>\u203a</span><span class="ph-sh tapme">{SHARE}</span><span>\u2637</span><span>\u29C9</span></div></div>', [50, 91]],
+    ['Scroll down, tap Add to Home Screen', 'It\u2019s in the list under the share options.',
+      '<div class="ph-sheet"><div class="ph-row">Copy</div><div class="ph-row">Add to Reading List</div><div class="ph-row">Add Bookmark</div><div class="ph-row on tapme">Add to Home Screen<span>\u229E</span></div><div class="ph-row">Find on Page</div></div>', [50, 70]],
+    ['Tap Add', 'Top right corner. The name can stay as it is.',
+      '<div class="ph-bar"><span>Cancel</span><b>Add to Home Screen</b><span class="ph-add tapme">Add</span></div><div class="ph-addrow">' + HS_ICON + '<div><b>Find Money</b><small>findmethemoney.netlify.app</small></div></div>', [88, 8]],
+    ['Open it from your Home Screen', 'Use the app from here from now on. Your plan stays put.', HS_GRID(5), [38, 27]]
+  ];
+  var ANDROID_SCENES = [
+    ['Tap the \u22EE menu', 'Top right corner of Chrome.',
+      '<div class="ph-chrome"><span class="ph-url2">findmethemoney.netlify.app</span><span class="ph-dots tapme">\u22EE</span></div><div class="ph-title">Find Me the Money</div><div class="ph-card"><b>We found $1,100 a month</b><small>Want it back?</small></div>', [90, 6]],
+    ['Tap Add to Home screen', 'Some phones call it Install app.',
+      '<div class="ph-menu"><div class="ph-row">New tab</div><div class="ph-row">History</div><div class="ph-row">Downloads</div><div class="ph-row on tapme">Add to Home screen</div><div class="ph-row">Settings</div></div>', [62, 46]],
+    ['Tap Install', 'Or Add, depending on your phone.',
+      '<div class="ph-dialog"><b>Install app?</b><div class="ph-addrow">' + HS_ICON + '<div><b>Find Money</b><small>findmethemoney.netlify.app</small></div></div><div class="ph-dlgbtns"><span>Cancel</span><span class="ph-add tapme">Install</span></div></div>', [78, 62]],
+    ['Open it from your Home Screen', 'Use the app from here from now on. Your plan stays put.', HS_GRID(5), [38, 27]]
+  ];
+  var GUIDES = { csv: CSV_SCENES, ios: IOS_SCENES, android: ANDROID_SCENES };
+  function guideScene(key, i) {
+    var list = GUIDES[key], sc = list[i], n = list.length;
+    return '<div class="csv-stage" key="' + i + '"><div class="phone"><div class="ph-screen">' + sc[2].replace('{SHARE}', ICON.share) + '<i class="ph-finger" style="left:' + sc[3][0] + '%;top:' + sc[3][1] + '%"></i></div></div>' +
+      '<div class="csv-copy"><div class="eyebrow">Step ' + (i + 1) + ' of ' + n + '</div><b>' + sc[0] + '</b><p>' + sc[1] + '</p>' +
+      '<div class="csv-dots">' + list.map(function (x, j) { return '<button type="button" class="' + (j === i ? 'on' : '') + '" data-a="guidestep" data-k="' + key + '" data-v="' + j + '" aria-label="Step ' + (j + 1) + '"></button>'; }).join('') + '</div>' +
+      '<div class="csv-nav"><button type="button" class="sharebtn ghost" data-a="guidestep" data-k="' + key + '" data-v="' + ((i + n - 1) % n) + '" aria-label="Previous step">\u2039</button><button type="button" class="sharebtn" data-a="guidestep" data-k="' + key + '" data-v="' + ((i + 1) % n) + '">' + (i === n - 1 ? 'Watch again' : 'Next \u203a') + '</button></div></div></div>';
   }
-  // plays on its own, one scene every few seconds, while the import screen is open (not with reduced motion)
+  function guideBox(key) { U.gStep = U.gStep || {}; return '<div class="csvg card" data-guide="' + key + '">' + guideScene(key, U.gStep[key] || 0) + '</div>'; }
+  // plays on its own, one scene every few seconds, on any screen showing a guide (not with reduced motion)
   var csvTimer = null;
   function csvAutoplay() {
     clearInterval(csvTimer); csvTimer = null;
-    if (U.screen !== 'import' || U.csvPaused) return;
+    var el0 = app.querySelector('[data-guide]'); if (!el0) return;
+    var key = el0.getAttribute('data-guide'); U.gPaused = U.gPaused || {}; if (U.gPaused[key]) return;
     try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
     csvTimer = setInterval(function () {
-      var el = app.querySelector('[data-csvguide]'); if (!el || U.screen !== 'import') { clearInterval(csvTimer); csvTimer = null; return; }
-      U.csvStep = ((U.csvStep || 0) + 1) % CSV_SCENES.length; el.innerHTML = csvScene(U.csvStep);
+      var el = app.querySelector('[data-guide="' + key + '"]'); if (!el) { clearInterval(csvTimer); csvTimer = null; return; }
+      U.gStep[key] = ((U.gStep[key] || 0) + 1) % GUIDES[key].length; el.innerHTML = guideScene(key, U.gStep[key]);
     }, 4200);
   }
   // "‹ Day 1 · Find your number  ○": a way back to today's plan, and a check to finish it from here
@@ -713,7 +736,7 @@
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
         (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
-          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you.</span></div>' : '') +
+          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you.</span><button type="button" class="linkbtn" data-a="edit" data-v="install" style="align-self:flex-start">Show me how \u203a</button></div>' : '') +
         (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
         (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
@@ -905,13 +928,10 @@
     install: function () {
       var ios = isIOS();
       return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><h2>Add it to your Home Screen</h2><p>' + (ios ? 'On iPhone, Safari can clear saved data from websites you haven\u2019t opened in about a week. Apps on your Home Screen are safe, and they open like a real app.' : 'It opens like a real app and is one tap away on payday.') + '</p></div>' +
-        '<div class="card stack" style="padding:16px 18px;gap:14px">' + (ios ? [
-          ['1', 'Tap ' + ICON.share + ' <b>Share</b> at the bottom of Safari.'], ['2', 'Scroll down and tap <b>Add to Home Screen</b>.'], ['3', 'Tap <b>Add</b>, then open Find Me the Money from your Home Screen.']]
-          : [['1', 'Open your browser\u2019s menu (the \u22ee or \u2026 button).'], ['2', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.'], ['3', 'Open Find Me the Money from your Home Screen.']]).map(function (x) {
-          return '<div class="check" style="align-items:center"><span class="dot today" aria-hidden="true">' + x[0] + '</span><span>' + x[1] + '</span></div>'; }).join('') + '</div>' +
-        '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
-        (ios && !standalone() && P.setupDone ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
+        (ios && !standalone() && P.setupDone ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
           '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
+        guideBox(ios ? 'ios' : 'android') +
+        '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
     },
     habit: function () {
@@ -929,7 +949,7 @@
         '<input type="file" accept=".csv,text/csv,text/comma-separated-values,application/vnd.ms-excel" data-file="csv" class="sr"></label>' +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
         '<div class="eyebrow" style="margin-top:6px">How to get the file \u00b7 30 seconds</div>' +
-        '<div class="csvg card" data-csvguide>' + csvScene(U.csvStep || 0) + '</div>' +
+        guideBox('csv') +
         '<button type="button" class="textbtn" data-a="help" style="align-self:flex-start">' + (U.showHelp ? 'Hide tips' : 'Still stuck? Tips for common banks') + '</button>' +
         (U.showHelp ? '<div class="card stack" style="padding:14px 18px;font-size:14px;color:var(--muted);gap:10px">' +
           '<span><b>No download button in your bank\u2019s app?</b> Most banks only offer it on their <b>website</b>. In Safari, log in to your bank, tap <b>aA</b> in the address bar, then <b>Request Desktop Website</b>.</span>' +
@@ -1661,7 +1681,7 @@
         if (!U.billOpen) { U.billOpen = {}; P.bills.forEach(function (x) { U.billOpen[x.group] = true; }); }
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
-      case 'csvstep': U.csvStep = +v; U.csvPaused = true; clearInterval(csvTimer); csvTimer = null; (function () { var el = app.querySelector('[data-csvguide]'); if (el) el.innerHTML = csvScene(U.csvStep); })(); break;
+      case 'guidestep': (function () { var k = b.getAttribute('data-k'); U.gStep = U.gStep || {}; U.gPaused = U.gPaused || {}; U.gStep[k] = +v; U.gPaused[k] = true; clearInterval(csvTimer); csvTimer = null; var el = app.querySelector('[data-guide="' + k + '"]'); if (el) el.innerHTML = guideScene(k, U.gStep[k]); })(); break;
       case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendcat': U.form.key = v; U.formErr = ''; render(); break;
       case 'spendsave':
