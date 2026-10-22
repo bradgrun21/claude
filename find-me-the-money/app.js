@@ -5,7 +5,7 @@
 
   // ---------- settings for the beta ----------
   var CONFIG = {
-    feedbackUrl: '',            // e.g. a Google Form link; the Feedback button hides while this is empty
+    feedbackUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSegoJHMVLzFlS6-o_XvC1Y6K4Dr_8qPa_fpCAMoywp8EnggzQ/viewform', // beta feedback form; shows a Feedback tab on every screen
     storageKey: 'fmtm.v1',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
@@ -166,6 +166,8 @@
     if (U.screen === 'plans' || U.screen === 'planday') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
     if (U.planCtx) html = planBar() + html;
+    // beta: a small Feedback tab on every screen
+    if (CONFIG.feedbackUrl) html += '<a class="fbtab" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener" data-a="feedback" aria-label="Send feedback">Feedback</a>';
     if (tabbed) {
       var news = P.unseen.length;
       html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
@@ -1859,6 +1861,7 @@
         track('share'); break;
       case 'saveimg': P.shares = (P.shares || 0) + 1; save(); download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
       case 'youtube': track('youtube'); break;
+      case 'feedback': track('feedback-' + U.screen); break;
       case 'joincommunity': P.communityJoined = true; save(); track('community'); setTimeout(render, 300); break;
       case 'postcommunity':
         // Skool can't take a post from another site, so copy the caption, save the card, and open the community to paste it

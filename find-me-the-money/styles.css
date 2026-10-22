@@ -505,3 +505,7 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .duepill { min-height: 24px; padding: 0 9px; border-radius: 12px; border: 1px dashed rgba(42,107,102,.45); background: transparent; font: inherit; font-size: 12px; font-weight: 700; color: #2A6B66; line-height: 1; }
 .duepill.set { border-style: solid; border-color: transparent; background: rgba(201,88,74,.12); color: #A2471F; }
 .duepill:focus-visible { outline: 2px solid #2A6B66; outline-offset: 2px; }
+/* beta feedback tab: a small vertical tab on the right edge of every screen */
+.fbtab { position: fixed; z-index: 15; right: 0; top: 46%; transform: translateY(-50%) rotate(180deg); writing-mode: vertical-rl; padding: 12px 7px; border-radius: 10px 0 0 10px; background: #2A6B66; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-decoration: none; box-shadow: 0 6px 16px rgba(30,62,66,.25); opacity: .9; }
+.fbtab { border-radius: 0 10px 10px 0; }
+.fbtab:focus-visible { outline: 3px solid rgba(232,135,95,.8); }

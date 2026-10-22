@@ -74,7 +74,7 @@ contributor. Nothing secret is in it: it's the same code anyone can see by visit
 ## Before you send it to friends and family
 - [ ] Optional: set `shareUrl` at the top of `app.js` (your domain) so it prints on share cards
 - [ ] Only after approval for an official affiliate/partner program (not a personal referral code), add links in `CONFIG.partners`
-- [ ] Set `feedbackUrl` at the top of `app.js` to a Google Form (or similar) so testers can reach you
+- [x] Feedback: a Feedback tab on every screen opens the beta Google Form (`feedbackUrl` in `app.js`)
 - [ ] Optional: turn on privacy-friendly visit counting. Create a free https://www.goatcounter.com site
       and uncomment the script tag in `index.html` with your code. It counts opens and steps like
       "finished setup" and "checked in", never money amounts
