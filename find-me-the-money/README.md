@@ -22,7 +22,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Import screen: an animated, five-step how-to for downloading a CSV, plus tips for common banks
 - Track spending by hand: + Add spending (amount, where, which budget line, date). Every budget line shows spent and left this month; over-budget lines turn orange. Quick add on Home, a monthly summary and list on the Budget tab, and a no-file option on the import screen
 - After a bank file: Put it in your budget. Drag each store onto a budget line (or tap it); it's remembered for next time, and imported purchases count against the lines. Month arrows on the spending summary
-- Wins tab (Challenges and Milestones) is always in the bar
+- Tab bar: Home, Budget, a raised + in the middle (add spending, update balances, import a bank file, add a goal), Plans & Goals, Community. Your wins (Challenges and Milestones) sit under the community section
 - Budget tab in the bottom bar: the Payday Plan per paycheck or per month, with quick links to change any part
 - Found money spells out the math (wants minus your fun limit) and where the money goes
 - Monthly bills in 10 groups (Home, Utilities, Food & household, Getting around, Health & insurance, Personal, Kids & family, Pets, Subscriptions, Other) with common items to add in one tap; yearly bills are set aside monthly

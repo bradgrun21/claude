@@ -143,9 +143,8 @@
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans & Goals', 'book'], ['wins', 'Wins', 'medal'], ['community', 'Community', 'people']];
-  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'wins' : screen; }
-  function winsHome() { return 'challenges'; }
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Community', 'people']];
+  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'community' : screen; }
   function render() {
     ensureIds();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
@@ -159,8 +158,9 @@
       var news = P.unseen.length;
       html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
         var on = tabOf(U.screen) === t[0];
-        return '<button type="button" data-a="go" data-v="' + (t[0] === 'wins' ? winsHome() : t[0]) + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'wins' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
-      }).join('') + '</nav>';
+        if (t[0] === 'plus') return '<span class="fabslot"><button type="button" class="fab' + (U.plusOpen ? ' open' : '') + '" data-a="plusmenu" aria-label="Add" aria-expanded="' + !!U.plusOpen + '">' + ICON.plus + '</button></span>';
+        return '<button type="button" data-a="go" data-v="' + t[0] + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'community' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
+      }).join('') + '</nav>' + (U.plusOpen ? plusSheet() : '');
     }
     app.innerHTML = html;
     if (U.screen === 'import') { if (!csvTimer) csvAutoplay(); } else if (csvTimer) { clearInterval(csvTimer); csvTimer = null; }
@@ -204,7 +204,20 @@
     return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your plan</small>Day ' + (U.planCtx.day + 1) + ' \u00b7 ' + d.title + '</span></button>' +
       '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark day ' + (U.planCtx.day + 1) + ' complete">' + ICON.check(done ? '#fff' : '#2A6B66', 16) + '<span>Done</span></button></div>';
   }
-  function go(s) { U.screen = s; U.err = ''; render(); window.scrollTo(0, 0); }
+  function go(s) {
+    U.plusOpen = false;
+    var toWins = s === 'challenges' || s === 'milestones';
+    if (toWins) { U.winsView = s; s = 'community'; }
+    U.screen = s; U.err = ''; render();
+    var w = toWins && app.querySelector('#wins');
+    if (w) w.scrollIntoView(); else window.scrollTo(0, 0);
+  }
+  // the + menu: the quick things people do between paydays
+  function plusSheet() {
+    var items = [['spendnew', '', 'Add spending', 'Five seconds per purchase'], ['checkin', '', 'Update my balances', 'Check in on payday, or anytime'], ['edit', 'import', 'Import a bank file', 'Sort it into your budget'], ['goalnew', '', 'Add a goal', 'A trip, a car, a gift']];
+    return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
+      return '<button type="button" role="menuitem" data-a="' + x[0] + '"' + (x[1] ? ' data-v="' + x[1] + '"' : '') + '><b>' + x[2] + '</b><small>' + x[3] + '</small></button>'; }).join('') + '</div>';
+  }
 
   var ICON = {
     check: function (c, s) { s = s || 14; return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none"><path d="M5 12l5 5L20 7"/></svg>'; },
@@ -217,6 +230,7 @@
     home: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>',
     flag: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
     wallet: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7a2 2 0 012-2h11v4"/><path d="M4 7v11a2 2 0 002 2h13a1 1 0 001-1V10a1 1 0 00-1-1H6a2 2 0 01-2-2z"/><circle cx="16" cy="14.5" r="1.2" fill="currentColor"/></svg>',
+    plus: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
     people: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.6a3.2 3.2 0 010 6.3M18 14.3c1.8.8 3 2.6 3 4.7"/></svg>',
     book: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 21V5M8 7h7"/></svg>',
     medal: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="6"/><path d="M8.5 9.2L6 3h4l2 4 2-4h4l-2.5 6.2"/><path d="M10 14l1.5 1.5L14.5 12"/></svg>',
@@ -1092,7 +1106,7 @@
           '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
       };
       var earnPick = pick.filter(function (d) { return d.tag === 'Earn'; }), restPick = pick.filter(function (d) { return d.tag !== 'Earn'; });
-      return winsSwitch('challenges') + '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
+      return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
         (active.length ? active.map(card).join('') : '<div class="note">' + ICON.info + '<span>No challenge running. Start one below; the 7-day ones are a great first win.</span></div>') +
         (active.length >= 3 ? '<p style="margin-top:10px">You\u2019re running 3. Finish or stop one to start another.</p>' : '') +
         (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t. Track every dollar and put it to work.</p>' + earnPick.map(startCard).join('') : '') +
@@ -1198,14 +1212,19 @@
           : '<button type="button" class="primary" disabled>Community opening soon</button>') +
         (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
         (CONFIG.youtubeUrl ? '<a class="card ytcard" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube"><span class="yt-ic" aria-hidden="true">\u25B6</span><span><b>Watch on YouTube</b><small>Short videos: find your money, payday wins, debt-free date reveals</small></span><span aria-hidden="true">\u203a</span></a>' : '') +
-        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget and numbers stay on this phone. Only what you choose to post is shared.</span></div>';
+        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget and numbers stay on this phone. Only what you choose to post is shared.</span></div>' +
+        // your wins, right under the community: challenges and milestones
+        '<div id="wins" class="stack" style="gap:10px;margin-top:14px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div>' +
+        '<div class="seg wins-seg" role="group" aria-label="Wins" style="align-self:flex-start">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
+          var on = (U.winsView || 'challenges') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="winsview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
+        (U.winsView === 'milestones' ? V.milestones() : V.challenges());
     },
     milestones: function () {
       var f = facts(), earned = F.BADGES.filter(function (b) { return P.badges[b.id]; }), locked = F.BADGES.filter(function (b) { return !P.badges[b.id]; });
       var o = F.outlook(profile(), today()), st = Math.min(o.step, 7);
       var pathCard = '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><div class="eyebrow">Your path</div><b>Step ' + st + ': ' + F.STEPS[st - 1][0] + '</b></div>' +
         '<button type="button" class="sharebtn" data-a="sharestep" data-v="">' + ICON.share + ' Share</button></div>' + journey(st, { small: true, progress: stepProgress(o) }) + '</div>';
-      return winsSwitch('milestones') + '<div style="margin-top:8px"><div class="eyebrow">' + earned.length + ' of ' + F.BADGES.length + ' earned</div><h2>Milestones</h2><p style="margin-top:6px">Little wins along the way. Tap one to share it.</p></div>' + celebration(9, 'badge') + pathCard +
+      return '<div style="margin-top:8px"><div class="eyebrow">' + earned.length + ' of ' + F.BADGES.length + ' earned</div><h2>Milestones</h2><p style="margin-top:6px">Little wins along the way. Tap one to share it.</p></div>' + celebration(9, 'badge') + pathCard +
         (earned.length ? '<div class="grid2">' + earned.map(function (b) {
           return '<button type="button" class="tile medal-tile" data-a="sharebadge" data-v="' + b.id + '"><span class="medal on">' + ICON.medal + '</span><b>' + b.title + '</b><span class="k">' + b.desc + '</span><span class="k" style="color:var(--sun-ink)">' + ICON.share + ' Share</span></button>';
         }).join('') + '</div>' : '') +
@@ -1548,6 +1567,9 @@
       case 'assignpick': assignTo(v); break;
       case 'assignundo': (function () { var m = U.assignHist.pop(); if (m) delete P.storeLine[m]; })(); save(); render(); break;
       case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); render(); break;
+      case 'plusmenu': U.plusOpen = !U.plusOpen; render(); break;
+      case 'plusclose': U.plusOpen = false; render(); break;
+      case 'winsview': U.winsView = v; render(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
