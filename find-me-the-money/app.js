@@ -69,6 +69,12 @@
     }
     catch (e) { storageOk = false; return blank(); }
   }
+  // Before a plan is deleted or replaced, keep a copy for 30 days so it can be brought back.
+  var TRASH = 'fmtm.v1.trash';
+  function keepCopy() { try { if (P.setupDone || P.debts.length || P.paycheck) localStorage.setItem(TRASH, JSON.stringify({ at: F.isoDay(today()), plan: P })); } catch (e) {} }
+  function trashed() {
+    try { var t = JSON.parse(localStorage.getItem(TRASH) || 'null'); if (!t || !t.plan || F.daysBetween(F.fromIso(t.at), today()) > 30) return null; return t; } catch (e) { return null; }
+  }
   function save() { try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); storageOk = true; } catch (e) { storageOk = false; } }
   var P = load();
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
@@ -647,6 +653,7 @@
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
         (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
           '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you.</span></div>' : '') +
+        (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
         (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
         '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
@@ -841,7 +848,7 @@
           return '<div class="check" style="align-items:center"><span class="dot today" aria-hidden="true">' + x[0] + '</span><span>' + x[1] + '</span></div>'; }).join('') + '</div>' +
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
         (ios && !standalone() && P.setupDone ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
-          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button></div>' : '') +
+          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
     },
     habit: function () {
@@ -1271,7 +1278,7 @@
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">Everything is saved only on this phone. Save a backup file now and then, in case you switch phones or clear your browser.</p>' +
-        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' +
+        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
         (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone. It can’t be undone unless you have a backup.</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
@@ -1280,11 +1287,13 @@
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
     },
     restore: function () {
-      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>Bring your plan here</h2><p>Paste the plan you copied in Safari, or pick a backup file. It replaces what\u2019s on this phone.</p>' +
+      var tr = trashed();
+      return back(P.setupDone ? 'settings' : 'welcome') + (tr ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your earlier plan</b><span class="d">Saved ' + dayMonth(F.fromIso(tr.at)) + ' before it was deleted or replaced.</span></div></button>' : '') + '<h2>Bring your plan here</h2><p>Paste the plan you copied in Safari, or pick a backup file. It replaces what\u2019s on this phone.</p>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Paste your plan</b><span style="font-size:14px;color:var(--muted)">In Safari: Find Me the Money \u2192 Settings \u2192 <b>Copy my plan</b>. Then press and hold below and tap <b>Paste</b>.</span>' +
-        '<textarea data-paste rows="3" placeholder="Press and hold, then Paste" aria-label="Paste your plan"></textarea><button type="button" class="primary" data-a="pasteplan">Bring my plan over</button></div>' +
-        '<label class="choice" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Or choose a backup file</b><span class="d">A .json file named find-me-the-money-backup</span></div><input type="file" accept=".json,application/json" data-file="backup" class="sr"></label>' +
-        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '');
+        '<button type="button" class="outline" data-a="pasteclip">Paste my copied plan</button>' +
+        '<textarea data-paste rows="3" placeholder="Or press and hold here, then Paste" aria-label="Paste your plan"></textarea><button type="button" class="primary" data-a="pasteplan">Bring my plan over</button>' +
+        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') + '</div>' +
+        '<label class="choice" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Or choose a backup file</b><span class="d">A .json file named find-me-the-money-backup</span></div><input type="file" accept=".json,application/json" data-file="backup" class="sr"></label>';
     }
   };
 
@@ -1598,6 +1607,7 @@
       case 'winsview': U.winsView = v; render(); break;
       case 'copyplan': (function () {
         var code = 'FMTM1:' + btoa(unescape(encodeURIComponent(JSON.stringify(P))));
+        U.planCode = code;
         var done = function () { U.copiedPlan = true; track('copy-plan'); render(); };
         try { navigator.clipboard.writeText(code).then(done, function () { window.prompt('Copy this, then paste it in the Home Screen app:', code); done(); }); }
         catch (err) { window.prompt('Copy this, then paste it in the Home Screen app:', code); done(); }
@@ -1608,9 +1618,14 @@
           if (txt.indexOf('FMTM1:') !== 0) throw new Error('bad');
           var d = JSON.parse(decodeURIComponent(escape(atob(txt.slice(6)))));
           if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad');
-          P = Object.assign(blank(), d); save(); track('paste-plan'); U.err = '';
+          if (P.setupDone) keepCopy(); P = Object.assign(blank(), d); save(); track('paste-plan'); U.err = '';
           U.toast = ['Your plan is here.', 'Everything came over: budget, streaks and history.', true]; go(P.setupDone ? 'home' : 'welcome');
         } catch (err) { U.err = 'That doesn\u2019t look like a copied plan. In Safari, tap Copy my plan again, then paste here.'; render(); }
+      })(); break;
+      case 'untrash': (function () { var t = trashed(); if (!t) return; var cur = P; P = Object.assign(blank(), t.plan); save(); try { if (cur.setupDone) localStorage.setItem(TRASH, JSON.stringify({ at: F.isoDay(today()), plan: cur })); else localStorage.removeItem(TRASH); } catch (e) {} track('untrash'); U.toast = ['Your plan is back.', 'Everything is just how you left it.', true]; go(P.setupDone ? 'home' : 'welcome'); })(); break;
+      case 'pasteclip': (function () {
+        try { navigator.clipboard.readText().then(function (t) { var el = app.querySelector('[data-paste]'); if (el) el.value = t; var bt = app.querySelector('[data-a=pasteplan]'); if (bt) bt.click(); }, function () { U.err = 'Your phone didn\u2019t allow pasting here. Press and hold in the box and tap Paste instead.'; render(); }); }
+        catch (err) { U.err = 'Press and hold in the box and tap Paste instead.'; render(); }
       })(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
@@ -1791,7 +1806,7 @@
         var ok = function () { U.copied = true; render(); };
         try { navigator.clipboard.writeText(txt).then(ok, function () { selectCaption(); }); } catch (err) { selectCaption(); }
         break;
-      case 'delyes': try { localStorage.removeItem(CONFIG.storageKey); } catch (err) {} P = blank(); U.confirmDelete = false; U.toast = null; go('welcome'); break;
+      case 'delyes': keepCopy(); try { localStorage.removeItem(CONFIG.storageKey); } catch (err) {} P = blank(); U.confirmDelete = false; U.toast = null; go('welcome'); break;
     }
   });
 
@@ -1872,7 +1887,7 @@
       save(); track('import'); U.sortHist = []; U.limit = null; go('sort');
     });
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {
-      try { var d = JSON.parse(text); if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad'); P = Object.assign(blank(), d); save(); U.toast = ['Backup restored.', 'Welcome back.', false]; go(P.setupDone ? 'home' : 'welcome'); }
+      try { var d = JSON.parse(text); if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad'); if (P.setupDone) keepCopy(); P = Object.assign(blank(), d); save(); U.toast = ['Backup restored.', 'Welcome back.', false]; go(P.setupDone ? 'home' : 'welcome'); }
       catch (err) { U.err = 'That doesn’t look like a Find Me the Money backup file.'; render(); }
     });
   });
