@@ -366,7 +366,7 @@
         P.bills.forEach(function (b, i) {
           if (b.group !== r.group) return;
           var yr = b.per === 'yr';
-          kids.push(line({ skey: 'b:' + b.id, mon: F.billMonthly(b), label: esc(b.name || 'Bill'), sub: yr ? 'Paid yearly \u00b7 set aside monthly' : '', amount: F.billMonthly(b) / d, edit: 'bill:' + i, raw: yr ? num(b.amount) : round2(num(b.amount) / d), unit: yr ? 'yr' : '', rm: ['bills', i] }));
+          kids.push(line({ billIdx: i, skey: 'b:' + b.id, mon: F.billMonthly(b), label: esc(b.name || 'Bill'), sub: yr ? 'Paid yearly \u00b7 set aside monthly' : '', amount: F.billMonthly(b) / d, edit: 'bill:' + i, raw: yr ? num(b.amount) : round2(num(b.amount) / d), unit: yr ? 'yr' : '', rm: ['bills', i] }));
         });
         return out.push(line({ cat: r.group === 'subs' ? 'want' : 'need', label: esc(r.label), amount: r.amount * K, open: 'g:' + r.group, kids: kids, skeys: kids.map(function (k) { return k.skey; }), mon: r.amount * pl.ppm }));
       }
@@ -427,8 +427,10 @@
       : r.edit ? '<button type="button" class="bamt" data-a="bedit" data-v="' + r.edit + '" aria-label="Change ' + r.label + ', now ' + money(r.amount) + '">' + money(r.amount) + '</button>' : '<b>' + money(r.amount) + '</b>';
     var open = r.open && U.bOpen && U.bOpen[r.open];
     var name = r.open ? '<button type="button" class="bname" data-a="btoggle" data-v="' + r.open + '" aria-expanded="' + !!open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span>' + r.label + '</button>' : r.label;
-    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + spentBar(r) + '</span>' +
+    var dueChip = r.billIdx != null ? '<button type="button" class="duechip' + (P.bills[r.billIdx].due ? ' set' : '') + '" data-a="duedit" data-i="' + r.billIdx + '">' + (P.bills[r.billIdx].due ? dueText(P.bills[r.billIdx]) : '+ Due date') + '</button>' : '';
+    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + dueChip + spentBar(r) + '</span>' +
       '<span class="bright">' + amt + (r.rm ? '<button type="button" class="x" data-a="rm" data-v="' + r.rm[0] + '" data-i="' + r.rm[1] + '" aria-label="Remove ' + r.label + '">\u00d7</button>' : '') + '</span></div>' +
+      (r.billIdx != null && U.dueEdit === r.billIdx ? dueForm(r.billIdx) : '') +
       (open ? '<div class="bkids">' + (r.kids.length ? r.kids.map(function (c) { return budgetLine(c, mo); }).join('') : '<p style="font-size:13px;padding:6px 0">Nothing here yet.</p>') + '</div>' : '');
   }
   // ---------- spending, added by hand ----------
@@ -575,7 +577,7 @@
     return goals;
   }
   // ---------- the activity calendar ----------
-  var CAL_KINDS = { payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
+  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
   function calEvents(y, m) {
     var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
     // paydays: step from the next payday in both directions
@@ -586,6 +588,7 @@
     Object.keys(P.badges || {}).forEach(function (id) { var b = F.BADGES.filter(function (x) { return x.id === id; })[0]; if (id === 'plan') add(P.badges[id], 'start', 'Started my plan'); else if (b) add(P.badges[id], 'milestone', b.title); });
     (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
     (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
+    if (itemized()) P.bills.forEach(function (b) { billDates(b, first, last).forEach(function (iso) { add(iso, 'bill', (b.name || 'Bill') + ' due \u00b7 ' + money(dueAmount(b))); }); });
     return ev;
   }
   function calendarCard() {
@@ -600,13 +603,60 @@
       cells += '<button type="button" class="cday' + (isPay ? ' pay' : '') + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(label) + '"><span>' + d + '</span><em>' + dots + '</em></button>';
     }
     var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
-    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday'; }).length; }, 0);
+    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill'; }).length; }, 0);
+    var soon = upcomingBills(14).slice(0, 4);
+    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="cal-bill"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + money(x.amt) + '</b></div>'; }).join('') + '</div>'
+      : (itemized() && !P.bills.some(function (b) { return b.due; }) ? '<button type="button" class="linkbtn" data-a="go" data-v="plan" style="align-self:flex-start;font-size:13px">Add due dates to your bills to see them here \u203a</button>' : '');
     return '<div class="card stack cal" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
-      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div></div>';
+      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
+  }
+  // ---------- bill due dates, repeating, shown on the calendar ----------
+  var REPEATS = [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly'], ['once', 'One time']];
+  function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function dueText(b) {
+    var d = F.fromIso(b.due), rp = b.rep || 'monthly';
+    if (rp === 'monthly') return 'Due the ' + ordinal(d.getDate()) + ' \u00b7 monthly';
+    if (rp === 'yearly') return 'Due ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' \u00b7 yearly';
+    if (rp === 'weekly') return 'Due ' + d.toLocaleDateString('en-US', { weekday: 'long' }) + 's \u00b7 weekly';
+    if (rp === 'biweekly') return 'Every 2 weeks \u00b7 next ' + dayMonth(F.fromIso(nextDue(b, today())));
+    return 'Due ' + dayMonth(d);
+  }
+  // what one payment of this bill is, from its monthly (or yearly) amount
+  function dueAmount(b) {
+    var rp = b.rep || 'monthly', mo = F.billMonthly(b);
+    return rp === 'yearly' ? (b.per === 'yr' ? num(b.amount) : mo * 12) : rp === 'weekly' ? mo * 12 / 52 : rp === 'biweekly' ? mo * 12 / 26 : rp === 'once' ? num(b.amount) : mo;
+  }
+  // every date a bill is due between two days (inclusive)
+  function billDates(b, from, to) {
+    if (!b.due) return [];
+    var start = F.fromIso(b.due), rp = b.rep || 'monthly', out = [], fi = F.isoDay(from), ti = F.isoDay(to), push = function (d) { var i = F.isoDay(d); if (i >= fi && i <= ti && i >= b.due) out.push(i); };
+    if (rp === 'once') push(start);
+    else if (rp === 'weekly' || rp === 'biweekly') {
+      var st = rp === 'weekly' ? 7 : 14, k = Math.max(0, Math.floor(F.daysBetween(start, from) / st));
+      for (var d = F.addDays(start, k * st); F.isoDay(d) <= ti; d = F.addDays(d, st)) push(d);
+    } else {
+      for (var y = from.getFullYear(), m = from.getMonth(); new Date(y, m, 1) <= to; m++) {
+        if (rp === 'yearly' && m % 12 !== start.getMonth()) continue;
+        var dim = new Date(y, m + 1, 0).getDate(); push(new Date(y, m, Math.min(start.getDate(), dim)));
+      }
+    }
+    return out;
+  }
+  function nextDue(b, from) { var l = billDates(b, from, F.addDays(from, 400)); return l[0] || b.due; }
+  function dueForm(i) {
+    var f = U.dueForm || {};
+    return '<div class="dueform"><label class="field">First due date<input type="date" data-duedate value="' + esc(f.date || '') + '"></label>' +
+      '<div class="field">Repeats<div class="seg wrap" role="group" aria-label="Repeats">' + REPEATS.map(function (x) { var on = f.rep === x[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="duerep" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="duesave" data-i="' + i + '">Save</button>' + (P.bills[i].due ? '<button type="button" class="sharebtn ghost" data-a="dueclear" data-i="' + i + '">Remove date</button>' : '') + '<button type="button" class="sharebtn ghost" data-a="duecancel">Cancel</button></div></div>';
+  }
+  function upcomingBills(days) {
+    var now = today(), to = F.addDays(now, days), out = [];
+    if (itemized()) P.bills.forEach(function (b) { if (F.billMonthly(b) > 0 || b.rep === 'once') billDates(b, now, to).forEach(function (iso) { out.push({ iso: iso, name: b.name || 'Bill', amt: dueAmount(b) }); }); });
+    return out.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; });
   }
   // ---------- the 30-second "find my money" ----------
   // the money to reclaim: debt payments you keep once the debt is gone, plus money that has no job yet
@@ -1627,6 +1677,11 @@
         try { navigator.clipboard.readText().then(function (t) { var el = app.querySelector('[data-paste]'); if (el) el.value = t; var bt = app.querySelector('[data-a=pasteplan]'); if (bt) bt.click(); }, function () { U.err = 'Your phone didn\u2019t allow pasting here. Press and hold in the box and tap Paste instead.'; render(); }); }
         catch (err) { U.err = 'Press and hold in the box and tap Paste instead.'; render(); }
       })(); break;
+      case 'duedit': (function () { var b = P.bills[i]; U.dueEdit = U.dueEdit === i ? null : i; U.dueForm = { date: b.due || F.isoDay(today()), rep: b.rep || (b.per === 'yr' ? 'yearly' : 'monthly') }; })(); render(); break;
+      case 'duerep': (function () { var el = app.querySelector('[data-duedate]'); if (el) U.dueForm.date = el.value; U.dueForm.rep = v; })(); render(); break;
+      case 'duesave': (function () { var el = app.querySelector('[data-duedate]'), dt = el && el.value; if (!/^\d{4}-\d{2}-\d{2}$/.test(dt || '')) return; P.bills[i].due = dt; P.bills[i].rep = U.dueForm.rep; U.dueEdit = null; save(); track('bill-due'); })(); render(); break;
+      case 'dueclear': delete P.bills[i].due; delete P.bills[i].rep; U.dueEdit = null; save(); render(); break;
+      case 'duecancel': U.dueEdit = null; render(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;

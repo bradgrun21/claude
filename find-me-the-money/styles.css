@@ -489,3 +489,13 @@ textarea[data-paste] { width: 100%; box-sizing: border-box; min-height: 80px; bo
 .logo { background: linear-gradient(180deg, #1B2E2D, #2A6B66); border-color: rgba(255,255,255,.25); }
 textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.7); padding: 8px 10px; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); resize: none; overflow-wrap: anywhere; }
 textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.7); padding: 8px 10px; font: 12px ui-monospace, Menlo, monospace; color: var(--muted); resize: none; overflow-wrap: anywhere; }
+/* bill due dates */
+.duechip { all: unset; cursor: pointer; display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; color: #2A6B66; }
+.duechip.set { color: var(--sun-ink); }
+.duechip:focus-visible { outline: 2px solid var(--line); border-radius: 4px; }
+.dueform { display: flex; flex-direction: column; gap: 12px; background: rgba(255,255,255,.7); border-radius: 16px; padding: 12px 14px; margin: 4px 0 10px; }
+.cal-bill { background: #C9584A; }
+.soon { border-top: 1px solid var(--line); padding-top: 6px; }
+.soon .row:last-child { border-bottom: 0; }
+.soon i { display: inline-block; width: 6px; height: 6px; border-radius: 3px; margin-right: 8px; vertical-align: 2px; }
+.soon small { display: block; margin-left: 14px; color: var(--faint); font-size: 12px; }

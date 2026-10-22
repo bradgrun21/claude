@@ -25,6 +25,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Tab bar: Home, Budget, a raised + in the middle (add spending, update balances, import a bank file, add a goal), Plans & Goals, Community. Your wins (Challenges and Milestones) sit under the community section
 - Goals can have an exact date: the app shows what each paycheck needs to set aside and budgets it
 - iPhone: the welcome screen says to Add to Home Screen first (the Home Screen app has its own storage). Already set up in Safari? Settings > Copy my plan, then in the Home Screen app: Started in Safari? > paste
+- Bill due dates: each bill on the Budget tab can have a due date that repeats (monthly, every 2 weeks, weekly, yearly or one time). Due days show on the Home calendar, with a Coming up list for the next two weeks
 - Budget tab in the bottom bar: the Payday Plan per paycheck or per month, with quick links to change any part
 - Found money spells out the math (wants minus your fun limit) and where the money goes
 - Monthly bills in 10 groups (Home, Utilities, Food & household, Getting around, Health & insurance, Personal, Kids & family, Pets, Subscriptions, Other) with common items to add in one tap; yearly bills are set aside monthly
