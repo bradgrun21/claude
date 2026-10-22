@@ -500,3 +500,8 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .soon i { display: inline-block; width: 6px; height: 6px; border-radius: 3px; margin-right: 8px; vertical-align: 2px; }
 .soon small { display: block; margin-left: 14px; color: var(--faint); font-size: 12px; }
 .rowedit + .duechip, .permo + .duechip { margin-left: 4px; }
+/* due date pill, right by the bill's name */
+.bname-row { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.duepill { min-height: 24px; padding: 0 9px; border-radius: 12px; border: 1px dashed rgba(42,107,102,.45); background: transparent; font: inherit; font-size: 12px; font-weight: 700; color: #2A6B66; line-height: 1; }
+.duepill.set { border-style: solid; border-color: transparent; background: rgba(201,88,74,.12); color: #A2471F; }
+.duepill:focus-visible { outline: 2px solid #2A6B66; outline-offset: 2px; }

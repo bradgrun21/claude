@@ -381,7 +381,7 @@
           (P.funParts || []).forEach(function (x, i) { if (num(x.amount) > 0) out.push(line({ skey: 'f:' + x.id, mon: num(x.amount), cat: 'want', label: esc(x.name || 'Fun money'), amount: num(x.amount) / d, edit: 'part:' + i, raw: round2(num(x.amount) / d), rm: ['funParts', i] })); });
           return;
         }
-        return out.push(line({ skey: 'fun', mon: profile().fun, cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping, fun. Spend it guilt-free, up to this amount.', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
+        return out.push(line({ skey: 'fun', mon: profile().fun, cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
       }
       if (r.kind === 'save') return out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, edit: r.label === 'Retirement' ? 'retire' : 'college', raw: round2((r.label === 'Retirement' ? retireMonthly() : num(P.collegeMonthly)) / d) }));
       out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, strong: true }));
@@ -425,10 +425,11 @@
     var amt = r.edit && U.bEdit === r.edit
       ? '<span class="bedit"><input type="number" inputmode="decimal" min="0" step="any" data-bedit="' + r.edit + '" value="' + r.raw + '" aria-label="' + r.label + ' amount"><span>' + unit + '</span></span>'
       : r.edit ? '<button type="button" class="bamt" data-a="bedit" data-v="' + r.edit + '" aria-label="Change ' + r.label + ', now ' + money(r.amount) + '">' + money(r.amount) + '</button>' : '<b>' + money(r.amount) + '</b>';
-    var open = r.open && U.bOpen && U.bOpen[r.open];
+    // groups start open; a tap on the name folds one away
+    var open = r.open && !(U.bOpen && U.bOpen[r.open] === false);
     var name = r.open ? '<button type="button" class="bname" data-a="btoggle" data-v="' + r.open + '" aria-expanded="' + !!open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span>' + r.label + '</button>' : r.label;
-    var dueChip = r.billIdx != null ? '<button type="button" class="duechip' + (P.bills[r.billIdx].due ? ' set' : '') + '" data-a="duedit" data-i="' + r.billIdx + '">' + (P.bills[r.billIdx].due ? dueText(P.bills[r.billIdx]) : '+ Due date') + '</button>' : '';
-    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + dueChip + spentBar(r) + '</span>' +
+    if (r.billIdx != null) name = '<span class="bname-row">' + name + duePill(P.bills[r.billIdx], r.billIdx) + '</span>';
+    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + spentBar(r) + '</span>' +
       '<span class="bright">' + amt + (r.rm ? '<button type="button" class="x" data-a="rm" data-v="' + r.rm[0] + '" data-i="' + r.rm[1] + '" aria-label="Remove ' + r.label + '">\u00d7</button>' : '') + '</span></div>' +
       (r.billIdx != null && U.dueEdit === r.billIdx ? dueForm(r.billIdx) : '') +
       (open ? '<div class="bkids">' + (r.kids.length ? r.kids.map(function (c) { return budgetLine(c, mo); }).join('') : '<p style="font-size:13px;padding:6px 0">Nothing here yet.</p>') + '</div>' : '');
@@ -466,7 +467,7 @@
     if (!spent && !bud) return '';
     var over = spent > bud + 0.5, left = bud - spent;
     return '<span class="spbar' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, bud ? spent / bud * 100 : 100) + '%"></i></span>' +
-      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' of ' + money(bud) + ' spent ' + (curSpendMonth() === monthOf(F.isoDay(today())) ? 'this month' : 'in ' + monthName(curSpendMonth())) + ' \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
+      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' spent \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
   }
   function spendTotals() {
     var m = spentMap(), lines = spendLines(), spent = 0, bud = 0;
@@ -625,6 +626,14 @@
     if (rp === 'biweekly') return 'Every 2 weeks \u00b7 next ' + dayMonth(F.fromIso(nextDue(b, today())));
     return 'Due ' + dayMonth(d);
   }
+  // the pill next to a bill's name: "Date" until set, then the short due day
+  function dueShort(b) {
+    var d = F.fromIso(b.due), rp = b.rep || 'monthly';
+    return rp === 'monthly' ? ordinal(d.getDate()) : rp === 'yearly' ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : rp === 'weekly' ? d.toLocaleDateString('en-US', { weekday: 'short' }) + 's' : rp === 'biweekly' ? 'Every 2 wks' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function duePill(b, i) {
+    return '<button type="button" class="duepill' + (b.due ? ' set' : '') + '" data-a="duedit" data-i="' + i + '" aria-label="' + (b.due ? esc(dueText(b)) + '. Change due date' : 'Add a due date') + '">' + (b.due ? dueShort(b) : 'Date') + '</button>';
+  }
   // what one payment of this bill is, from its monthly (or yearly) amount
   function dueAmount(b) {
     var rp = b.rep || 'monthly', mo = F.billMonthly(b);
@@ -782,7 +791,7 @@
               '<button type="button" class="per" data-a="billper" data-i="' + i + '" aria-label="' + (yr ? 'Paid yearly. Switch to monthly' : 'Paid monthly. Switch to yearly') + '">' + (yr ? '/yr' : '/mo') + '</button>' +
               '<button type="button" class="x" data-a="rm" data-v="bills" data-i="' + i + '" aria-label="Remove ' + esc(b.name || 'bill') + '">×</button></div>' +
               (yr ? '<small class="permo" data-permo="' + i + '">' + (num(b.amount) ? 'Sets aside ' + money(num(b.amount) / 12) + ' a month' : 'Enter the yearly cost') + '</small>' : '') +
-              '<button type="button" class="duechip' + (b.due ? ' set' : '') + '" data-a="duedit" data-i="' + i + '">' + (b.due ? dueText(b) : '+ Due date') + '</button>' +
+              '<div style="margin:6px 0 0 4px">' + duePill(b, i) + '</div>' +
               (U.dueEdit === i ? dueForm(i) : '') + '</div>';
           }).join('') +
             '<div class="chips">' + picks.map(function (it) {
@@ -1688,7 +1697,7 @@
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
       case 'bedit': U.bEdit = v; U.bAdd = null; render(); (function () { var inp = app.querySelector('[data-bedit]'); if (inp) { inp.focus(); inp.select(); } })(); break;
-      case 'btoggle': U.bOpen = U.bOpen || {}; U.bOpen[v] = !U.bOpen[v]; render(); break;
+      case 'btoggle': U.bOpen = U.bOpen || {}; U.bOpen[v] = U.bOpen[v] === false; render(); break;
       case 'badd': U.bAdd = v; U.bEdit = null; render(); (function () { var inp = app.querySelector('[data-baddname]'); if (inp) inp.focus(); })(); break;
       case 'baddcancel': U.bAdd = null; render(); break;
       case 'baddsave': (function () { var n = app.querySelector('[data-baddname]'), a = app.querySelector('[data-baddamt]'); budgetAdd(v, n && n.value, a && a.value); })(); U.bAdd = null; render(); break;
