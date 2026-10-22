@@ -437,3 +437,11 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 .ytcard > span:last-child { color: var(--faint); font-size: 20px; }
 .yt-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #E8875F; color: #fff; font-size: 15px; flex: none; }
 .ytcard:focus-visible { outline: 2px solid #2A6B66; }
+/* spending added by hand, counted against each budget line */
+.spbar { display: block; height: 5px; border-radius: 3px; background: rgba(42,107,102,.12); overflow: hidden; margin-top: 6px; }
+.spbar i { display: block; height: 100%; border-radius: 3px; background: #2A6B66; }
+.spbar.over i { background: #E8875F; }
+.spbar.big { height: 8px; border-radius: 4px; margin-top: 0; }
+.spnote { display: block; font-size: 12px !important; color: var(--faint); margin-top: 3px; }
+.spnote.over { color: var(--sun-ink) !important; font-weight: 600; }
+.bigamt { font-size: 28px !important; font-weight: 600; min-height: 60px; }

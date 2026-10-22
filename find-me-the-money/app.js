@@ -53,7 +53,7 @@
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -147,6 +147,7 @@
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'wins' : screen; }
   function winsHome() { return P.unlocked && P.unlocked.challenges ? 'challenges' : 'milestones'; }
   function render() {
+    ensureIds();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
     var tabs = TABS.filter(function (t) { return t[0] !== 'wins' || u.challenges || u.milestones; });
@@ -340,11 +341,11 @@
         P.bills.forEach(function (b, i) {
           if (b.group !== r.group) return;
           var yr = b.per === 'yr';
-          kids.push(line({ label: esc(b.name || 'Bill'), sub: yr ? 'Paid yearly \u00b7 set aside monthly' : '', amount: F.billMonthly(b) / d, edit: 'bill:' + i, raw: yr ? num(b.amount) : round2(num(b.amount) / d), unit: yr ? 'yr' : '', rm: ['bills', i] }));
+          kids.push(line({ skey: 'b:' + b.id, mon: F.billMonthly(b), label: esc(b.name || 'Bill'), sub: yr ? 'Paid yearly \u00b7 set aside monthly' : '', amount: F.billMonthly(b) / d, edit: 'bill:' + i, raw: yr ? num(b.amount) : round2(num(b.amount) / d), unit: yr ? 'yr' : '', rm: ['bills', i] }));
         });
-        return out.push(line({ cat: r.group === 'subs' ? 'want' : 'need', label: esc(r.label), amount: r.amount * K, open: 'g:' + r.group, kids: kids }));
+        return out.push(line({ cat: r.group === 'subs' ? 'want' : 'need', label: esc(r.label), amount: r.amount * K, open: 'g:' + r.group, kids: kids, skeys: kids.map(function (k) { return k.skey; }), mon: r.amount * pl.ppm }));
       }
-      if (r.kind === 'bill') return out.push(line({ cat: 'need', label: esc(r.label), sub: 'One number for now. Add needs below to list them one by one.', amount: r.amount * K, edit: 'basics', raw: round2(num(P.basics) / d) }));
+      if (r.kind === 'bill') return out.push(line({ skey: 'basics', mon: num(P.basics), cat: 'need', label: esc(r.label), sub: 'One number for now. Add needs below to list them one by one.', amount: r.amount * K, edit: 'basics', raw: round2(num(P.basics) / d) }));
       if (r.kind === 'min') {
         var dk = [];
         P.debts.forEach(function (x, i) { if (num(x.bal) > 0) dk.push(line({ label: esc(x.name || 'Debt'), sub: money(num(x.bal)) + ' left', amount: num(x.min) / d, edit: 'dmin:' + i, raw: round2(num(x.min) / d) })); });
@@ -352,10 +353,10 @@
       }
       if (r.kind === 'fun') {
         if (funParts().length) {
-          (P.funParts || []).forEach(function (x, i) { if (num(x.amount) > 0) out.push(line({ cat: 'want', label: esc(x.name || 'Fun money'), amount: num(x.amount) / d, edit: 'part:' + i, raw: round2(num(x.amount) / d), rm: ['funParts', i] })); });
+          (P.funParts || []).forEach(function (x, i) { if (num(x.amount) > 0) out.push(line({ skey: 'f:' + x.id, mon: num(x.amount), cat: 'want', label: esc(x.name || 'Fun money'), amount: num(x.amount) / d, edit: 'part:' + i, raw: round2(num(x.amount) / d), rm: ['funParts', i] })); });
           return;
         }
-        return out.push(line({ cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping, fun. Spend it guilt-free, up to this amount.', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
+        return out.push(line({ skey: 'fun', mon: profile().fun, cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping, fun. Spend it guilt-free, up to this amount.', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
       }
       if (r.kind === 'save') return out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, edit: r.label === 'Retirement' ? 'retire' : 'college', raw: round2((r.label === 'Retirement' ? retireMonthly() : num(P.collegeMonthly)) / d) }));
       out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, strong: true }));
@@ -401,9 +402,58 @@
       : r.edit ? '<button type="button" class="bamt" data-a="bedit" data-v="' + r.edit + '" aria-label="Change ' + r.label + ', now ' + money(r.amount) + '">' + money(r.amount) + '</button>' : '<b>' + money(r.amount) + '</b>';
     var open = r.open && U.bOpen && U.bOpen[r.open];
     var name = r.open ? '<button type="button" class="bname" data-a="btoggle" data-v="' + r.open + '" aria-expanded="' + !!open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span>' + r.label + '</button>' : r.label;
-    return '<div class="row brow"><span style="min-width:0;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + '</span>' +
+    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + spentBar(r) + '</span>' +
       '<span class="bright">' + amt + (r.rm ? '<button type="button" class="x" data-a="rm" data-v="' + r.rm[0] + '" data-i="' + r.rm[1] + '" aria-label="Remove ' + r.label + '">\u00d7</button>' : '') + '</span></div>' +
       (open ? '<div class="bkids">' + (r.kids.length ? r.kids.map(function (c) { return budgetLine(c, mo); }).join('') : '<p style="font-size:13px;padding:6px 0">Nothing here yet.</p>') + '</div>' : '');
+  }
+  // ---------- spending, added by hand ----------
+  function ensureIds() {
+    (P.bills || []).forEach(function (b) { if (!b.id) b.id = uid(); });
+    (P.funParts || []).forEach(function (x) { if (!x.id) x.id = uid(); });
+    P.spends = P.spends || [];
+  }
+  function monthOf(iso) { return String(iso).slice(0, 7); }
+  // the categories a purchase can count against: the spending lines in their own budget
+  function spendLines() {
+    var out = [];
+    if (itemized()) P.bills.forEach(function (b) { if (F.billMonthly(b) > 0) out.push({ key: 'b:' + b.id, label: b.name || 'Bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
+    else out.push({ key: 'basics', label: 'Bills and basics', cat: 'need', mon: num(P.basics) });
+    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, label: x.name || 'Fun money', cat: 'want', mon: num(x.amount) }); });
+    else out.push({ key: 'fun', label: 'Fun money', cat: 'want', mon: profile().fun });
+    out.push({ key: 'other', label: 'Something else', cat: 'other', mon: 0 });
+    return out;
+  }
+  function spentMap(month) {
+    var m = {}; month = month || monthOf(F.isoDay(today()));
+    P.spends.forEach(function (x) { if (monthOf(x.date) === month) m[x.key] = (m[x.key] || 0) + num(x.amount); });
+    return m;
+  }
+  function spentBar(r) {
+    if (!P.spends.length || !(r.skey || r.skeys)) return '';
+    var m = spentMap(), spent = r.skeys ? r.skeys.reduce(function (t, k) { return t + (m[k] || 0); }, 0) : (m[r.skey] || 0), bud = r.mon || 0;
+    if (!spent && !bud) return '';
+    var over = spent > bud + 0.5, left = bud - spent;
+    return '<span class="spbar' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, bud ? spent / bud * 100 : 100) + '%"></i></span>' +
+      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' spent this month \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
+  }
+  function spendTotals() {
+    var m = spentMap(), lines = spendLines(), spent = 0, bud = 0;
+    lines.forEach(function (l) { spent += m[l.key] || 0; bud += l.mon; });
+    Object.keys(m).forEach(function (k) { if (!lines.some(function (l) { return l.key === k; })) spent += m[k]; });
+    return { spent: spent, bud: bud };
+  }
+  function homeSpend() {
+    var t = spendTotals();
+    return '<div class="card" style="padding:12px 14px 12px 18px;display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0"><b>' + (P.spends.length ? money(t.spent) + ' spent this month' : 'Track what you spend') + '</b>' +
+      '<small style="display:block;color:var(--muted);font-size:13px">' + (P.spends.length ? money(Math.max(0, t.bud - t.spent)) + ' left in your budget' : 'Five seconds per purchase. See it count against your budget.') + '</small></div>' +
+      '<button type="button" class="sharebtn" data-a="spendnew">+ Add</button></div>';
+  }
+  function spendSummary() {
+    var t = spendTotals(), over = t.spent > t.bud + 0.5, month = today().toLocaleDateString('en-US', { month: 'long' });
+    return '<div class="card stack spsum" style="padding:14px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + month + ' spending</b>' +
+      '<span style="font-size:14px;color:var(--muted)">' + (P.spends.length ? money(t.spent) + ' of ' + money(t.bud) : 'Nothing tracked yet') + '</span></div>' +
+      (P.spends.length ? '<span class="spbar big' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, t.bud ? t.spent / t.bud * 100 : 0) + '%"></i></span>' : '<p style="font-size:14px">Add what you spend and see it count against your budget, line by line.</p>') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button>' + (P.spends.length ? '<button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all</button>' : '') + '</div></div>';
   }
   function budgetAddRow(cat, mo) {
     if (cat === 'save') return '<button type="button" class="baddbtn" data-a="goalnew">+ Add a goal</button>';
@@ -772,6 +822,7 @@
           '<span><b>On a computer?</b> Download it there, then AirDrop or email it to yourself and save it to Files. Import it here on your phone, where your plan lives.</span>' +
           '<span><b>Apple Card:</b> Wallet \u2192 Apple Card \u2192 Card Balance \u2192 a monthly statement \u2192 Export Transactions \u2192 CSV.</span>' +
           '<span><b>Still can\u2019t find it?</b> Search your bank\u2019s help for \u201cexport transactions CSV.\u201d Use the account you spend from most. You can add another file later.</span></div>' : '') +
+        (P.setupDone ? '<button type="button" class="outline" data-a="spendnew">No file? Add your spending by hand</button>' : '') +
         '<div class="push"><button type="button" class="textbtn" data-a="go" data-v="' + (U.wizReturn || 'home') + '">Skip for now</button></div>';
     },
     sort: function () {
@@ -862,6 +913,7 @@
         '<div class="seg" role="group" aria-label="Show the plan" style="align-self:flex-start">' + [['check', 'Per paycheck'], ['month', 'Per month']].map(function (o) {
           var on = (o[0] === 'month') === mo; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="plview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
         (mo ? '<p style="font-size:13px;margin-top:-6px">' + (pl.ppm === 1 ? 'You’re paid monthly, so this matches your paycheck.' : 'We do the math for you. A few months a year bring an extra paycheck, a nice bonus for your plan.') + '</p>' : '') +
+        (P.setupDone ? spendSummary() : '') +
         '<p style="font-size:13px;margin-top:-4px">Tap any amount to change it.</p>' +
         '<div class="card budget">' + BUDGET_SECTIONS.map(function (sec) {
           var mine = rows.filter(function (r) { return r.cat === sec[0]; }); if (!mine.length && sec[0] === 'give') return '';
@@ -933,7 +985,7 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + streakCard() + calendarCard() + checklist() + snow + nw +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
         '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
         '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
@@ -1065,6 +1117,36 @@
           : '<button type="button" class="primary" data-a="planmark">Mark day ' + (i + 1) + ' complete</button>') + '</div>';
     },
 
+    spendadd: function () {
+      var f = U.form || {}, lines = spendLines(), last = f.key;
+      var chips = function (cat, title) {
+        var mine = lines.filter(function (l) { return l.cat === cat; }); if (!mine.length) return '';
+        return '<div class="field">' + title + '<div class="chips" style="margin-top:8px">' + mine.map(function (l) {
+          var on = last === l.key; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="spendcat" data-v="' + l.key + '">' + esc(l.label) + '</button>'; }).join('') + '</div></div>';
+      };
+      return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">5 seconds</div><h2>Add spending</h2><p>What did you spend, and on what? It counts against that line in your budget.</p></div>' +
+        (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
+        '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
+        '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
+        chips('need', 'Needs') + chips('want', 'Wants') + chips('other', 'Not in my budget') +
+        '<label class="field">Date<input type="date" data-g="date" value="' + esc(f.date || F.isoDay(today())) + '"></label></div>' +
+        (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button><button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button></div>';
+    },
+    spendlog: function () {
+      var month = monthOf(F.isoDay(today())), lines = spendLines(), byKey = {}, t = spendTotals();
+      lines.forEach(function (l) { byKey[l.key] = l; });
+      var mine = P.spends.filter(function (x) { return monthOf(x.date) === month; }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+      var days = {}; mine.forEach(function (x) { (days[x.date] = days[x.date] || []).push(x); });
+      return back('plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">This month</div><h2>' + money(t.spent) + ' spent</h2><p>Out of ' + money(t.bud) + ' budgeted for needs and wants.</p></div>' +
+        '<button type="button" class="primary" data-a="spendnew">+ Add spending</button>' +
+        (mine.length ? Object.keys(days).map(function (d) {
+          return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
+            var l = byKey[x.key] || { label: 'Removed category' };
+            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '<small>' + esc(x.note ? l.label : '') + '</small></span><span class="bright"><b>' + money2(num(x.amount)) + '</b><button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button></span></div>';
+          }).join('') + '</div>';
+        }).join('') : '<p style="padding:8px 0">Nothing yet this month.</p>');
+    },
     community: function () {
       var url = CONFIG.communityUrl, joined = P.communityJoined, latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? -1 : 1; }).pop();
       var inside = [
@@ -1411,6 +1493,21 @@
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
       case 'csvstep': U.csvStep = +v; U.csvPaused = true; clearInterval(csvTimer); csvTimer = null; (function () { var el = app.querySelector('[data-csvguide]'); if (el) el.innerHTML = csvScene(U.csvStep); })(); break;
+      case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
+      case 'spendcat': U.form.key = v; U.formErr = ''; render(); break;
+      case 'spendsave':
+        if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
+        if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
+        P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
+        U.lastSpendKey = U.form.key; save(); track('spend-add');
+        if (v === 'again') {
+          var sl = spendLines().filter(function (l) { return l.key === U.form.key; })[0];
+          U.spendSaved = money2(num(U.form.amount)) + ' added to ' + (sl ? sl.label : 'your budget') + '.';
+          U.form = { amount: '', note: '', key: U.form.key, date: U.form.date }; U.formErr = ''; render();
+          var ai = app.querySelector('[data-g=amount]'); if (ai) ai.focus();
+        } else go(U.spendBack || 'plan');
+        break;
+      case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); render(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
