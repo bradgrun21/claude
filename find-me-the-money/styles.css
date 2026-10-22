@@ -499,3 +499,4 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .soon .row:last-child { border-bottom: 0; }
 .soon i { display: inline-block; width: 6px; height: 6px; border-radius: 3px; margin-right: 8px; vertical-align: 2px; }
 .soon small { display: block; margin-left: 14px; color: var(--faint); font-size: 12px; }
+.rowedit + .duechip, .permo + .duechip { margin-left: 4px; }
