@@ -8,6 +8,7 @@
     feedbackUrl: '',            // e.g. a Google Form link; the Feedback button hides while this is empty
     storageKey: 'fmtm.v1',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
+    youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
     // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
     // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
@@ -1078,6 +1079,7 @@
         (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the community') + '</a>'
           : '<button type="button" class="primary" disabled>Community opening soon</button>') +
         (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
+        (CONFIG.youtubeUrl ? '<a class="card ytcard" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube"><span class="yt-ic" aria-hidden="true">\u25B6</span><span><b>Watch on YouTube</b><small>Short videos: find your money, payday wins, debt-free date reveals</small></span><span aria-hidden="true">\u203a</span></a>' : '') +
         '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget and numbers stay on this phone. Only what you choose to post is shared.</span></div>';
     },
     milestones: function () {
@@ -1570,6 +1572,7 @@
         } else { U.shareErr = 'This browser can\u2019t share images directly. Use Save image, then share it from your photos.'; render(); }
         track('share'); break;
       case 'saveimg': P.shares = (P.shares || 0) + 1; save(); download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
+      case 'youtube': track('youtube'); break;
       case 'joincommunity': P.communityJoined = true; save(); track('community'); setTimeout(render, 300); break;
       case 'postcommunity':
         // Skool can't take a post from another site, so copy the caption, save the card, and open the community to paste it

@@ -12,7 +12,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Find my money in 30 seconds: pay per paycheck and how often, expenses, debt and payments, then "We found $X a month" (debt payments you keep once debt-free, plus money with no job), "Want it back?" and Reclaim my money. The answers fill in the detailed setup
 - The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
 - Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (% / $ per month / balance), kids and college, home and mortgage, giving. The reveal shows every step at a glance
-- Community tab: what's inside the Skool community and a Join button (set `communityUrl` in `app.js`); every share card gets "Post it in the community". Challenges and Milestones share one Wins tab
+- Community tab: what's inside the Skool community and a Join button (set `communityUrl` in `app.js`) and a Watch on YouTube link (`youtubeUrl`); every share card gets "Post it in the community". Challenges and Milestones share one Wins tab
 - Share cards in four shapes: Post (4:5), Story (9:16), Square and a wide one for Skool and Facebook; a Step card draws your place on the 7-step path (Wins tab, and on every level-up)
 - Budget in sections (Giving, Needs, Wants, Saving & goals); fun money can be broken into parts; money found from wants is shown going to work on the snowball line
 - What if you found more? slider: extra dollars a month move your next big date

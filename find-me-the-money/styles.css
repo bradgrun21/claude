@@ -430,3 +430,10 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 @media (max-width: 340px) { .csv-stage { grid-template-columns: 1fr; justify-items: center; text-align: center; } .csv-dots, .csv-nav { justify-content: center; } }
 @media (prefers-reduced-motion: reduce) { .csv-stage, .ph-sheet, .ph-file.new, .ph-opt.on, .tapme { animation: none; } .ph-finger { animation: none; opacity: .9; } }
 .qhint { display: block; margin-top: -8px; font-size: 13px; color: var(--faint); line-height: 1.4; }
+/* YouTube link on the Community tab */
+.ytcard { display: flex; align-items: center; gap: 14px; padding: 14px 18px; text-decoration: none; color: var(--ink); }
+.ytcard small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.ytcard > span:nth-child(2) { flex: 1; min-width: 0; }
+.ytcard > span:last-child { color: var(--faint); font-size: 20px; }
+.yt-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: #E8875F; color: #fff; font-size: 15px; flex: none; }
+.ytcard:focus-visible { outline: 2px solid #2A6B66; }
