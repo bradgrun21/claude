@@ -60,7 +60,7 @@
   function load() {
     try {
       var raw = localStorage.getItem(CONFIG.storageKey); if (!raw) return blank();
-      var d = JSON.parse(raw);
+      var d = JSON.parse(raw); delete d.x;
       // plans saved before features unlocked gradually keep everything they already had
       if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
       // bills saved before budget groups existed get placed by name
@@ -1823,7 +1823,7 @@
         if (fsum > 0) P.fun = String(fsum);
         var ft = app.querySelector('[data-total="fun"]'); if (ft) ft.textContent = money(fsum);
       }
-      else P[t.getAttribute('data-f')] = t.value;
+      else if (t.getAttribute('data-f') !== 'x') P[t.getAttribute('data-f')] = t.value;
       save();
       var sl = app.querySelector('[data-live="savings"]'); if (sl) sl.textContent = savingsNote();
       var qm = app.querySelector('[data-live="qmonth"]'); if (qm) qm.textContent = quickMonthNote();
