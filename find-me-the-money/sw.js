@@ -1,5 +1,5 @@
 // Keeps the app working offline. Bump VERSION after each deploy so phones pick up the new files.
-var VERSION = 'fmtm-2026-10-22e';
+var VERSION = 'fmtm-2026-10-22f';
 var FILES = ['./', 'index.html', 'styles.css', 'core.js', 'share.js', 'app.js', 'privacy.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {

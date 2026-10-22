@@ -485,3 +485,5 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 .tabbar .fab.open { background: linear-gradient(135deg, #FF9A76, #E8875F); }
 textarea[data-paste] { width: 100%; box-sizing: border-box; min-height: 80px; border-radius: 16px; border: 1px solid var(--edge); background: rgba(255,255,255,.85); padding: 12px 14px; font: inherit; font-size: 16px; color: var(--ink); resize: vertical; }
 .homefirst svg { vertical-align: -3px; }
+/* the new icon: magnifying glass over a dollar sign, on deep teal */
+.logo { background: linear-gradient(180deg, #1B2E2D, #2A6B66); border-color: rgba(255,255,255,.25); }

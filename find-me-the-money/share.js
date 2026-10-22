@@ -16,12 +16,19 @@
     ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
+  // the app icon: a magnifying glass over a dollar sign, on deep teal
   function logo(ctx, x, y, s) {
-    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,.95)'; roundRect(ctx, x, y, s, s, s * 0.28); ctx.fill();
-    ctx.strokeStyle = '#E8875F'; ctx.lineWidth = s * 0.085; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(x + s * 0.45, y + s * 0.45, s * 0.24, 0, Math.PI * 2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x + s * 0.63, y + s * 0.63); ctx.lineTo(x + s * 0.8, y + s * 0.8); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x + s * 0.45, y + s * 0.34); ctx.lineTo(x + s * 0.45, y + s * 0.56); ctx.stroke();
+    ctx.save();
+    var bg = ctx.createLinearGradient(0, y, 0, y + s); bg.addColorStop(0, '#1B2E2D'); bg.addColorStop(1, '#2A6B66');
+    ctx.fillStyle = bg; roundRect(ctx, x, y, s, s, s * 0.24); ctx.fill();
+    var cx = x + s * 0.444, cy = y + s * 0.444, r = s * 0.218;
+    var rg = ctx.createLinearGradient(0, cy - r, 0, cy + r); rg.addColorStop(0, '#FFD08A'); rg.addColorStop(1, '#FF9A76');
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = '#3A554D'; ctx.fill();
+    ctx.lineWidth = s * 0.059; ctx.strokeStyle = rg; ctx.stroke();
+    ctx.lineCap = 'round'; ctx.lineWidth = s * 0.089; ctx.strokeStyle = '#FF9A76';
+    ctx.beginPath(); ctx.moveTo(x + s * 0.611, y + s * 0.611); ctx.lineTo(x + s * 0.769, y + s * 0.769); ctx.stroke();
+    ctx.fillStyle = '#FFD08A'; ctx.font = '700 ' + Math.round(s * 0.3) + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('$', cx, cy + s * 0.01);
     ctx.restore();
   }
 
