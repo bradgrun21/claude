@@ -199,4 +199,10 @@ test('Bills roll up into budget groups, yearly bills a twelfth a month', () => {
   assert.strictEqual(C.groupFor('Rent or housing'), 'home'); assert.strictEqual(C.groupFor('Netflix'), 'subs'); assert.strictEqual(C.groupFor('Mystery'), 'other');
 });
 
+test('A goal with a date sets aside its fixed amount every paycheck', () => {
+  const pl = C.plan({ paycheck: 1600, freq: 'biweekly', givingPct: 0, savings: 0, fun: 0, bills: [], debts: [], goals: [{ id: 'g', name: 'Trip', amount: 1200, kind: 'fund', months: 6, byPer: 100, saved: 0 }] });
+  assert.strictEqual(pl.rows.filter(r => r.kind === 'goal')[0].amount, 100);
+  assert.strictEqual(C.perCheck({ amount: 1200, saved: 1200, byPer: 100 }, 2), 0);
+});
+
 console.log(`\n${passed} tests passed`);

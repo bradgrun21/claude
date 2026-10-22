@@ -84,9 +84,15 @@
       // interest is optional; a blank rate is estimated at 20%
       debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       efMonths: efMonths(), saveRows: saveRows(),
-      goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind, months: g.months, per: g.per || 0, saved: num(g.saved) }; })
+      goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.by ? 'fund' : g.kind, months: g.months, per: g.per || 0, byPer: g.by ? goalByPer(g) : 0, saved: num(g.saved) }; })
     };
   }
+  // paydays left before a goal's date, and what each one needs to set aside
+  function paydaysUntil(iso) {
+    var next = F.rollPayday(P.nextPay, P.freq, today()), days = F.FREQS[P.freq].days, gap = F.daysBetween(F.fromIso(next), F.fromIso(iso));
+    return gap < 0 ? 0 : Math.floor(gap / days) + 1;
+  }
+  function goalByPer(g) { var left = Math.max(0, num(g.amount) - num(g.saved)), n = paydaysUntil(g.by); return left ? Math.ceil(left / Math.max(1, n)) : 0; }
   function funSet() { return P.fun !== '' && P.fun != null; }
   function itemized() { return P.bills.some(function (b) { return F.billMonthly(b) > 0; }); }
   function billsTotal() { return P.bills.reduce(function (t, b) { return t + F.billMonthly(b); }, 0); }
@@ -552,9 +558,9 @@
     var goals = '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Your goals</h3><span style="font-size:13px;color:var(--faint)">' + P.goals.length + ' of 3</span></div>' +
       (P.goals.length ? P.goals.map(function (g, i) {
         var go2 = o.goals[i], done = num(g.saved) >= g.amount;
-        var slider = g.kind === 'dream' && !done && step <= 2 ? (maxPer ? '<label class="field" style="font-weight:500;font-size:13px">Put toward it now: <b data-gv="' + g.id + '" style="color:var(--ink)">' + money(g.per || 0) + ' per paycheck</b>' +
+        var slider = g.kind === 'dream' && !g.by && !done && step <= 2 ? (maxPer ? '<label class="field" style="font-weight:500;font-size:13px">Put toward it now: <b data-gv="' + g.id + '" style="color:var(--ink)">' + money(g.per || 0) + ' per paycheck</b>' +
           '<input type="range" min="0" max="' + maxPer + '" step="10" value="' + Math.min(g.per || 0, maxPer) + '" data-slide="' + g.id + '"></label>' : '') : '';
-        return '<div class="debt"><div class="top"><span>' + esc(g.name) + '<span class="tag">' + (g.kind === 'fund' ? 'Plan-for-it' : 'Dream') + '</span></span><b>' + money(num(g.saved)) + ' of ' + money(g.amount) + '</b></div>' +
+        return '<div class="debt"><div class="top"><span>' + esc(g.name) + '<span class="tag">' + (g.by ? 'By ' + shortDate(F.fromIso(g.by)) : g.kind === 'fund' ? 'Plan-for-it' : 'Dream') + '</span></span><b>' + money(num(g.saved)) + ' of ' + money(g.amount) + '</b></div>' +
           '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(1, num(g.saved) / g.amount * 100) + '%"></i></div>' +
           '<div style="font-size:13px;color:var(--muted)" data-gp="' + g.id + '">' + (done ? 'Fully funded. Go enjoy it.' : goalText(g, go2, o)) + '</div>' + slider +
           '<button type="button" class="textbtn" style="min-height:32px;font-size:13px;align-self:flex-start;padding:0" data-a="goaldel" data-i="' + i + '">Remove</button></div>';
@@ -639,6 +645,9 @@
         '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn’t know you had.</h1>' +
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
+        (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
+          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you.</span></div>' : '') +
+        (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
         '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
         '<button type="button" class="textbtn" data-a="go" data-v="restore">I have a backup file</button>' +
@@ -831,6 +840,8 @@
           : [['1', 'Open your browser\u2019s menu (the \u22ee or \u2026 button).'], ['2', 'Tap <b>Install app</b> or <b>Add to Home screen</b>.'], ['3', 'Open Find Me the Money from your Home Screen.']]).map(function (x) {
           return '<div class="check" style="align-items:center"><span class="dot today" aria-hidden="true">' + x[0] + '</span><span>' + x[1] + '</span></div>'; }).join('') + '</div>' +
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
+        (ios && !standalone() && P.setupDone ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
+          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button></div>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
     },
     habit: function () {
@@ -973,8 +984,10 @@
         '<div class="field">What kind of goal?<div class="seg" role="group" aria-label="Goal type" style="align-self:flex-start">' + [['dream', 'Dream'], ['fund', 'Plan-for-it']].map(function (k) {
           return '<button type="button" class="' + (f.kind === k[0] ? 'on' : '') + '" aria-pressed="' + (f.kind === k[0]) + '" data-a="gkind" data-v="' + k[0] + '">' + k[1] + '</button>'; }).join('') + '</div></div>' +
         '<p style="font-size:13px">' + (f.kind === 'fund' ? 'Gifts, car repairs, registration, yearly bills: costs you know are coming that would otherwise land on a credit card. A little goes aside every paycheck, in every step.' : 'Trips, concerts, a new car. While you pay off debt, dreams wait their turn, then your snowball money funds them. Want a small one sooner? Use the slider on your home screen to see the tradeoff.') + '</p>' +
-        (f.kind === 'fund' ? '<div class="field">Needed in<div class="seg" role="group" aria-label="Needed in" style="align-self:flex-start">' + [3, 6, 12].map(function (m) {
-          return '<button type="button" class="' + (f.months === m ? 'on' : '') + '" aria-pressed="' + (f.months === m) + '" data-a="gmonths" data-v="' + m + '">' + m + ' months</button>'; }).join('') + '</div></div>' : '') +
+        '<div class="field">When do you want it?<div class="seg wrap" role="group" aria-label="When" style="align-self:flex-start">' + (f.kind === 'fund' ? [[3, 'In 3 months'], [6, 'In 6 months'], [12, 'In 12 months'], ['date', 'Pick a date']] : [['asap', 'When my plan allows'], ['date', 'Pick a date']]).map(function (m) {
+          var on = f.when === 'date' ? m[0] === 'date' : f.kind === 'fund' ? f.months === m[0] : m[0] === 'asap';
+          return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="gmonths" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div></div>' +
+        (f.when === 'date' ? '<label class="field">Date<input type="date" data-g="by" min="' + F.isoDay(F.addDays(today(), 1)) + '" value="' + esc(f.by || '') + '"></label><p data-live="gper" style="font-size:14px;font-weight:600;color:#2A6B66">' + goalDateNote(f) + '</p>' : '') +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') + '</div>' +
         '<div class="push"><button type="button" class="primary" data-a="goalsave">Save my goal</button><button type="button" class="textbtn" data-a="go" data-v="' + U.next + '">Cancel</button></div>';
     },
@@ -1258,7 +1271,8 @@
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">Everything is saved only on this phone. Save a backup file now and then, in case you switch phones or clear your browser.</p>' +
-        '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Restore from a backup</button>' +
+        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' +
+        '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
         (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone. It can’t be undone unless you have a backup.</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
         (CONFIG.feedbackUrl ? '<a class="outline" style="text-decoration:none;color:var(--ink)" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener">Send feedback</a>' : '') +
@@ -1266,13 +1280,25 @@
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
     },
     restore: function () {
-      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>Restore from a backup</h2><p>Pick the backup file you saved from Find Me the Money. It replaces what’s on this phone.</p>' +
-        '<label class="choice best" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Choose backup file</b><span class="d">A .json file named find-me-the-money-backup</span></div><input type="file" accept=".json,application/json" data-file="backup" class="sr"></label>' +
+      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>Bring your plan here</h2><p>Paste the plan you copied in Safari, or pick a backup file. It replaces what\u2019s on this phone.</p>' +
+        '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Paste your plan</b><span style="font-size:14px;color:var(--muted)">In Safari: Find Me the Money \u2192 Settings \u2192 <b>Copy my plan</b>. Then press and hold below and tap <b>Paste</b>.</span>' +
+        '<textarea data-paste rows="3" placeholder="Press and hold, then Paste" aria-label="Paste your plan"></textarea><button type="button" class="primary" data-a="pasteplan">Bring my plan over</button></div>' +
+        '<label class="choice" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Or choose a backup file</b><span class="d">A .json file named find-me-the-money-backup</span></div><input type="file" accept=".json,application/json" data-file="backup" class="sr"></label>' +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '');
     }
   };
 
+  function goalDateNote(f) {
+    if (!f.by || !(num(f.amount) > 0)) return 'Pick a date and an amount to see what it takes.';
+    if (f.by <= F.isoDay(today())) return 'Pick a date after today.';
+    var n = paydaysUntil(f.by), per = Math.ceil(num(f.amount) / Math.max(1, n));
+    return money(per) + ' each paycheck \u00b7 ' + plural(Math.max(1, n), 'payday') + ' until ' + longDate(F.fromIso(f.by));
+  }
   function goalText(g, go2, o) {
+    if (g.by) {
+      var per = goalByPer(g), late = go2 && go2.ready && F.isoDay(go2.ready) > g.by;
+      return 'By ' + longDate(F.fromIso(g.by)) + ' \u00b7 ' + money(per) + ' set aside each paycheck' + (late ? ' \u00b7 your plan is tight, so it may land ' + shortDate(go2.ready) : '');
+    }
     if (!go2 || !go2.ready) return 'Not reachable yet at this pace.';
     var t = 'Ready ' + shortDate(go2.ready);
     if (g.kind === 'fund') return t + ' · ' + money(F.perCheck({ amount: g.amount, months: g.months, kind: 'fund', saved: num(g.saved) }, F.FREQS[P.freq].perMonth)) + ' set aside each paycheck';
@@ -1570,6 +1596,22 @@
       case 'plusmenu': U.plusOpen = !U.plusOpen; render(); break;
       case 'plusclose': U.plusOpen = false; render(); break;
       case 'winsview': U.winsView = v; render(); break;
+      case 'copyplan': (function () {
+        var code = 'FMTM1:' + btoa(unescape(encodeURIComponent(JSON.stringify(P))));
+        var done = function () { U.copiedPlan = true; track('copy-plan'); render(); };
+        try { navigator.clipboard.writeText(code).then(done, function () { window.prompt('Copy this, then paste it in the Home Screen app:', code); done(); }); }
+        catch (err) { window.prompt('Copy this, then paste it in the Home Screen app:', code); done(); }
+      })(); break;
+      case 'pasteplan': (function () {
+        var el = app.querySelector('[data-paste]'), txt = String(el && el.value || '').trim();
+        try {
+          if (txt.indexOf('FMTM1:') !== 0) throw new Error('bad');
+          var d = JSON.parse(decodeURIComponent(escape(atob(txt.slice(6)))));
+          if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad');
+          P = Object.assign(blank(), d); save(); track('paste-plan'); U.err = '';
+          U.toast = ['Your plan is here.', 'Everything came over: budget, streaks and history.', true]; go(P.setupDone ? 'home' : 'welcome');
+        } catch (err) { U.err = 'That doesn\u2019t look like a copied plan. In Safari, tap Copy my plan again, then paste here.'; render(); }
+      })(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
@@ -1621,7 +1663,7 @@
       case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
       case 'basicpick': P.basicsAuto = false; P.basics = v; save(); render(); break;
       case 'ladder': U.showLadder = !U.showLadder; render(); break;
-      case 'installdone': P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
+      case 'installdone': U.copiedPlan = false; P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
       case 'openunlock': markSeen('unlock:' + v); go(v); break;
       case 'levelgo': markSeen('level:' + v); go('plan'); break;
       case 'quick':
@@ -1638,12 +1680,13 @@
         if (other) { var el = document.getElementById('g-name'); if (el) el.focus(); }
         break;
       case 'gkind': U.form.kind = v; render(); break;
-      case 'gmonths': U.form.months = +v; render(); break;
+      case 'gmonths': if (v === 'date') { U.form.when = 'date'; if (!U.form.by) U.form.by = F.isoDay(F.addDays(today(), 182)); } else { U.form.when = ''; if (v !== 'asap') U.form.months = +v; } render(); break;
       case 'goalsave':
         var nm = String(U.form.name || '').trim(), amt = Math.round(num(U.form.amount));
         if (!nm || !(amt > 0)) { U.formErr = 'Give your goal a name and an amount above $0.'; render(); break; }
         if (P.goals.length >= 3) { U.formErr = 'You can have 3 goals at a time. Finish or remove one first.'; render(); break; }
-        P.goals.push({ id: uid(), name: nm, amount: amt, kind: U.form.kind, months: U.form.months, per: 0, saved: 0 });
+        if (U.form.when === 'date' && !(U.form.by && U.form.by > F.isoDay(today()))) { U.formErr = 'Pick a date after today.'; render(); break; }
+        P.goals.push({ id: uid(), name: nm, amount: amt, kind: U.form.kind, months: U.form.months, per: 0, saved: 0, by: U.form.when === 'date' ? U.form.by : '' });
         save(); track('goal'); go(U.next); break;
       case 'goaldel': P.goals.splice(i, 1); save(); render(); break;
       case 'checkin': P.prevBalances = P.prevBalances || {}; go('checkin'); break;
@@ -1786,7 +1829,7 @@
       }
       return;
     }
-    if (t.hasAttribute('data-g')) { U.form[t.getAttribute('data-g')] = t.value; return; }
+    if (t.hasAttribute('data-g')) { U.form[t.getAttribute('data-g')] = t.value; var gp = app.querySelector('[data-live="gper"]'); if (gp) gp.textContent = goalDateNote(U.form); return; }
     if (t.hasAttribute('data-whatif')) {
       U.whatIf = +t.value; var w = whatIfText(U.whatIf);
       if (w) { var dEl = app.querySelector('[data-live="wiDate"]'), sEl = app.querySelector('[data-live="wiSub"]'); if (dEl) dEl.textContent = w.date; if (sEl) sEl.textContent = w.sub; }

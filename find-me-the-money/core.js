@@ -191,7 +191,8 @@
 
   // ---------- the plan ----------
   function sum(list, f) { return list.reduce(function (t, x) { return t + (+f(x) || 0); }, 0); }
-  function perCheck(g, ppm) { return g.saved >= g.amount ? 0 : g.kind === 'fund' ? g.amount / (g.months * ppm) : (g.per || 0); }
+  // a goal with a date sets aside a fixed amount per paycheck (byPer), in every step, until it's funded
+  function perCheck(g, ppm) { return g.saved >= g.amount ? 0 : g.byPer ? g.byPer : g.kind === 'fund' ? g.amount / (g.months * ppm) : (g.per || 0); }
 
   // The Payday Plan for one paycheck. Every dollar gets a job; what's left is "extra".
   function plan(p) {
@@ -226,7 +227,7 @@
     var s = {
       debts: p.debts.map(function (d) { return { id: d.id, name: d.name, bal: +d.bal || 0, min: +d.min || 0, apr: (+d.apr || 0) / 100 }; }),
       savings: +p.savings || 0, target: pl.safetyNet,
-      goals: (p.goals || []).map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind, months: g.months, per: g.per || 0, saved: g.saved || 0 }; })
+      goals: (p.goals || []).map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind, months: g.months, per: g.per || 0, byPer: g.byPer || 0, saved: g.saved || 0 }; })
     };
     s.step = stepOf(s);
     return s;
