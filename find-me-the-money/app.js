@@ -155,7 +155,7 @@
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Community', 'people']];
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Community & Wins', 'people']];
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'community' : screen; }
   function render() {
     ensureIds();
