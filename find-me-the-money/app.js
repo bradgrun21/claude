@@ -1614,9 +1614,25 @@
     var r = new FileReader(); r.onload = function () { cb(String(r.result)); }; r.onerror = function () { U.err = 'We couldn’t open that file.'; render(); }; r.readAsText(f);
   }
 
+  var CONFIRM_FIRST = { rm: 1, spenddel: 1, goaldel: 1, dueclear: 1 };
+  function resetConfirm() {
+    clearTimeout(U.confirmTimer);
+    var el = U.confirmEl; if (el && el.isConnected) { el.innerHTML = el.getAttribute('data-was'); el.classList.remove('confirmdel'); }
+    U.confirmDel = null; U.confirmEl = null;
+  }
   app.addEventListener('click', function (e) {
     var b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
     var a = b.getAttribute('data-a'), v = b.getAttribute('data-v'), i = +b.getAttribute('data-i');
+    // deleting takes two taps: the first turns the button into "Delete?"
+    if (CONFIRM_FIRST[a]) {
+      var sig = a + '|' + v + '|' + b.getAttribute('data-i');
+      if (U.confirmDel !== sig) {
+        resetConfirm(); U.confirmDel = sig; U.confirmEl = b; b.setAttribute('data-was', b.innerHTML);
+        b.innerHTML = 'Delete?'; b.classList.add('confirmdel'); U.confirmTimer = setTimeout(resetConfirm, 4000);
+        return;
+      }
+      clearTimeout(U.confirmTimer); U.confirmDel = null; U.confirmEl = null;
+    } else resetConfirm();
     switch (a) {
       case 'go': if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;

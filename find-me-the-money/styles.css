@@ -509,3 +509,5 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .fbtab { position: fixed; z-index: 15; right: 0; top: 46%; transform: translateY(-50%) rotate(180deg); writing-mode: vertical-rl; padding: 12px 7px; border-radius: 10px 0 0 10px; background: #2A6B66; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-decoration: none; box-shadow: 0 6px 16px rgba(30,62,66,.25); opacity: .9; }
 .fbtab { border-radius: 0 10px 10px 0; }
 .fbtab:focus-visible { outline: 3px solid rgba(232,135,95,.8); }
+/* two-tap delete */
+.confirmdel, .x.confirmdel, .textbtn.confirmdel, .sharebtn.confirmdel { width: auto !important; min-width: 0; height: auto; min-height: 28px; padding: 0 10px !important; border-radius: 14px; border: 0; background: #C9584A !important; color: #fff !important; font-size: 12px !important; font-weight: 700; line-height: 28px; text-decoration: none; }
