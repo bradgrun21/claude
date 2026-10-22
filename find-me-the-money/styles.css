@@ -445,3 +445,19 @@ input[type=range][data-whatif] { width: 100%; accent-color: #E8875F; }
 .spnote { display: block; font-size: 12px !important; color: var(--faint); margin-top: 3px; }
 .spnote.over { color: var(--sun-ink) !important; font-weight: 600; }
 .bigamt { font-size: 28px !important; font-weight: 600; min-height: 60px; }
+/* put imported stores in the budget: drag a card onto a line */
+.dragcard { position: relative; z-index: 3; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; background: #fff; border-radius: 22px; padding: 18px 20px; box-shadow: 0 14px 34px rgba(30,62,66,.16); border: 1px solid var(--edge); display: flex; flex-direction: column; gap: 4px; transition: transform .2s ease; }
+.dragcard b { font-family: var(--display); font-size: 24px; font-weight: 600; }
+.dragcard span { color: var(--muted); font-size: 15px; }
+.dragcard .tag { position: absolute; top: 14px; right: 14px; font-style: normal; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; color: #fff; }
+.dragcard .tag.need { background: #2A6B66; } .dragcard .tag.want { background: #9A8BD3; }
+.dragcard.dragging { transition: none; cursor: grabbing; box-shadow: 0 20px 44px rgba(30,62,66,.28); }
+.buckets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bucket { min-height: 54px; border-radius: 16px; border: 2px dashed rgba(42,107,102,.3); background: rgba(255,255,255,.6); font: inherit; font-size: 15px; font-weight: 600; color: var(--ink); padding: 8px 10px; text-align: center; transition: transform .12s, background .12s; }
+.bucket.want { border-color: rgba(154,139,211,.5); }
+.bucket.other { border-color: rgba(98,120,117,.35); color: var(--muted); }
+.bucket.hover { transform: scale(1.04); background: rgba(42,107,102,.14); border-style: solid; border-color: #2A6B66; }
+.bucket.want.hover { background: rgba(154,139,211,.2); border-color: #9A8BD3; }
+.mnav { width: 32px; height: 32px; border-radius: 16px; border: 1px solid var(--edge); background: rgba(255,255,255,.6); font-size: 18px; line-height: 1; color: var(--ink); flex: none; }
+.impt { font-size: 11px; font-weight: 700; color: var(--faint); border: 1px solid var(--line); border-radius: 8px; padding: 2px 6px; }
+@media (prefers-reduced-motion: reduce) { .dragcard, .bucket { transition: none; } }

@@ -53,7 +53,7 @@
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], storeLine: {}, payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -145,12 +145,12 @@
   // Challenges and Milestones share the Wins tab, so the bar stays at five
   var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plans', 'Plans & Goals', 'book'], ['wins', 'Wins', 'medal'], ['community', 'Community', 'people']];
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'wins' : screen; }
-  function winsHome() { return P.unlocked && P.unlocked.challenges ? 'challenges' : 'milestones'; }
+  function winsHome() { return 'challenges'; }
   function render() {
     ensureIds();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
-    var tabs = TABS.filter(function (t) { return t[0] !== 'wins' || u.challenges || u.milestones; });
+    var tabs = TABS;
     var tabbed = P.setupDone && U.screen !== 'wins' && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
     if (U.screen === 'plans' || U.screen === 'planday') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
@@ -223,7 +223,6 @@
     share: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>'
   };
   function winsSwitch(cur) {
-    if (!(P.unlocked && P.unlocked.challenges && P.unlocked.milestones)) return '';
     return '<div class="seg" role="group" aria-label="Wins" style="align-self:flex-start;margin-top:8px">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
       var on = cur === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="go" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
   }
@@ -423,18 +422,23 @@
     out.push({ key: 'other', label: 'Something else', cat: 'other', mon: 0 });
     return out;
   }
+  function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
+  function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
+  function tracking() { return P.spends.length > 0 || Object.keys(P.storeLine || {}).length > 0; }
+  // purchases added by hand, plus imported purchases from stores placed in a budget line
   function spentMap(month) {
-    var m = {}; month = month || monthOf(F.isoDay(today()));
+    var m = {}, sl = P.storeLine || {}; month = month || curSpendMonth();
     P.spends.forEach(function (x) { if (monthOf(x.date) === month) m[x.key] = (m[x.key] || 0) + num(x.amount); });
+    P.tx.forEach(function (x) { var k = sl[x.merchant]; if (k && monthOf(x.date) === month) m[k] = (m[k] || 0) + num(x.amount); });
     return m;
   }
   function spentBar(r) {
-    if (!P.spends.length || !(r.skey || r.skeys)) return '';
+    if (!tracking() || !(r.skey || r.skeys)) return '';
     var m = spentMap(), spent = r.skeys ? r.skeys.reduce(function (t, k) { return t + (m[k] || 0); }, 0) : (m[r.skey] || 0), bud = r.mon || 0;
     if (!spent && !bud) return '';
     var over = spent > bud + 0.5, left = bud - spent;
     return '<span class="spbar' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, bud ? spent / bud * 100 : 100) + '%"></i></span>' +
-      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' spent this month \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
+      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' of ' + money(bud) + ' spent ' + (curSpendMonth() === monthOf(F.isoDay(today())) ? 'this month' : 'in ' + monthName(curSpendMonth())) + ' \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
   }
   function spendTotals() {
     var m = spentMap(), lines = spendLines(), spent = 0, bud = 0;
@@ -443,17 +447,33 @@
     return { spent: spent, bud: bud };
   }
   function homeSpend() {
-    var t = spendTotals();
-    return '<div class="card" style="padding:12px 14px 12px 18px;display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0"><b>' + (P.spends.length ? money(t.spent) + ' spent this month' : 'Track what you spend') + '</b>' +
-      '<small style="display:block;color:var(--muted);font-size:13px">' + (P.spends.length ? money(Math.max(0, t.bud - t.spent)) + ' left in your budget' : 'Five seconds per purchase. See it count against your budget.') + '</small></div>' +
+    var t = spendTotals(), on = tracking() && t.spent > 0;
+    return '<div class="card" style="padding:12px 14px 12px 18px;display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0"><b>' + (on ? money(t.spent) + ' spent in ' + monthName(curSpendMonth()) : 'Track what you spend') + '</b>' +
+      '<small style="display:block;color:var(--muted);font-size:13px">' + (on ? money(Math.max(0, t.bud - t.spent)) + ' left in your budget' : 'Five seconds per purchase. See it count against your budget.') + '</small></div>' +
       '<button type="button" class="sharebtn" data-a="spendnew">+ Add</button></div>';
   }
+  // imported stores (not transfers) that don't have a budget line yet, biggest first
+  function unassignedStores() {
+    if (!P.tx.length) return [];
+    var sl = P.storeLine || {};
+    return F.storeTotals(P.tx).filter(function (x) { return !sl[x.m] && P.sorted[x.m] !== 'skip'; }).sort(function (a, b) { return b.total - a.total; });
+  }
+  function assignTo(key) {
+    var q = unassignedStores(); if (!q.length) return;
+    P.storeLine = P.storeLine || {}; P.storeLine[q[0].m] = key; U.assignHist = U.assignHist || []; U.assignHist.push(q[0].m);
+    // show the month the file covers, so the bars have something to count
+    var last = P.txTo || P.tx[P.tx.length - 1].date; if (monthOf(last) !== curSpendMonth() && !P.spends.some(function (x) { return monthOf(x.date) === curSpendMonth(); })) U.spendMonth = monthOf(last);
+    save(); render();
+  }
   function spendSummary() {
-    var t = spendTotals(), over = t.spent > t.bud + 0.5, month = today().toLocaleDateString('en-US', { month: 'long' });
-    return '<div class="card stack spsum" style="padding:14px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + month + ' spending</b>' +
-      '<span style="font-size:14px;color:var(--muted)">' + (P.spends.length ? money(t.spent) + ' of ' + money(t.bud) : 'Nothing tracked yet') + '</span></div>' +
-      (P.spends.length ? '<span class="spbar big' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, t.bud ? t.spent / t.bud * 100 : 0) + '%"></i></span>' : '<p style="font-size:14px">Add what you spend and see it count against your budget, line by line.</p>') +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button>' + (P.spends.length ? '<button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all</button>' : '') + '</div></div>';
+    var t = spendTotals(), over = t.spent > t.bud + 0.5, ym = curSpendMonth(), on = tracking(), left = unassignedStores().length;
+    return '<div class="card stack spsum" style="padding:14px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+      (on ? '<button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">\u2039</button>' : '') + '<b style="flex:1">' + monthName(ym) + ' spending</b>' +
+      '<span style="font-size:14px;color:var(--muted)">' + (on ? money(t.spent) + ' of ' + money(t.bud) : 'Nothing tracked yet') + '</span>' +
+      (on ? '<button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">\u203a</button>' : '') + '</div>' +
+      (left ? '<button type="button" class="linkbtn" data-a="assignstart" style="align-self:flex-start">Put ' + plural(left, 'imported store') + ' in your budget \u203a</button>' : '') +
+      (on ? '<span class="spbar big' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, t.bud ? t.spent / t.bud * 100 : 0) + '%"></i></span>' : '<p style="font-size:14px">Add what you spend and see it count against your budget, line by line.</p>') +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button>' + (on ? '<button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all</button>' : '') + '</div></div>';
   }
   function budgetAddRow(cat, mo) {
     if (cat === 'save') return '<button type="button" class="baddbtn" data-a="goalnew">+ Add a goal</button>';
@@ -1133,17 +1153,33 @@
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button><button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button></div>';
     },
+    assign: function () {
+      var q = unassignedStores(), done = (U.assignHist || []).length, total = q.length + done, cur = q[0], lines = spendLines();
+      if (!cur) return '<div class="stack" style="gap:8px;margin-top:20px"><div class="eyebrow">All set</div><h2>Every store has a home in your budget</h2><p>Your budget lines now count what you spent in ' + monthName(curSpendMonth()) + '. New files go to the same lines automatically.</p></div>' +
+        '<div class="push"><button type="button" class="primary" data-a="go" data-v="plan">See my budget</button></div>';
+      var tile = function (l) { return '<button type="button" class="bucket ' + l.cat + '" data-bucket="' + l.key + '" data-a="assignpick" data-v="' + l.key + '">' + esc(l.label) + '</button>'; };
+      var group = function (cat, title) { var m = lines.filter(function (l) { return l.cat === cat; }); return m.length ? '<div class="eyebrow" style="margin-top:4px">' + title + '</div><div class="buckets">' + m.map(tile).join('') + '</div>' : ''; };
+      var b = P.sorted[cur.m];
+      return back(U.assignBack || 'plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">Put it in your budget \u00b7 ' + (done + 1) + ' of ' + total + '</div><h2>Where does this go?</h2>' +
+        '<p>Drag the store onto a budget line, or tap the line. We\u2019ll remember it for next time.</p></div>' +
+        '<div class="bar" style="flex:none"><i style="width:' + (done / total * 100) + '%"></i></div>' +
+        '<div class="dragcard" data-drag="1"><b>' + esc(cur.m) + '</b><span>' + money2(cur.total) + ' \u00b7 ' + plural(cur.count, 'purchase') + '</span>' + (b === 'need' || b === 'want' ? '<i class="tag ' + b + '">' + (b === 'need' ? 'Need' : 'Want') + '</i>' : '') + '</div>' +
+        group('need', 'Needs') + group('want', 'Wants') + group('other', 'Not in my budget') +
+        '<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap">' + (done ? '<button type="button" class="textbtn" data-a="assignundo">Undo ' + esc(U.assignHist[done - 1]) + '</button>' : '') +
+        '<button type="button" class="textbtn" data-a="go" data-v="' + (U.assignBack || 'plan') + '">Finish later</button></div>';
+    },
     spendlog: function () {
-      var month = monthOf(F.isoDay(today())), lines = spendLines(), byKey = {}, t = spendTotals();
+      var month = curSpendMonth(), lines = spendLines(), byKey = {}, t = spendTotals(), sl = P.storeLine || {};
       lines.forEach(function (l) { byKey[l.key] = l; });
-      var mine = P.spends.filter(function (x) { return monthOf(x.date) === month; }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+      var imported = P.tx.filter(function (x) { return sl[x.merchant] && monthOf(x.date) === month; }).map(function (x) { return { date: x.date, amount: x.amount, key: sl[x.merchant], note: x.merchant, imported: true }; });
+      var mine = P.spends.filter(function (x) { return monthOf(x.date) === month; }).concat(imported).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
       var days = {}; mine.forEach(function (x) { (days[x.date] = days[x.date] || []).push(x); });
-      return back('plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">This month</div><h2>' + money(t.spent) + ' spent</h2><p>Out of ' + money(t.bud) + ' budgeted for needs and wants.</p></div>' +
+      return back('plan') + '<div class="stack" style="gap:6px"><div style="display:flex;align-items:center;gap:8px"><button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">\u2039</button><div class="eyebrow" style="flex:1;text-align:center">' + monthName(month) + '</div><button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">\u203a</button></div><h2>' + money(t.spent) + ' spent</h2><p>Out of ' + money(t.bud) + ' budgeted for needs and wants.</p></div>' +
         '<button type="button" class="primary" data-a="spendnew">+ Add spending</button>' +
         (mine.length ? Object.keys(days).map(function (d) {
           return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
             var l = byKey[x.key] || { label: 'Removed category' };
-            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '<small>' + esc(x.note ? l.label : '') + '</small></span><span class="bright"><b>' + money2(num(x.amount)) + '</b><button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button></span></div>';
+            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '<small>' + esc(x.note ? l.label : '') + '</small></span><span class="bright"><b>' + money2(num(x.amount)) + '</b>' + (x.imported ? '<span class="impt" title="From your bank file">bank</span>' : '<button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button>') + '</span></div>';
           }).join('') + '</div>';
         }).join('') : '<p style="padding:8px 0">Nothing yet this month.</p>');
     },
@@ -1507,6 +1543,10 @@
           var ai = app.querySelector('[data-g=amount]'); if (ai) ai.focus();
         } else go(U.spendBack || 'plan');
         break;
+      case 'spendmonth': (function () { var a = curSpendMonth().split('-'), d = new Date(+a[0], +a[1] - 1 + (+v), 1); U.spendMonth = F.isoDay(d).slice(0, 7); })(); render(); break;
+      case 'assignstart': U.assignHist = []; U.assignBack = U.screen === 'assign' ? U.assignBack : U.screen; go('assign'); break;
+      case 'assignpick': assignTo(v); break;
+      case 'assignundo': (function () { var m = U.assignHist.pop(); if (m) delete P.storeLine[m]; })(); save(); render(); break;
       case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); render(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
@@ -1547,7 +1587,10 @@
       case 'filter': U.filter = v; render(); break;
       case 'setfun':
         (function () { var w = Math.round(spending().monthly.want / 10) * 10; P.found = w > U.limit ? { amount: w - U.limit, from: w } : null; })();
-        P.fun = U.limit; P.funParts = []; save(); go(U.wizReturn === 'planday' ? 'planday' : 'home'); break;
+        P.fun = U.limit; P.funParts = []; save();
+        if (P.setupDone && unassignedStores().length) { U.assignHist = []; U.assignBack = U.wizReturn === 'planday' ? 'planday' : 'home'; go('assign'); }
+        else go(U.wizReturn === 'planday' ? 'planday' : 'home');
+        break;
       case 'finish':
         P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
         if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
@@ -1782,6 +1825,21 @@
     setTimeout(function () { decide(v); }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 230);
   }
   var drag = null;
+  function bucketAt(x, y) { var el = document.elementFromPoint(x, y); return el && el.closest && el.closest('[data-bucket]'); }
+  app.addEventListener('pointermove', function (e) {
+    if (!dcard) return;
+    dcard.el.style.transform = 'translate(' + (e.clientX - dcard.x) + 'px,' + (e.clientY - dcard.y) + 'px) scale(.92)';
+    dcard.el.style.pointerEvents = 'none'; var bk = bucketAt(e.clientX, e.clientY); dcard.el.style.pointerEvents = '';
+    Array.prototype.forEach.call(app.querySelectorAll('.bucket.hover'), function (x) { if (x !== bk) x.classList.remove('hover'); });
+    if (bk) bk.classList.add('hover');
+  });
+  function dropCard(e) {
+    if (!dcard) return; var d = dcard; dcard = null;
+    d.el.style.pointerEvents = 'none'; var bk = e && e.type === 'pointerup' ? bucketAt(e.clientX, e.clientY) : null; d.el.style.pointerEvents = '';
+    if (bk) assignTo(bk.getAttribute('data-bucket')); else { d.el.classList.remove('dragging'); d.el.style.transform = ''; }
+  }
+  app.addEventListener('pointerup', dropCard);
+  app.addEventListener('pointercancel', dropCard);
   app.addEventListener('focusout', function (e) {
     var t = e.target; if (!t.hasAttribute || !t.hasAttribute('data-bedit')) return;
     budgetCommit(t.getAttribute('data-bedit'), t.value);
@@ -1797,7 +1855,10 @@
     if (t.hasAttribute && (t.hasAttribute('data-baddamt') || t.hasAttribute('data-baddname')) && e.key === 'Enter') { e.preventDefault(); var sb = app.querySelector('[data-a=baddsave]'); if (sb) sb.click(); }
     if (t.hasAttribute && (t.hasAttribute('data-baddamt') || t.hasAttribute('data-baddname')) && e.key === 'Escape') { U.bAdd = null; render(); }
   });
+  var dcard = null;
   app.addEventListener('pointerdown', function (e) {
+    var dc = e.target.closest && e.target.closest('[data-drag]');
+    if (dc) { dcard = { el: dc, x: e.clientX, y: e.clientY }; dc.classList.add('dragging'); try { dc.setPointerCapture(e.pointerId); } catch (err) {} return; }
     var nx = e.target.closest && e.target.closest('[data-a=bedit]');
     if (nx && U.bEdit) U.bNext = nx.getAttribute('data-v');
     var card = e.target.closest('[data-swipe]'); if (!card) return;
