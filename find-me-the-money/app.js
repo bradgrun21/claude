@@ -846,7 +846,7 @@
         (P.kids === 'yes' ? '<div class="field">Saving for their college yet?' + choice('college', [['no', 'Not yet'], ['some', 'A little'], ['yes', 'Yes, on track']]) + '</div>' : '') +
         (P.kids === 'yes' && (P.college === 'some' || P.college === 'yes') ? '<div class="card stack" style="padding:16px 18px;gap:12px"><div class="grid2">' + field('Saved so far', 'collegeBal', { ph: '0', min: 0 }) + field('Adding per month', 'collegeMonthly', { ph: '50', min: 0 }) + '</div>' +
           '<p style="font-size:13px">What you add each month goes in your budget as its own line.</p></div>' : '') +
-        (P.kids === 'none' || P.kids === 'someday' ? '<p style="font-size:14px">No problem. Step 5 is a skip for now.</p>' : '') + wizNext('kids');
+        wizNext('kids');
     },
     house: function () {
       return wizardHead('house', 'Do you own your home?', 'Step 6 is paying your home off early. It comes after the steps before it, so your mortgage isn’t part of the debt snowball.') +
