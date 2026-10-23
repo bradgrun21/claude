@@ -2064,7 +2064,7 @@
         U.cloudStep = { email: em, sent: false }; U.err = '';
         var bt = app.querySelector('[data-a=csend]'); if (bt) { bt.disabled = true; bt.textContent = 'Sending\u2026'; }
         sb('/auth/v1/otp?redirect_to=' + encodeURIComponent(location.origin + location.pathname), { method: 'POST', body: { email: em, create_user: true } })
-          .then(function () { U.cloudStep = { email: em, sent: true }; track('account-code'); }, function (er) { U.err = er.status === 429 ? 'Too many codes asked for. Wait a minute, then try again.' : 'We couldn\u2019t send the email. Check your connection and try again.'; })
+          .then(function () { U.cloudStep = { email: em, sent: true }; track('account-code'); }, function (er) { U.err = er.status === 429 ? 'Too many codes asked for. Wait a minute, then try again.' : 'We couldn\u2019t send the email. ' + (er.status ? 'The account service said: ' + er.message + ' (' + er.status + ')' : 'Check your connection and try again.'); })
           .then(function () { render(); var c = app.querySelector('[data-ccode]'); if (c) c.focus(); });
       })(); break;
       case 'cverify': (function () {
@@ -2072,7 +2072,7 @@
         if (!/^\d{6,10}$/.test(code)) { U.err = 'Enter the code from the email.'; render(); return; }
         var bt = app.querySelector('[data-a=cverify]'); if (bt) { bt.disabled = true; bt.textContent = 'Signing in\u2026'; }
         sb('/auth/v1/verify', { method: 'POST', body: { type: 'email', email: U.cloudStep.email, token: code } })
-          .then(signedIn, function () { U.err = 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
+          .then(signedIn, function (er) { U.err = er.status >= 500 || !er.status ? 'We couldn\u2019t check the code' + (er.status ? ': ' + er.message : '. Check your connection.') : 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
       })(); break;
       case 'creset': U.cloudStep = null; U.err = ''; render(); break;
       case 'cout': if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
