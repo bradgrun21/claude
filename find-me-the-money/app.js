@@ -263,7 +263,7 @@
   function saveNudge() {
     if (!cloudOn() || S || P.saveNudgeOff || !(P.history || []).length) return '';
     return '<div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center"><div style="flex:1;min-width:0"><b>Save your plan</b><span style="display:block;font-size:14px;color:var(--muted)">So it\u2019s safe if you lose or switch phones.</span></div>' +
-      '<button type="button" class="sharebtn" data-a="go" data-v="account">Save it</button><button type="button" class="x" data-a="savenudgeoff" aria-label="Hide this">\u00d7</button></div>';
+      '<button type="button" class="sharebtn" data-a="edit" data-v="account">Save it</button><button type="button" class="x" data-a="savenudgeoff" aria-label="Hide this">\u00d7</button></div>';
   }
   function accountCard() {
     if (!cloudOn()) return '';
@@ -1681,7 +1681,7 @@
         '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>';
     },
     account: function () {
-      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
+      return back(P.setupDone ? U.wizReturn || 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
         (S ? '' : U.joinMode ? '<p>First sign in with your own email. Then enter the invite code your spouse sent you.</p>' : '<p>Already saved a plan to your account? Sign in and it comes right back.</p>') + accountCard();
     },
     cloudpick: function () {
@@ -1915,9 +1915,11 @@
       ['bills', 'List your bills one by one', 'Optional: more exact than one number', itemized()]
     ];
     if (!standalone()) items.push(['install', 'Add to your Home Screen', isIOS() ? 'Keeps your plan safe on iPhone' : 'One tap away on payday', !!P.installSeen]);
+    if (cloudOn()) items.push(['account', 'Save your plan with your email', 'So it\u2019s safe on any phone. No password', !!S]);
+    if (CONFIG.communityUrl) items.push(['community', 'Join the community', 'Free. Share wins and get your questions answered', !!P.communityJoined]);
     var done = items.filter(function (x) { return x[3]; }).length;
     if (done === items.length) return '';
-    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Make it more accurate</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + items.length + '</span></div>' +
+    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Finish setting up</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + items.length + '</span></div>' +
       items.map(function (x) {
         return x[3] ? '<div class="planrow locked"><span class="dot on" aria-hidden="true">' + ICON.check('#fff', 12) + '</span><span style="flex:1"><s style="color:var(--faint)">' + x[1] + '</s></span></div>'
           : '<button type="button" class="planrow" data-a="edit" data-v="' + x[0] + '"><span class="dot today" aria-hidden="true"></span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">' + x[1] + '</span><small style="color:var(--faint)">' + x[2] + '</small></span><span aria-hidden="true">\u203a</span></button>';
