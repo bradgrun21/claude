@@ -11,7 +11,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
 - Find my money in 30 seconds: pay per paycheck and how often, expenses, debt and payments, then "We found $X a month" (debt payments you keep once debt-free, plus money with no job), "Want it back?" and Reclaim my money. The answers fill in the detailed setup
 - The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
-- Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (% / $ per month / balance), kids and college, home and mortgage, giving. The reveal shows every step at a glance
+- Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (one card per account: whose, 401(k)/403(b)/IRA/Roth/pension, % or $ per month, balance, and whether it comes out before payday; take-home accounts become their own budget lines), kids and college, home and mortgage, giving. The reveal shows every step at a glance
 - Community tab: what's inside the Skool community and a Join button (set `communityUrl` in `app.js`) and a Watch on YouTube link (`youtubeUrl`); every share card gets "Post it in the community". Challenges and Milestones share one Wins tab
 - Share cards in four shapes: Post (4:5), Story (9:16), Square and a wide one for Skool and Facebook; a Step card draws your place on the 7-step path (Wins tab, and on every level-up)
 - Budget in sections (Giving, Needs, Wants, Saving & goals); fun money can be broken into parts; money found from wants is shown going to work on the snowball line
@@ -28,6 +28,8 @@ the phone and never uploaded. There is no server, no account and no database.
 - Bill due dates: each bill on the Budget tab can have a due date that repeats (monthly, every 2 weeks, weekly, yearly or one time). Due days show on the Home calendar, with a Coming up list for the next two weeks
 - Add to Home Screen: an animated four-step guide (iPhone Safari or Android Chrome) on the Add to Home Screen page, linked from the Home checklist and the iPhone tip on the welcome screen
 - Households: the paycheck step asks Whose paychecks are in this plan? (Just mine / Mine and my spouse's). Paycheck 1, 2, 3... each with a name, amount, how often and next payday; the plan uses the combined income and every payday shows on the calendar. The 30-second screen can add a second paycheck too
+- Other money coming in: side income, child support, rental, benefits or anything else, added on the paycheck step and counted in the monthly total
+- Monthly money date: pick a day, it repeats monthly on the calendar and in Coming up, can be added to a phone calendar (.ics), and opens a 7-step checklist (celebrate a win, look back at last month, check in, give next month's money a job, and more). Home shows it when it's due
 - Budget tab in the bottom bar: the Payday Plan per paycheck or per month, with quick links to change any part
 - Found money spells out the math (wants minus your fun limit) and where the money goes
 - Monthly bills in 10 groups (Home, Utilities, Food & household, Getting around, Health & insurance, Personal, Kids & family, Pets, Subscriptions, Other) with common items to add in one tap; yearly bills are set aside monthly

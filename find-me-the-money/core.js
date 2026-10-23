@@ -201,7 +201,7 @@
     var giving = p.givingPct ? Math.round(p.paycheck * p.givingPct / 100) : 0;
     if (giving) rows.push({ label: 'Giving (' + p.givingPct + '%)', amount: giving, kind: 'give' });
     p.bills.forEach(function (b) { if (+b.amount > 0) rows.push({ label: b.name || 'Bill', amount: b.amount / ppm, kind: 'bill', group: b.id }); });
-    (p.saveRows || []).forEach(function (r) { if (+r.amount > 0) rows.push({ label: r.label, amount: r.amount / ppm, kind: 'save' }); });
+    (p.saveRows || []).forEach(function (r) { if (+r.amount > 0) rows.push({ label: r.label, amount: r.amount / ppm, kind: 'save', key: r.key }); });
     if (+p.fun > 0) rows.push({ label: 'Fun money (wants)' + (p.funEst ? ' \u00b7 estimate' : ''), amount: p.fun / ppm, kind: 'fun' });
     // the snowball keeps the total debt budget fixed: a paid-off debt's minimum rolls into the next one
     var mins = sum(p.debts, function (d) { return d.min; });

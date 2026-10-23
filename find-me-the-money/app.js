@@ -53,7 +53,7 @@
       debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], storeLine: {}, payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -63,6 +63,8 @@
       var d = JSON.parse(raw); delete d.x;
       // plans saved before features unlocked gradually keep everything they already had
       if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
+      // one retirement answer becomes the first retirement account
+      if (!d.retirements && (num(d.retirePct) || num(d.retireMonthly) || num(d.retireBal))) d.retirements = [{ id: uid(), owner: 0, type: d.retireFrom === 'post' ? 'IRA' : '401(k)', pct: d.retirePct || '', monthly: d.retireMonthly || '', bal: d.retireBal || '', from: d.retireFrom || 'pre' }];
       // bills saved before budget groups existed get placed by name
       (d.bills || []).forEach(function (b) { if (!b.group) b.group = F.groupFor(b.name); });
       return Object.assign(blank(), d);
@@ -101,20 +103,26 @@
   function goalByPer(g) { var left = Math.max(0, num(g.amount) - num(g.saved)), n = paydaysUntil(g.by); return left ? Math.ceil(left / Math.max(1, n)) : 0; }
   // ---------- household income: Paycheck 1 (P.paycheck) plus any others (P.incomes) ----------
   function extraIncomes() { return (P.incomes || []).filter(function (x) { return num(x.amount) > 0; }); }
-  function monthlyIncome() { return num(P.paycheck) * F.FREQS[P.freq].perMonth + extraIncomes().reduce(function (t, x) { return t + num(x.amount) * F.FREQS[x.freq || 'biweekly'].perMonth; }, 0); }
+  function monthlyIncome() { return num(P.paycheck) * F.FREQS[P.freq].perMonth + extraIncomes().reduce(function (t, x) { return t + num(x.amount) * F.FREQS[x.freq || 'biweekly'].perMonth; }, 0) + otherMonthly(); }
+  function otherMonthly() { return (P.otherIncome || []).reduce(function (t, x) { return t + num(x.amount); }, 0); }
+  var OTHER_INCOME = ['Side income', 'Child support', 'Rental income', 'Benefits', 'Something else'];
   // the plan runs on Paycheck 1's schedule; other paychecks join it as their monthly share
   function householdPaycheck() { return monthlyIncome() / F.FREQS[P.freq].perMonth; }
   function funSet() { return P.fun !== '' && P.fun != null; }
   function itemized() { return P.bills.some(function (b) { return F.billMonthly(b) > 0; }); }
   function billsTotal() { return P.bills.reduce(function (t, b) { return t + F.billMonthly(b); }, 0); }
   // retirement paid from take-home pay and college savings get their own budget lines (monthly)
-  function retireMonthly() {
-    if (!(P.retire === 'some' || P.retire === 'full')) return 0;
-    return num(P.retireMonthly) || num(P.retirePct) / 100 * num(P.paycheck) * F.FREQS[P.freq].perMonth;
+  // whose pay a retirement % comes from: Paycheck 1, 2, ...
+  function payOwners() {
+    return [{ label: P.payLabel || 'You', monthly: num(P.paycheck) * F.FREQS[P.freq].perMonth }].concat((P.incomes || []).map(function (x) { return { label: x.label || 'Spouse', monthly: num(x.amount) * F.FREQS[x.freq || 'biweekly'].perMonth }; }));
   }
+  function accMonthly(a) { var o = payOwners()[a.owner || 0] || payOwners()[0]; return num(a.monthly) || num(a.pct) / 100 * o.monthly; }
+  function retireOn() { return P.retire === 'some' || P.retire === 'full'; }
+  function retireMonthly() { return retireOn() ? (P.retirements || []).reduce(function (t, a) { return t + accMonthly(a); }, 0) : 0; }
+  function accLabel(a) { return (a.type || 'Retirement') + (payOwners().length > 1 ? ' \u00b7 ' + (payOwners()[a.owner || 0] || payOwners()[0]).label : ''); }
   function saveRows() {
     var out = [];
-    if (P.retireFrom === 'post' && retireMonthly() > 0) out.push({ label: 'Retirement', amount: retireMonthly() });
+    if (retireOn()) (P.retirements || []).forEach(function (a, i) { if (a.from === 'post' && accMonthly(a) > 0) out.push({ label: 'Retirement \u00b7 ' + accLabel(a), amount: accMonthly(a), key: 'ret:' + i }); });
     if (P.kids === 'yes' && num(P.collegeMonthly) > 0) out.push({ label: 'College savings', amount: num(P.collegeMonthly) });
     return out;
   }
@@ -413,7 +421,7 @@
         }
         return out.push(line({ skey: 'fun', mon: profile().fun, cat: 'want', label: 'Fun money' + (funSet() ? '' : ' \u00b7 estimate'), sub: 'Eating out, coffee, shopping', amount: r.amount * K, edit: 'fun', raw: round2(profile().fun / d) }));
       }
-      if (r.kind === 'save') return out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, edit: r.label === 'Retirement' ? 'retire' : 'college', raw: round2((r.label === 'Retirement' ? retireMonthly() : num(P.collegeMonthly)) / d) }));
+      if (r.kind === 'save') { var ri = r.key && r.key.indexOf('ret:') === 0 ? +r.key.slice(4) : -1; return out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, edit: ri >= 0 ? r.key : 'college', raw: round2((ri >= 0 ? accMonthly(P.retirements[ri]) : num(P.collegeMonthly)) / d) })); }
       out.push(line({ cat: 'save', label: esc(r.label), amount: r.amount * K, strong: true }));
     });
     return out;
@@ -428,7 +436,7 @@
     else if (parts[0] === 'dmin') P.debts[i].min = m;
     else if (key === 'fun') P.fun = m;
     else if (parts[0] === 'part') { P.funParts[i].amount = m; P.fun = String(funParts().reduce(function (t, x) { return t + num(x.amount); }, 0)); }
-    else if (key === 'retire') P.retireMonthly = m;
+    else if (parts[0] === 'ret') { P.retirements[i].monthly = m; P.retirements[i].pct = ''; }
     else if (key === 'college') P.collegeMonthly = m;
     save();
   }
@@ -584,7 +592,7 @@
       p.savings >= 1000 ? ['✓ ' + money(p.savings) + ' saved', true] : [money(p.savings) + ' of $1,000', false],
       n ? [plural(n, 'debt') + ' · ' + money(owed), false] : ['✓ No debt', true],
       [money(o.plan.safetyNet) + ' goal · ' + efMonths() + ' mo', false],
-      P.retire === 'some' || P.retire === 'full' ? [(P.retire === 'full' ? '\u2713 ' : '') + (num(P.retirePct) ? num(P.retirePct) + '%' : retireMonthly() ? money(retireMonthly()) + '/mo' : P.retire === 'full' ? '15% or more' : 'Started') + (num(P.retireBal) ? ' \u00b7 ' + money(num(P.retireBal)) : ''), P.retire === 'full'] : ['Not yet', false],
+      retireOn() ? (function () { var acc = P.retirements || [], bal = acc.reduce(function (t, a) { return t + num(a.bal); }, 0); return [(P.retire === 'full' ? '\u2713 ' : '') + (acc.length > 1 ? plural(acc.length, 'account') : acc[0] && num(acc[0].pct) ? num(acc[0].pct) + '%' : retireMonthly() ? money(retireMonthly()) + '/mo' : P.retire === 'full' ? '15% or more' : 'Started') + (bal ? ' \u00b7 ' + money(bal) : ''), P.retire === 'full']; })() : ['Not yet', false],
       P.kids === 'yes' ? (P.college === 'yes' || P.college === 'some' ? [(P.college === 'yes' ? '\u2713 ' : '') + (num(P.collegeBal) ? money(num(P.collegeBal)) + ' saved' : 'Started') + (num(P.collegeMonthly) ? ' \u00b7 ' + money(num(P.collegeMonthly)) + '/mo' : ''), P.college === 'yes'] : ['Not yet', false]) : ['Skip for now', false],
       P.home === 'free' ? ['\u2713 Paid off', true] : P.home === 'mortgage' ? [num(P.mortgage) ? money(num(P.mortgage)) + ' left' + (payoffMonths() && payoffMonths() !== Infinity ? ' \u00b7 ' + F.addDays(today(), Math.round(payoffMonths() * 30.44)).getFullYear() : '') : 'Mortgage', false] : P.home === 'rent' ? ['Renting', false] : ['Later', false],
       P.givingPct ? ['Giving ' + P.givingPct + '%', true] : ['Someday', false]
@@ -608,7 +616,7 @@
     return goals;
   }
   // ---------- the activity calendar ----------
-  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
+  var CAL_KINDS = { mdate: ['Money date', 'cal-mdate'], bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
   function calEvents(y, m) {
     var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
     // paydays: step from the next payday in both directions
@@ -624,6 +632,8 @@
     (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
     (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
     if (itemized()) P.bills.forEach(function (b) { billDates(b, first, last).forEach(function (iso) { add(iso, 'bill', (b.name || 'Bill') + ' due \u00b7 ' + money(dueAmount(b))); }); });
+    if (P.moneyDate && P.moneyDate.due) billDates({ due: P.moneyDate.due, rep: 'monthly' }, first, last).forEach(function (iso) { add(iso, 'mdate', 'Money date'); });
+    (P.moneyDates || []).forEach(function (iso) { add(iso, 'checkin', 'Money date done'); });
     return ev;
   }
   function calendarCard() {
@@ -639,15 +649,17 @@
     }
     var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
     var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill'; }).length; }, 0);
-    var soon = upcomingBills(14).slice(0, 4);
-    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="cal-bill"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + money(x.amt) + '</b></div>'; }).join('') + '</div>'
+    var soon = upcomingBills(14);
+    var mdn = mdNext(now); if (mdn && F.daysBetween(now, F.fromIso(mdn)) <= 14) soon.push({ iso: mdn, name: 'Money date', amt: null, md: true });
+    soon = soon.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; }).slice(0, 5);
+    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="' + (x.md ? 'cal-mdate' : 'cal-bill') + '"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + (x.md ? '' : money(x.amt)) + '</b></div>'; }).join('') + '</div>'
       : (itemized() && !P.bills.some(function (b) { return b.due; }) ? '<button type="button" class="linkbtn" data-a="go" data-v="plan" style="align-self:flex-start;font-size:13px">Add due dates to your bills to see them here \u203a</button>' : '');
     return '<div class="card stack cal" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
-      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span><span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
+      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + (P.moneyDate && P.moneyDate.due ? '<span><i class="cal-mdate"></i>Money date</span>' : '') + '<span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
   }
   // ---------- bill due dates, repeating, shown on the calendar ----------
   var REPEATS = [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly'], ['once', 'One time']];
@@ -700,6 +712,45 @@
     var now = today(), to = F.addDays(now, days), out = [];
     if (itemized()) P.bills.forEach(function (b) { if (F.billMonthly(b) > 0 || b.rep === 'once') billDates(b, now, to).forEach(function (iso) { out.push({ iso: iso, name: b.name || 'Bill', amt: dueAmount(b) }); }); });
     return out.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; });
+  }
+  // ---------- the monthly money date ----------
+  var MD_STEPS = [
+    ['Celebrate one win since last time', 'Even a small one. Say it out loud.', 'milestones', 'See my wins'],
+    ['Look back at last month', 'Spent vs budget, line by line. No blame, just notice.', 'mdlast', 'Open last month'],
+    ['Update your balances', 'Savings and every debt, so the countdown is real.', 'checkin', 'Update now'],
+    ['Look ahead', 'Bills coming up, birthdays, trips, anything different next month.', 'home', 'See the calendar'],
+    ['Adjust next month\u2019s budget', 'Move money where it\u2019s needed. Every dollar gets a job.', 'plan', 'Open the budget'],
+    ['Check your goals', 'Still the right ones? On track for the date?', 'plans', 'See goals'],
+    ['Pick one small thing to try', 'A challenge, a bill to cancel, one habit.', 'challenges', 'Pick a challenge']
+  ];
+  function mdNext(from) {
+    if (!P.moneyDate || !P.moneyDate.due) return null;
+    var b = { due: P.moneyDate.due, rep: 'monthly' }, n = nextDue(b, from || today());
+    // Done a few days early? That one counts, so point to the month after.
+    if (n && (P.moneyDates || []).some(function (x) { return x >= F.isoDay(F.addDays(F.fromIso(n), -7)); })) n = nextDue(b, F.addDays(F.fromIso(n), 1));
+    return n;
+  }
+  function mdDueNow() {
+    if (!P.moneyDate || !P.moneyDate.due) return false;
+    var now = today(), last = billDates({ due: P.moneyDate.due, rep: 'monthly' }, F.addDays(now, -3), now).pop();
+    return !!last && !(P.moneyDates || []).some(function (x) { return x >= last; });
+  }
+  function moneyDateCard() {
+    var md = P.moneyDate, two = extraIncomes().length > 0 || P.household === 'shared';
+    if (!md || !md.due || U.mdEdit) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Monthly money date</div><b>' + (two ? 'Twenty minutes, once a month, together' : 'Twenty minutes, once a month, with yourself') + '</b>' +
+      '<span style="font-size:14px;color:var(--muted)">Celebrate a win, look back, look ahead, and give next month\u2019s money a job. ' + (two ? 'Couples who do this fight less about money.' : 'It\u2019s the habit that keeps a plan alive.') + '</span>' +
+      '<label class="field">Pick the first one<input type="date" data-mddate value="' + esc(md && md.due || F.isoDay(F.addDays(today(), 7))) + '"></label>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="mdset">Set my money date</button>' + (U.mdEdit ? '<button type="button" class="sharebtn ghost" data-a="mdcancel">Cancel</button>' : '') + '</div></div>';
+    var nx = mdNext(today()), due = mdDueNow();
+    return '<div class="card stack mdcard' + (due ? ' due' : '') + '" style="padding:16px 18px;gap:10px"><div class="eyebrow">Monthly money date</div><b>' + (due ? 'It\u2019s money date day' : 'Next: ' + dayMonth(F.fromIso(nx))) + '</b>' +
+      '<span style="font-size:14px;color:var(--muted)">Repeats on the ' + ordinal(F.fromIso(md.due).getDate()) + ' of every month.' + ((P.moneyDates || []).length ? ' ' + plural(P.moneyDates.length, 'money date') + ' done.' : '') + '</span>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="go" data-v="moneydate">' + (due ? 'Start it now' : 'Open the checklist') + '</button><button type="button" class="sharebtn ghost" data-a="mdics">Add to my calendar</button><button type="button" class="sharebtn ghost" data-a="mdchange">Change day</button></div></div>';
+  }
+  function mdIcs() {
+    var d = F.fromIso(mdNext(today()) || P.moneyDate.due), day = F.isoDay(d).replace(/-/g, ''), stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Find Me the Money//Money date//EN', 'BEGIN:VEVENT', 'UID:fmtm-moneydate-' + uid() + '@findmethemoney', 'DTSTAMP:' + stamp,
+      'DTSTART;VALUE=DATE:' + day, 'RRULE:FREQ=MONTHLY;BYMONTHDAY=' + Math.min(28, d.getDate()), 'SUMMARY:Money date (Find Me the Money)', 'DESCRIPTION:Twenty minutes: celebrate a win\\, look back\\, look ahead\\, give next month a plan.',
+      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Money date today', 'TRIGGER:PT18H', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   }
   // ---------- the 30-second "find my money" ----------
   // the money to reclaim: debt payments you keep once the debt is gone, plus money that has no job yet
@@ -815,7 +866,14 @@
         field('Next payday', 'nextPay', { type: 'date' }) + '</div>' +
         incomeCards(false) +
         '<button type="button" class="outline" data-a="incadd" style="min-height:46px;font-size:15px">+ Add another paycheck</button>' +
-        (extraIncomes().length ? '<p data-live="together" style="font-size:14px;font-weight:600;color:#2A6B66">Together: about ' + money(monthlyIncome()) + ' a month after taxes.</p>' : '') + wizNext('pay');
+        '<div class="card stack" style="padding:16px 18px;gap:12px"><div><b>Other money coming in</b><small style="display:block;color:var(--muted);font-size:14px">Optional. A monthly amount for anything that isn\u2019t a paycheck.</small></div>' +
+        (P.otherIncome || []).map(function (x, i) {
+          return '<div class="rowedit"><input type="text" aria-label="Income name" data-f="x" data-list="otherIncome" data-i="' + i + '" data-k="label" value="' + esc(x.label) + '" placeholder="Name">' +
+            '<input type="number" inputmode="decimal" aria-label="' + esc(x.label || 'Income') + ' per month" data-f="x" data-list="otherIncome" data-i="' + i + '" data-k="amount" value="' + esc(x.amount) + '" placeholder="$/mo">' +
+            '<button type="button" class="x" data-a="rm" data-v="otherIncome" data-i="' + i + '" aria-label="Remove ' + esc(x.label || 'income') + '">\u00d7</button></div>';
+        }).join('') +
+        '<div class="chips">' + OTHER_INCOME.map(function (n) { return '<button type="button" class="chip" data-a="otheradd" data-v="' + (n === 'Something else' ? '' : n) + '">+ ' + n + '</button>'; }).join('') + '</div></div>' +
+        (extraIncomes().length || otherMonthly() ? '<p data-live="together" style="font-size:14px;font-weight:600;color:#2A6B66">Together: about ' + money(monthlyIncome()) + ' a month after taxes.</p>' : '') + wizNext('pay');
     },
     basics: function () {
       var picks = [1500, 2000, 2500, 3000, 3500];
@@ -887,10 +945,17 @@
     retire: function () {
       return wizardHead('retire', 'Are you saving for retirement?', 'Once you’re debt-free with a full safety net, 15% of your income goes toward retirement, in accounts like a 401(k), 403(b) or Roth IRA.') +
         choice('retire', [['none', 'Not yet'], ['some', 'Yes, under 15%'], ['full', 'Yes, 15% or more'], ['unsure', 'Not sure']]) +
-        (P.retire === 'some' || P.retire === 'full' ? '<div class="card stack" style="padding:16px 18px;gap:12px"><div class="grid2">' + field('% of your pay', 'retirePct', { ph: '6', min: 0 }) + field('Or $ per month', 'retireMonthly', { ph: '200', min: 0 }) + '</div>' +
-          field('Saved so far, all accounts', 'retireBal', { ph: '0', min: 0 }) +
-          '<div class="field">How does it get there?' + choice('retireFrom', [['pre', 'Taken out before my paycheck (like a 401(k))'], ['post', 'I pay it from my paycheck (like an IRA)']]) + '</div>' +
-          '<p style="font-size:13px">' + (P.retireFrom === 'post' ? 'We’ll add it to your budget as its own line.' : 'Taken out before payday? It’s already left out of your take-home pay, so nothing changes in your budget.') + '</p></div>' : '') +
+        (retireOn() ? (P.retirements || []).map(function (a, i) {
+          var at = function (k, label, ph) { return '<label class="field">' + label + '<input type="number" inputmode="decimal" min="0" data-f="x" data-list="retirements" data-i="' + i + '" data-k="' + k + '" value="' + esc(a[k] || '') + '" placeholder="' + ph + '"></label>'; };
+          var chips = function (act, cur, opts) { return '<div class="chips" style="margin-top:6px">' + opts.map(function (o) { var on = cur === o[0]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="' + act + '" data-i="' + i + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>'; };
+          var owners = payOwners();
+          return '<div class="card stack" style="padding:16px 18px;gap:12px"><div class="paylabel"><b>Account ' + (i + 1) + '</b><span style="flex:1"></span><button type="button" class="x" data-a="rm" data-v="retirements" data-i="' + i + '" aria-label="Remove account ' + (i + 1) + '">\u00d7</button></div>' +
+            (owners.length > 1 ? '<div class="field">Whose?' + chips('retowner', String(a.owner || 0), owners.map(function (o, k) { return [String(k), esc(o.label)]; })) + '</div>' : '') +
+            '<div class="field">What kind?' + chips('rettype', a.type || '', [['401(k)', '401(k)'], ['403(b)', '403(b)'], ['IRA', 'IRA'], ['Roth IRA', 'Roth IRA'], ['Pension', 'Pension'], ['Other', 'Other']]) + '</div>' +
+            '<div class="grid2">' + at('pct', '% of pay', '6') + at('monthly', 'Or $ per month', '200') + '</div>' + at('bal', 'Saved so far', '0') +
+            '<div class="field">How does it get there?' + chips('retfrom', a.from || 'pre', [['pre', 'Taken out before payday'], ['post', 'I pay it from my take-home']]) + '</div>' +
+            '<p style="font-size:13px">' + (a.from === 'post' ? 'We\u2019ll add it to your budget as its own line.' : 'Taken out before payday? It\u2019s already left out of your take-home pay, so nothing changes in your budget.') + '</p></div>';
+        }).join('') + '<button type="button" class="outline" data-a="retadd" style="min-height:46px;font-size:15px">+ Add another account</button>' : '') +
         '<p style="font-size:13px">Already investing while you pay off debt? Some people pause it for a while to throw more at the snowball. That’s your call, and we’ll remind you when you reach Step 4.</p>' + wizNext('retire');
     },
     kids: function () {
@@ -1150,7 +1215,7 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
         '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
         '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
@@ -1249,6 +1314,17 @@
         }).join('') + '</div>' : '');
     },
 
+    moneydate: function () {
+      var two = extraIncomes().length > 0 || P.household === 'shared', ck = U.mdChecks || {}, done = Object.keys(ck).filter(function (k) { return ck[k]; }).length;
+      return back(U.mdBack || 'plans') + '<div class="stack" style="gap:6px"><div class="eyebrow">Monthly money date \u00b7 about 20 minutes</div><h2>' + (two ? 'Your money date' : 'Your money date') + '</h2>' +
+        '<p>' + (two ? 'Sit down together, phones on this screen. Both voices count, nobody gets blamed, and you end with something fun.' : 'Grab a coffee and go top to bottom. This is how a plan keeps working.') + '</p></div>' +
+        '<div class="card" style="padding:6px 18px">' + MD_STEPS.map(function (x, i) {
+          var on = !!ck[i];
+          return '<div class="row mdrow" style="align-items:flex-start;padding:12px 0"><button type="button" class="mdcheck' + (on ? ' on' : '') + '" data-a="mdcheck" data-i="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(x[0]) + '">' + (on ? ICON.check('#fff', 14) : '') + '</button>' +
+            '<div style="flex:1;min-width:0"><b>' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:13px;margin-top:2px">' + x[1] + '</small><button type="button" class="linkbtn" data-a="mdgo" data-v="' + x[2] + '" style="font-size:13px;margin-top:4px">' + x[3] + ' \u203a</button></div></div>';
+        }).join('') + '</div>' +
+        '<div class="push"><button type="button" class="primary" data-a="mddone">' + (done >= MD_STEPS.length ? 'Money date done' : 'Mark money date done') + '</button></div>';
+    },
     plans: function () {
       var now = today(), list = F.PLANS.map(function (def) {
         var run = P.plans.filter(function (p) { return p.id === def.id && !p.ended; })[0];
@@ -1269,7 +1345,7 @@
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
         (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + goalsCard() +
+        celebration(2, ['plan', 'unlock']) + moneyDateCard() + goalsCard() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
@@ -1690,7 +1766,14 @@
       case 'claimgo': track('claim'); go('path'); break;
       case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', subNoAmt: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
       case 'giving': P.givingPct = +v; save(); render(); break;
-      case 'answer': P[b.getAttribute('data-k')] = v; save(); render(); break;
+      case 'answer': P[b.getAttribute('data-k')] = v;
+        if (b.getAttribute('data-k') === 'retire' && (v === 'some' || v === 'full') && !(P.retirements || []).length) P.retirements = [{ id: uid(), owner: 0, type: '401(k)', pct: '', monthly: '', bal: '', from: 'pre' }];
+        save(); render(); break;
+      case 'retadd': P.retirements = P.retirements || []; P.retirements.push({ id: uid(), owner: (P.incomes || []).length && P.retirements.length ? 1 : 0, type: '', pct: '', monthly: '', bal: '', from: 'pre' }); save(); render(); break;
+      case 'retowner': P.retirements[i].owner = +v; save(); render(); break;
+      case 'rettype': P.retirements[i].type = v; save(); render(); break;
+      case 'retfrom': P.retirements[i].from = v; save(); render(); break;
+      case 'otheradd': P.otherIncome = P.otherIncome || []; P.otherIncome.push({ id: uid(), label: v, amount: '' }); save(); render(); (function () { var ins = app.querySelectorAll('[data-list=otherIncome][data-i="' + (P.otherIncome.length - 1) + '"]'); if (ins.length) ins[v ? 1 : 0].focus(); })(); break;
       case 'savepick': P.savings = v; save(); render(); break;
       case 'add':
         if (v === 'bills') P.bills.push({ name: '', amount: '' });
@@ -1762,6 +1845,13 @@
       case 'household': P.household = v; if (v === 'single') P.incomes = extraIncomes(); if (v === 'shared' && !(P.incomes || []).length) { P.incomes = [{ id: uid(), label: '', amount: '', freq: P.freq, nextPay: P.nextPay }]; } save(); render(); break;
       case 'incadd': P.incomes = P.incomes || []; P.incomes.push({ id: uid(), label: '', amount: '', freq: P.freq, nextPay: P.nextPay }); if (!P.household) P.household = 'shared'; save(); render(); break;
       case 'incfreq': P.incomes[i].freq = v; save(); render(); break;
+      case 'mdset': (function () { var el = app.querySelector('[data-mddate]'), dt = el && el.value; if (!/^\d{4}-\d{2}-\d{2}$/.test(dt || '')) return; P.moneyDate = { due: dt }; U.mdEdit = false; save(); track('money-date-set'); })(); render(); break;
+      case 'mdchange': U.mdEdit = true; render(); break;
+      case 'mdcancel': U.mdEdit = false; render(); break;
+      case 'mdics': download('find-me-the-money-money-date.ics', 'text/calendar', mdIcs()); track('money-date-ics'); break;
+      case 'mdcheck': U.mdChecks = U.mdChecks || {}; U.mdChecks[i] = !U.mdChecks[i]; render(); break;
+      case 'mdgo': U.mdChecks = U.mdChecks || {}; if (v === 'mdlast') { var nd = today(); U.spendMonth = F.isoDay(new Date(nd.getFullYear(), nd.getMonth() - 1, 1)).slice(0, 7); go('plan'); } else go(v); break;
+      case 'mddone': P.moneyDates = P.moneyDates || []; P.moneyDates.push(F.isoDay(today())); U.mdChecks = {}; save(); track('money-date-done'); U.planToast = 'Money date done. See you next month.'; go('plans'); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;
@@ -1963,7 +2053,7 @@
       save();
       var sl = app.querySelector('[data-live="savings"]'); if (sl) sl.textContent = savingsNote();
       var qm = app.querySelector('[data-live="qmonth"]'); if (qm) qm.textContent = quickMonthNote();
-      if (t.getAttribute('data-list') === 'incomes' && t.getAttribute('data-k') === 'amount' && U.screen === 'pay') { var tg = app.querySelector('[data-live="together"]'); if (tg) tg.textContent = 'Together: about ' + money(monthlyIncome()) + ' a month after taxes.'; }
+      if ((t.getAttribute('data-list') === 'incomes' || t.getAttribute('data-list') === 'otherIncome') && t.getAttribute('data-k') === 'amount' && U.screen === 'pay') { var tg = app.querySelector('[data-live="together"]'); if (tg) tg.textContent = 'Together: about ' + money(monthlyIncome()) + ' a month after taxes.'; }
       if (t.getAttribute('data-f') === 'savings') Array.prototype.forEach.call(app.querySelectorAll('[data-a=savepick]'), function (c) { var on = t.value !== '' && +c.getAttribute('data-v') === num(t.value); c.classList.toggle('on', on); c.setAttribute('aria-pressed', on); });
       var po = app.querySelector('[data-live="payoff"]'); if (po) po.textContent = payoffNote();
       var tot = app.querySelector('[data-total="bills"]');
