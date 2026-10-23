@@ -1916,7 +1916,7 @@
     ];
     if (!standalone()) items.push(['install', 'Add to your Home Screen', isIOS() ? 'Keeps your plan safe on iPhone' : 'One tap away on payday', !!P.installSeen]);
     if (cloudOn()) items.push(['account', 'Save your plan with your email', 'So it\u2019s safe on any phone. No password', !!S]);
-    if (CONFIG.communityUrl) items.push(['community', 'Join the community', 'Free. Share wins and get your questions answered', !!P.communityJoined]);
+    if (CONFIG.communityUrl) items.push(['community', 'Join the FREE community', 'Share wins and get your questions answered', !!P.communityJoined]);
     var done = items.filter(function (x) { return x[3]; }).length;
     if (done === items.length) return '';
     return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Finish setting up</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + items.length + '</span></div>' +
