@@ -252,6 +252,19 @@
     return '<span style="font-size:14px">' + (P.setupDone ? 'Joining replaces the budget on this phone with your spouse\u2019s. Yours is kept for 30 days, just in case.' : 'Enter the code your spouse sent you.') + '</span>' +
       '<label class="field">Invite code<input type="text" autocapitalize="characters" autocomplete="off" maxlength="8" data-cjoin placeholder="ABC123" style="text-transform:uppercase;letter-spacing:3px"></label><button type="button" class="primary" data-a="cjoin">Join the shared budget</button>';
   }
+  function signInForm() {
+    var st = U.cloudStep;
+    return (st && st.sent ? '<span style="font-size:14px">We emailed a 6-digit code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email. Not there in a minute? Check your junk or spam folder.</span>' +
+        '<label class="field">Code<input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="123456"></label>' +
+        '<button type="button" class="primary" data-a="cverify">Sign in</button><div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="linkbtn" data-a="csend">Send a new code</button><button type="button" class="linkbtn" data-a="creset">Use a different email</button></div>'
+        : '<label class="field">Email<input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label><button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
+      (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '');
+  }
+  function saveNudge() {
+    if (!cloudOn() || S || P.saveNudgeOff || !(P.history || []).length) return '';
+    return '<div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center"><div style="flex:1;min-width:0"><b>Save your plan</b><span style="display:block;font-size:14px;color:var(--muted)">So it\u2019s safe if you lose or switch phones.</span></div>' +
+      '<button type="button" class="sharebtn" data-a="go" data-v="account">Save it</button><button type="button" class="x" data-a="savenudgeoff" aria-label="Hide this">\u00d7</button></div>';
+  }
   function accountCard() {
     if (!cloudOn()) return '';
     if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc(S.email || 'Signed in') + '</b>' +
@@ -262,11 +275,7 @@
     var st = U.cloudStep;
     return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Save to an account</div><b>Keep your plan on every phone</b>' +
       '<span style="font-size:14px;color:var(--muted)">Free. Sign in with your email and your plan follows you to a new phone, Safari or the Home Screen app. No password.</span>' +
-      (st && st.sent ? '<span style="font-size:14px">We emailed a 6-digit code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email. Not there in a minute? Check your junk or spam folder.</span>' +
-        '<label class="field">Code<input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="123456"></label>' +
-        '<button type="button" class="primary" data-a="cverify">Sign in</button><div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="linkbtn" data-a="csend">Send a new code</button><button type="button" class="linkbtn" data-a="creset">Use a different email</button></div>'
-        : '<label class="field">Email<input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label><button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
-      (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') + '</div>';
+      signInForm() + '</div>';
   }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 
@@ -1406,7 +1415,7 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
       return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
+        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + saveNudge() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
         '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
         '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
         '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
@@ -1663,6 +1672,13 @@
         (CONFIG.feedbackUrl ? '<a class="outline" style="text-decoration:none;color:var(--ink)" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener">Send feedback</a>' : '') +
         '<a class="textbtn" style="text-align:center;text-decoration:none;display:block;padding-top:12px" href="privacy.html">Privacy</a>' +
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
+    },
+    savesetup: function () {
+      return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
+        '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">Last step</div><h2>Save your progress</h2>' +
+        '<p>Your plan is built. Save it to your account so it\u2019s safe if you lose your phone, get a new one, or add the app to your Home Screen. Free, and no password.</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:10px">' + signInForm() + '</div>' +
+        '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>';
     },
     account: function () {
       return back(P.setupDone ? 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
@@ -2101,7 +2117,11 @@
         P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
         if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
         snapshot(); save(); track('setup-done');
-        U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true]; go('home'); break;
+        U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true];
+        if (cloudOn() && !S) { U.cloudStep = null; U.err = ''; go('savesetup'); } else go('home');
+        break;
+      case 'saveskip': track('save-skip'); go('home'); break;
+      case 'savenudgeoff': P.saveNudgeOff = true; save(); render(); break;
       case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
       case 'basicpick': P.basicsAuto = false; P.basics = v; save(); render(); break;
       case 'ladder': U.showLadder = !U.showLadder; render(); break;

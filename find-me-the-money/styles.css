@@ -124,7 +124,7 @@ p { margin: 0; color: var(--muted); }
 .debt.paid .top span:first-child { text-decoration: line-through; color: var(--faint); }
 .target { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; background: var(--sun); color: var(--sun-deep); padding: 3px 8px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
-.field input[type=text], .field input[type=number] { min-height: 50px; border-radius: 16px; border: 1px solid var(--edge); background: rgba(255,255,255,.8); padding: 0 16px; font: inherit; font-size: 17px; font-weight: 500; color: var(--ink); width: 100%; }
+.field input[type=text], .field input[type=number], .field input[type=email] { min-height: 50px; border-radius: 16px; border: 1px solid var(--edge); background: rgba(255,255,255,.8); padding: 0 16px; font: inherit; font-size: 17px; font-weight: 500; color: var(--ink); width: 100%; }
 .field input:focus-visible { outline: 3px solid rgba(42,107,102,.35); outline-offset: 1px; }
 input[type=range] { width: 100%; height: 32px; accent-color: #2A6B66; margin: 0; }
 .split { display: flex; height: 14px; border-radius: 7px; overflow: hidden; gap: 3px; width: 100%; }

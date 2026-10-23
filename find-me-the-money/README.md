@@ -29,6 +29,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Add to Home Screen: an animated four-step guide (iPhone Safari or Android Chrome) on the Add to Home Screen page, linked from the Home checklist and the iPhone tip on the welcome screen
 - Households: the paycheck step asks Whose paychecks are in this plan? (Just mine / Mine and my spouse's). Paycheck 1, 2, 3... each with a name, amount, how often and next payday; the plan uses the combined income and every payday shows on the calendar. The 30-second screen can add a second paycheck too
 - Optional accounts (Supabase): sign in with an emailed 6-digit code or link, no password. The plan saves to the person's own row after each change and loads on any phone, Safari or the Home Screen app. If both the account and the phone have a plan, it asks which to keep and saves the other for 30 days. Sign out, or delete the account copy, from Settings. Setup: the `plans` table with row level security, and `{{ .Token }}` in the Magic Link and Confirm signup email templates
+- Setup ends with Save your progress: sign in with an emailed code before Home (or Not now). Anyone who skips sees a small Save your plan card on Home after their first check-in
 - Shared budgets for couples: Settings → Invite my spouse makes a one-time code (good for 7 days). The spouse signs in with their own email, taps Joining your spouse's budget? and enters it. Both see and edit one budget; changes made at the same time are combined field by field and item by item, so two purchases logged at once both stay. Either person can stop sharing or leave (keeping a copy). Database setup lives in `supabase.sql`
 - Other money coming in: side income, child support, rental, benefits or anything else, added on the paycheck step and counted in the monthly total
 - Monthly money date: pick a day, it repeats monthly on the calendar and in Coming up, can be added to a phone calendar (.ics), and opens a 7-step checklist (celebrate a win, look back at last month, check in, give next month's money a job, and more). Home shows it when it's due
@@ -108,3 +109,9 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 - `privacy.html`, `manifest.webmanifest`, `sw.js` (offline), `icons/`
 
 *An educational budgeting tool, not financial, tax or investment advice.*
+
+## Still to set up
+- [ ] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
+- [ ] Supabase SMTP: sender name "Find Me the Money"
+- [ ] Later: own domain + Resend for sign-in emails (keeps them out of junk)
+- [ ] OneSignal App ID for payday and money date reminders
