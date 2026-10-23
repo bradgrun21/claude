@@ -555,3 +555,6 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .mdcheck { width: 28px; height: 28px; flex: none; border-radius: 14px; border: 2px solid #2A6B66; background: #fff; display: grid; place-items: center; margin-right: 12px; }
 .mdcheck.on { background: #2A6B66; }
 .mdrow { justify-content: flex-start; }
+
+/* shared budget invite code */
+.invitecode { font-size: 30px; font-weight: 700; letter-spacing: 6px; text-align: center; padding: 12px; border-radius: 16px; background: rgba(42,107,102,.08); color: #2A6B66; font-variant-numeric: tabular-nums; }

@@ -120,43 +120,101 @@
       throw er;
     });
   }
+  // The last copy both sides agreed on, so two phones' changes can be combined instead of one replacing the other
+  var BASE = 'fmtm.base';
+  function getBase() { try { return JSON.parse(localStorage.getItem(BASE) || 'null'); } catch (e) { return null; } }
+  function setBase(d) { try { localStorage.setItem(BASE, JSON.stringify(d)); } catch (e) {} }
+  function J(x) { return JSON.stringify(x === undefined ? null : x); }
+  function keyOf(x) { return x && typeof x === 'object' ? x.uid || x.id : null; }
+  function isObj(x) { return x && typeof x === 'object' && !Array.isArray(x); }
+  // three-way merge: a field only one side changed takes that side; lists of items with ids merge item by item
+  function merge3(b, m, t) {
+    b = isObj(b) ? b : {}; var out = {};
+    Object.keys(Object.assign({}, m, t)).forEach(function (k) {
+      var bj = J(b[k]), mj = J(m[k]), tj = J(t[k]), v;
+      if (mj === tj || tj === bj) v = m[k];
+      else if (mj === bj) v = t[k];
+      else if (Array.isArray(m[k]) && Array.isArray(t[k]) && m[k].concat(t[k]).every(keyOf)) v = mergeList(Array.isArray(b[k]) ? b[k] : [], m[k], t[k]);
+      else if (isObj(m[k]) && isObj(t[k])) v = merge3(b[k], m[k], t[k]);
+      else v = m[k];
+      if (v !== undefined) out[k] = v;
+    });
+    return out;
+  }
+  function mergeList(b, m, t) {
+    var bm = {}, mm = {}, tm = {}, out = [];
+    b.forEach(function (x) { if (keyOf(x)) bm[keyOf(x)] = x; }); m.forEach(function (x) { mm[keyOf(x)] = x; }); t.forEach(function (x) { tm[keyOf(x)] = x; });
+    var take = function (k) {
+      var inB = k in bm, x;
+      if (k in mm && k in tm) x = J(mm[k]) === J(bm[k]) ? tm[k] : (J(tm[k]) === J(bm[k]) ? mm[k] : (isObj(mm[k]) && isObj(tm[k]) ? merge3(bm[k], mm[k], tm[k]) : mm[k]));
+      else if (k in mm) x = !inB || J(mm[k]) !== J(bm[k]) ? mm[k] : null; // the other phone deleted it, unless this one changed it
+      else x = !inB || J(tm[k]) !== J(bm[k]) ? tm[k] : null;
+      if (x) out.push(x);
+    };
+    var seen = {};
+    t.concat(m).forEach(function (x) { var k = keyOf(x); if (!seen[k]) { seen[k] = 1; take(k); } });
+    return out;
+  }
+  // who this plan belongs to: your own, or the one your spouse shared with you
+  function cloudWho() {
+    return sb('/rest/v1/plan_members?select=owner_id,owner_email,member_id,member_email', { auth: true }).then(function (rows) {
+      var mine = (rows || []).filter(function (r) { return r.member_id === S.uid; })[0], part = (rows || []).filter(function (r) { return r.owner_id === S.uid; })[0];
+      S.owner = mine ? mine.owner_id : S.uid; S.role = mine ? 'member' : 'owner'; S.partner = mine ? mine.owner_email : part ? part.member_email : null; S.shareReady = true; keepAuth();
+    }, function () { S.owner = S.uid; S.role = 'owner'; S.partner = null; S.shareReady = false; });
+  }
+  function shared() { return !!(S && S.partner); }
   function cloudPaint() { if ((U.screen === 'settings' || U.screen === 'account') && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render(); }
   function adopt(row) {
     if (P.setupDone) keepCopy();
     P = Object.assign(blank(), row.data); lastJ = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
     try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); } catch (e) {}
-    S.synced = P.savedAt || 0; keepAuth();
+    S.synced = P.savedAt || 0; keepAuth(); setBase(row.data);
   }
   // Compares this phone with the account copy. Whichever changed since the last sync wins; if both did,
   // the newer one wins and the other is kept as the 30-day "bring back" copy.
   function cloudPull(first) {
     if (!S || !cloudOn()) return Promise.resolve();
-    return fresh().then(function () { return sb('/rest/v1/plans?select=data,updated_at&user_id=eq.' + S.uid, { auth: true }); }).then(function (rows) {
+    return fresh().then(cloudWho).then(function () { return sb('/rest/v1/plans?select=data,updated_at&user_id=eq.' + S.owner, { auth: true }); }).then(function (rows) {
       var row = rows && rows[0], remote = row && row.data;
       C.ready = true;
       if (!remote || !remote.setupDone) { if (P.setupDone) return cloudPush(); C.state = 'saved'; return; }
       var rAt = remote.savedAt || 0, lAt = P.savedAt || 0;
       if (S.synced == null && P.setupDone && JSON.stringify(Object.assign(blank(), remote, { savedAt: 0 })) !== lastJ) { C.ready = false; U.cloudPick = { at: rAt, row: row }; go('cloudpick'); return; }
-      if (S.synced == null || !P.setupDone || (rAt > (S.synced || 0) && (lAt <= (S.synced || 0) || rAt > lAt))) {
+      if (S.synced == null || !P.setupDone || (rAt > (S.synced || 0) && lAt <= (S.synced || 0))) {
         if (rAt !== lAt || !P.setupDone) { adopt(row); C.state = 'saved'; if (first || !P.setupDone) U.screen = 'home'; render(); return; }
       }
+      if (rAt > (S.synced || 0) && lAt > (S.synced || 0)) { combine(remote); render(); return cloudPush(); }
       if (lAt > rAt) return cloudPush();
-      S.synced = rAt; keepAuth(); C.state = 'saved';
+      S.synced = rAt; keepAuth(); setBase(remote); C.state = 'saved';
     }).catch(function () { C.state = S ? 'offline' : 'expired'; }).then(cloudPaint);
   }
   function cloudPush() {
     if (!S || !C.ready || !P.setupDone) return Promise.resolve();
+    C.timer = null;
     if (C.busy) { cloudQueue(); return Promise.resolve(); }
     C.busy = true; C.state = 'saving';
     var at = P.savedAt || Date.now();
     return fresh().then(function () {
-      return sb('/rest/v1/plans?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.uid, data: P, updated_at: new Date().toISOString() } });
-    }).then(function () { if (S) { S.synced = at; keepAuth(); } C.state = 'saved'; }, function () { C.state = S ? 'offline' : 'expired'; })
+      // someone else saved since this phone last synced? fold their changes in first
+      return sb('/rest/v1/plans?select=data&user_id=eq.' + (S.owner || S.uid), { auth: true }).then(function (rows) {
+        var r = rows && rows[0] && rows[0].data;
+        if (r && r.setupDone && (r.savedAt || 0) > (S.synced || 0) && S.synced != null) { combine(r); at = P.savedAt; render(); }
+      });
+    }).then(function () {
+      return sb('/rest/v1/plans?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.owner || S.uid, data: P, updated_at: new Date().toISOString() } });
+    }).then(function () { if (S) { S.synced = at; keepAuth(); setBase(P); } C.state = 'saved'; }, function () { C.state = S ? 'offline' : 'expired'; })
       .then(function () { C.busy = false; cloudPaint(); });
+  }
+  function combine(remote) {
+    var m = merge3(getBase(), JSON.parse(JSON.stringify(P)), remote);
+    P = Object.assign(blank(), m); P.savedAt = Math.max(Date.now(), (remote.savedAt || 0) + 1);
+    lastJ = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
+    try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); } catch (e) {}
   }
   function cloudQueue() { if (!S || !C.ready) return; clearTimeout(C.timer); C.timer = setTimeout(cloudPush, 1500); }
   function signedIn(r) {
-    setSession(r); delete S.synced; keepAuth(); U.cloudStep = null; U.err = ''; track('account-signin');
+    setSession(r); delete S.synced; keepAuth(); setBase(null); U.cloudStep = null; U.err = ''; track('account-signin');
+    if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
     return cloudPull(true).then(function () { if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
   }
   // A sign-in link opened in this browser lands here with the session in the address
@@ -176,11 +234,29 @@
   function syncText() {
     return { saving: 'Saving…', saved: '✓ Saved to your account', offline: 'Offline. It’ll save when you’re back online.', expired: 'Signed out. Sign in again to keep saving.' }[C.state] || 'Checking your account…';
   }
+  function shareBlock() {
+    if (!S || S.shareReady === false) return '';
+    var top = '<div class="stack" style="gap:8px;border-top:1px solid var(--line, rgba(0,0,0,.08));padding-top:12px;margin-top:2px"><b>Budget together</b>';
+    if (S.role === 'member') return top + '<span style="font-size:14px;color:var(--muted)">You and <b>' + esc(S.partner || 'your spouse') + '</b> share this budget. Changes either of you make show up for both.</span>' +
+      (U.cleave ? '<span style="font-size:14px">Leave? You keep a copy of the budget as your own; it stops updating with theirs.</span><div class="grid2"><button type="button" class="outline" data-a="cleaveno">Stay</button><button type="button" class="primary danger" data-a="cleaveyes">Leave</button></div>' : '<button type="button" class="linkbtn" data-a="cleave" style="align-self:flex-start">Leave the shared budget</button>') + '</div>';
+    if (S.partner) return top + '<span style="font-size:14px;color:var(--muted)">Shared with <b>' + esc(S.partner) + '</b>. Changes either of you make show up for both.</span>' +
+      (U.cunshare ? '<span style="font-size:14px">Stop sharing? They keep a copy, but it stops updating with yours.</span><div class="grid2"><button type="button" class="outline" data-a="cunshareno">Keep sharing</button><button type="button" class="primary danger" data-a="cunshareyes">Stop sharing</button></div>' : '<button type="button" class="linkbtn" data-a="cunshare" style="align-self:flex-start">Stop sharing</button>') + '</div>';
+    if (U.invite) return top + '<span style="font-size:14px;color:var(--muted)">Have your spouse open Find Me the Money, tap <b>Joining your spouse\u2019s budget?</b> (or Settings \u2192 Have an invite code?), sign in with their own email and enter:</span>' +
+      '<div class="invitecode" aria-label="Invite code">' + esc(U.invite) + '</div><span style="font-size:13px;color:var(--faint)">Works once, for 7 days.</span>' +
+      '<button type="button" class="sharebtn" data-a="cinviteshare">Send it to my spouse</button></div>';
+    return top + '<span style="font-size:14px;color:var(--muted)">Your spouse signs in with their own email and sees this same budget. Either of you can update it.</span>' +
+      '<button type="button" class="sharebtn" data-a="cinvite" style="align-self:flex-start">Invite my spouse</button>' + joinBlock() + '</div>';
+  }
+  function joinBlock() {
+    if (!U.joinOpen && !U.joinMode) return '<button type="button" class="linkbtn" data-a="cjoinopen" style="align-self:flex-start">Have an invite code?</button>';
+    return '<span style="font-size:14px">' + (P.setupDone ? 'Joining replaces the budget on this phone with your spouse\u2019s. Yours is kept for 30 days, just in case.' : 'Enter the code your spouse sent you.') + '</span>' +
+      '<label class="field">Invite code<input type="text" autocapitalize="characters" autocomplete="off" maxlength="8" data-cjoin placeholder="ABC123" style="text-transform:uppercase;letter-spacing:3px"></label><button type="button" class="primary" data-a="cjoin">Join the shared budget</button>';
+  }
   function accountCard() {
     if (!cloudOn()) return '';
     if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc(S.email || 'Signed in') + '</b>' +
       '<span style="font-size:14px;color:var(--muted)" data-live="sync">' + syncText() + '</span>' +
-      '<span style="font-size:14px;color:var(--muted)">Sign in with this email on any phone, in Safari or the Home Screen app, and your plan is there.</span>' +
+      '<span style="font-size:14px;color:var(--muted)">Sign in with this email on any phone, in Safari or the Home Screen app, and your plan is there.</span>' + shareBlock() + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
       (U.cdel ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This deletes the copy saved in your account and signs you out. Your plan stays on this phone.</span></div><div class="grid2"><button type="button" class="outline" data-a="cdelno">Keep it</button><button type="button" class="primary danger" data-a="cdelyes">Delete it</button></div>'
         : '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn ghost" data-a="cout">Sign out</button><button type="button" class="sharebtn ghost" data-a="cdel" style="color:var(--warn)">Delete my account copy</button></div>') + '</div>';
     var st = U.cloudStep;
@@ -923,6 +999,7 @@
         (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
           '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you' + (cloudOn() ? ', unless you save it to an account' : '') + '.</span><button type="button" class="linkbtn" data-a="edit" data-v="install" style="align-self:flex-start">Show me how \u203a</button></div>' : '') +
         (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
+        (cloudOn() && !S ? '<button type="button" class="choice" data-a="cjoinstart" style="text-align:left"><div class="ic">' + ICON.people + '</div><div><b>Joining your spouse\u2019s budget?</b><span class="d">Sign in and enter the invite code they sent you.</span></div></button>' : '') +
         (cloudOn() && !S ? '<button type="button" class="choice" data-a="go" data-v="account" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Already have an account?</b><span class="d">Sign in and your plan comes right back.</span></div></button>' : '') +
         (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
@@ -1588,7 +1665,8 @@
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
     },
     account: function () {
-      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : 'Sign in') + '</h2>' + (S ? '' : '<p>Already saved a plan to your account? Sign in and it comes right back.</p>') + accountCard();
+      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
+        (S ? '' : U.joinMode ? '<p>First sign in with your own email. Then enter the invite code your spouse sent you.</p>' : '<p>Already saved a plan to your account? Sign in and it comes right back.</p>') + accountCard();
     },
     cloudpick: function () {
       var pk = U.cloudPick; if (!pk) return V.home();
@@ -2077,6 +2155,45 @@
       case 'creset': U.cloudStep = null; U.err = ''; render(); break;
       case 'cout': if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
       case 'cdel': U.cdel = true; render(); break;
+      case 'cjoinstart': U.joinMode = true; go('account'); break;
+      case 'cjoinopen': U.joinOpen = true; render(); var cj = app.querySelector('[data-cjoin]'); if (cj) cj.focus(); break;
+      case 'cinvite': (function () {
+        var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', code = '';
+        for (var k = 0; k < 6; k++) code += A[Math.floor(Math.random() * A.length)];
+        fresh().then(function () { return sb('/rest/v1/plan_invites?owner_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
+          .then(function () { return sb('/rest/v1/plan_invites', { method: 'POST', auth: true, headers: { Prefer: 'return=minimal' }, body: { code: code, owner_id: S.uid } }); })
+          .then(function () { U.invite = code; track('share-invite'); render(); }, function () { U.err = 'We couldn\u2019t make an invite right now. Try again in a minute.'; render(); });
+      })(); break;
+      case 'cinviteshare': (function () {
+        var t = 'Join our budget on Find Me the Money. Open https://' + CONFIG.shareUrl + ', tap \u201cJoining your spouse\u2019s budget?\u201d, sign in with your email, and enter this code: ' + U.invite;
+        if (navigator.share) navigator.share({ text: t }).catch(function () {});
+        else try { navigator.clipboard.writeText(t); U.toast = ['Invite copied.', 'Paste it in a text to your spouse.', true]; render(); } catch (err) { window.prompt('Copy this and send it:', t); }
+      })(); break;
+      case 'cjoin': (function () {
+        var el = app.querySelector('[data-cjoin]'), code = String(el && el.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (code.length < 6) { U.err = 'Enter the 6-character code from your spouse.'; render(); return; }
+        var bt = app.querySelector('[data-a=cjoin]'); if (bt) { bt.disabled = true; bt.textContent = 'Joining\u2026'; }
+        fresh().then(function () { return sb('/rest/v1/rpc/join_plan', { method: 'POST', auth: true, body: { invite: code } }); })
+          .then(cloudWho).then(function () { return sb('/rest/v1/plans?select=data,updated_at&user_id=eq.' + S.owner, { auth: true }); })
+          .then(function (rows) {
+            U.joinMode = false; U.joinOpen = false; C.ready = true; C.state = 'saved'; track('share-join');
+            if (rows && rows[0] && rows[0].data && rows[0].data.setupDone) adopt(rows[0]);
+            U.toast = ['You\u2019re in.', 'You and ' + (S.partner || 'your spouse') + ' now share one budget.', true]; go(P.setupDone ? 'home' : 'welcome');
+          }, function (er) { U.err = /not found|invalid/i.test(er.message) ? 'That code didn\u2019t work. It may have expired or been used. Ask for a new one.' : /own/i.test(er.message) ? 'That\u2019s your own invite. Your spouse enters it on their phone.' : 'We couldn\u2019t join right now. Try again in a minute.'; render(); });
+      })(); break;
+      case 'cleave': U.cleave = true; render(); break;
+      case 'cleaveno': U.cleave = false; render(); break;
+      case 'cleaveyes': U.cleave = false;
+        fresh().then(function () { return sb('/rest/v1/plan_members?member_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
+          .then(function () { S.owner = S.uid; S.role = 'owner'; S.partner = null; S.synced = -1; keepAuth(); setBase(null); C.ready = true; return cloudPush(); })
+          .then(function () { U.toast = ['You left the shared budget.', 'This copy is yours now.', true]; render(); }, function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
+        break;
+      case 'cunshare': U.cunshare = true; render(); break;
+      case 'cunshareno': U.cunshare = false; render(); break;
+      case 'cunshareyes': U.cunshare = false;
+        fresh().then(function () { return sb('/rest/v1/plan_members?owner_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
+          .then(function () { S.partner = null; keepAuth(); U.toast = ['Sharing stopped.', 'The budget is just yours again.', true]; render(); }, function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
+        break;
       case 'cdelno': U.cdel = false; render(); break;
       case 'cdelyes': (function () {
         U.cdel = false;
@@ -2349,5 +2466,7 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) { if (C.timer) { clearTimeout(C.timer); cloudPush(); } return; } if (S && !C.busy) cloudPull(false); if (U.screen === 'home') render(); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
   cloudStart();
+  // a shared budget checks for the other person's changes every minute while it's open
+  setInterval(function () { if (shared() && !document.hidden && !C.busy && C.ready && !C.timer) cloudPull(false); }, 60000);
   render();
 })();
