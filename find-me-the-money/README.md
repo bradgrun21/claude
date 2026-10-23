@@ -14,6 +14,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (one card per account: whose, 401(k)/403(b)/IRA/Roth/pension, % or $ per month, balance, and whether it comes out before payday; take-home accounts become their own budget lines), kids and college, home and mortgage, giving. The reveal shows every step at a glance
 - Community tab: what's inside the Skool community and a Join button (set `communityUrl` in `app.js`) and a Watch on YouTube link (`youtubeUrl`); every share card gets "Post it in the community". Challenges and Milestones share one Wins tab
 - Share cards in four shapes: Post (4:5), Story (9:16), Square and a wide one for Skool and Facebook; a Step card draws your place on the 7-step path (Wins tab, and on every level-up)
+- Giving on a slider: a percent of pay or a set dollar amount each month (type it or slide it, switching keeps about the same amount), shown as a month and per paycheck. Tap it in the budget to change it
 - Budget in sections (Giving, Needs, Wants, Saving & goals); fun money can be broken into parts; money found from wants is shown going to work on the snowball line
 - What if you found more? slider: extra dollars a month move your next big date
 - Edit the budget in place: tap any amount to change it, tap a group to see and edit its bills, and add a need or a want right under its section

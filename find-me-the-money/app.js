@@ -54,7 +54,7 @@
   function blank() {
     return { v: 1, setupDone: false, paycheck: '', freq: 'biweekly', nextPay: F.isoDay(F.addDays(today(), 7)),
       bills: [['Rent', 'home'], ['Electricity', 'utilities'], ['Internet', 'utilities'], ['Phone', 'utilities'], ['Groceries', 'food'], ['Gas', 'transport'], ['Car insurance', 'transport']].map(function (x) { return { name: x[0], amount: '', group: x[1] }; }),
-      debts: [], savings: '', givingPct: 0, fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
+      debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
       efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, payAuto: false, basicsAuto: false,
@@ -282,7 +282,7 @@
   // a numeric copy of the saved data for the math, with a missed payday rolled forward
   function profile() {
     return {
-      paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: P.givingPct, savings: num(P.savings),
+      paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: giveAmt() ? 0 : P.givingPct, giveAmt: giveAmt() / F.FREQS[P.freq].perMonth, savings: num(P.savings),
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
       fun: funSet() ? num(P.fun) : Math.round(monthlyIncome() * 0.1 / 10) * 10, funEst: !funSet(),
       // one "bills and basics" number until the person lists bills one by one
@@ -350,6 +350,25 @@
     var sv = num(P.savings);
     if (!savingsSet()) return '';
     return sv >= 1000 ? 'Step 1 done. Your starter cushion is in place.' : money(1000 - sv) + ' to go to your $1,000 starter cushion.';
+  }
+  // giving: a share of pay, or a set dollar amount each month
+  function giveAmt() { return P.giveMode === 'amt' ? num(P.giveMonthly) : 0; }
+  function giveText() {
+    var inc = monthlyIncome(), ppm = F.FREQS[P.freq].perMonth;
+    if (P.giveMode === 'amt') { var a = num(P.giveMonthly); return a ? money(a) + ' a month \u00b7 ' + money(a / ppm) + ' each paycheck' + (inc ? ' \u00b7 about ' + Math.round(a / inc * 1000) / 10 + '% of your pay' : '') : 'Not giving for now'; }
+    var pc = +P.givingPct || 0; return pc ? money(inc * pc / 100) + ' a month \u00b7 ' + money(inc * pc / 100 / ppm) + ' each paycheck' : 'Not giving for now';
+  }
+  function giveBox() {
+    var amt = P.giveMode === 'amt', inc = monthlyIncome(), pc = +P.givingPct || 0, a = num(P.giveMonthly);
+    var amax = Math.max(100, Math.ceil(inc * 0.2 / 50) * 50, Math.ceil(a / 50) * 50), pmax = Math.max(20, Math.ceil(pc));
+    return '<div class="card stack" style="padding:18px;gap:14px"><div class="seg" role="group" aria-label="Give by" style="align-self:flex-start">' +
+      [['pct', '% of pay'], ['amt', '$ a month']].map(function (o) { var on = (amt ? 'amt' : 'pct') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="givemode" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      '<div style="font-family:var(--display);font-size:44px;font-weight:300;line-height:1" data-live="givebig">' + (amt ? money(a) : pc + '%') + '</div>' +
+      '<span style="font-size:14px;color:var(--muted)" data-live="givetext">' + giveText() + '</span>' +
+      (amt ? '<input type="range" min="0" max="' + amax + '" step="5" value="' + a + '" data-give="amt" aria-label="Dollars to give each month">' +
+          '<label class="field">Or type an amount per month<input type="number" inputmode="decimal" min="0" data-give="amtnum" value="' + esc(P.giveMonthly || '') + '" placeholder="0"></label>'
+        : '<input type="range" min="0" max="' + pmax + '" step="1" value="' + pc + '" data-give="pct" aria-label="Percent of pay to give">' +
+          '<label class="field">Or type a percent<input type="number" inputmode="decimal" min="0" max="100" step="0.5" data-give="pctnum" value="' + (pc || '') + '" placeholder="0"></label>') + '</div>';
   }
   // a row of answer buttons; picks are saved as P[key]
   function choice(key, opts, action) {
@@ -596,7 +615,7 @@
     var out = [], d = mo ? 1 : pl.ppm, K = mo ? pl.ppm : 1;
     var line = function (o) { o.amount = o.amount || 0; return o; };
     pl.rows.forEach(function (r) {
-      if (r.kind === 'give') return out.push(line({ cat: 'give', label: esc(r.label), amount: r.amount * K, strong: true, edit: 'give', raw: P.givingPct || 0, unit: '%' }));
+      if (r.kind === 'give') return out.push(line({ cat: 'give', label: esc(r.label), amount: r.amount * K, strong: true, edit: 'give', raw: giveAmt() ? round2(giveAmt() / d) : P.givingPct || 0, unit: giveAmt() ? '' : '%' }));
       if (r.kind === 'bill' && r.group) {
         var kids = [];
         P.bills.forEach(function (b, i) {
@@ -628,7 +647,7 @@
   // save one edited amount; v is what was typed, in the units on screen
   function budgetCommit(key, raw) {
     var pl = F.plan(profile()), d = U.planMonth ? 1 : pl.ppm, v = Math.max(0, num(raw)), m = String(round2(v * d)), parts = key.split(':'), i = +parts[1];
-    if (key === 'give') P.givingPct = Math.min(100, Math.round(v));
+    if (key === 'give') { if (giveAmt()) P.giveMonthly = m; else P.givingPct = Math.min(100, Math.round(v * 10) / 10); }
     else if (key === 'basics') P.basics = m;
     else if (parts[0] === 'bill') P.bills[i].amount = P.bills[i].per === 'yr' ? String(round2(v)) : m;
     else if (parts[0] === 'dmin') P.debts[i].min = m;
@@ -793,7 +812,7 @@
       retireOn() ? (function () { var acc = P.retirements || [], bal = acc.reduce(function (t, a) { return t + num(a.bal); }, 0); return [(P.retire === 'full' ? '\u2713 ' : '') + (acc.length > 1 ? plural(acc.length, 'account') : acc[0] && num(acc[0].pct) ? num(acc[0].pct) + '%' : retireMonthly() ? money(retireMonthly()) + '/mo' : P.retire === 'full' ? '15% or more' : 'Started') + (bal ? ' \u00b7 ' + money(bal) : ''), P.retire === 'full']; })() : ['Not yet', false],
       P.kids === 'yes' ? (P.college === 'yes' || P.college === 'some' ? [(P.college === 'yes' ? '\u2713 ' : '') + (num(P.collegeBal) ? money(num(P.collegeBal)) + ' saved' : 'Started') + (num(P.collegeMonthly) ? ' \u00b7 ' + money(num(P.collegeMonthly)) + '/mo' : ''), P.college === 'yes'] : ['Not yet', false]) : ['Skip for now', false],
       P.home === 'free' ? ['\u2713 Paid off', true] : P.home === 'mortgage' ? [num(P.mortgage) ? money(num(P.mortgage)) + ' left' + (payoffMonths() && payoffMonths() !== Infinity ? ' \u00b7 ' + F.addDays(today(), Math.round(payoffMonths() * 30.44)).getFullYear() : '') : 'Mortgage', false] : P.home === 'rent' ? ['Renting', false] : ['Later', false],
-      P.givingPct ? ['Giving ' + P.givingPct + '%', true] : ['Someday', false]
+      giveAmt() ? ['Giving ' + money(giveAmt()) + ' a month', true] : P.givingPct ? ['Giving ' + P.givingPct + '%', true] : ['Someday', false]
     ];
   }
   // goals, with the tradeoff slider; lives on the Plans & Goals tab
@@ -1174,8 +1193,7 @@
     },
     give: function () {
       return wizardHead('give', 'Would you like to give?', 'Church, a cause you love, a neighbor in need. Giving comes off the top of every paycheck, even while you pay off debt. Step 7 is where it grows: build wealth and give more than you ever thought you could.') +
-        choice('givingPct', [[0, 'Not now'], [2, '2%'], [5, '5%'], [10, '10%']], 'giving') +
-        '<p style="font-size:13px">You can change it anytime.</p>' + wizNext('give');
+        giveBox() + '<p style="font-size:13px">Slide to zero for not now. You can change it anytime.</p>' + wizNext('give');
     },
     fun: function () {
       var parts = P.funParts || [], used = {}, sp = P.tx.length && !spending().unsorted.length ? spending() : null;
@@ -1986,6 +2004,13 @@
       case 'claimgo': track('claim'); go('path'); break;
       case 'claimshare': (function () { var q = quickMath(); openShare({ eyebrow: 'Found money', title: 'I found ' + money(q.total * 12) + ' a year', sub: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', subNoAmt: 'Debt payments I\u2019ll keep once I\u2019m debt-free, plus money that never had a job.', chips: [money(q.total) + ' a month'], chipsNoAmt: ['Reclaiming it'], caption: 'Three numbers, 30 seconds: I found ' + money(q.total * 12) + ' a year.' }); })(); break;
       case 'giving': P.givingPct = +v; save(); render(); break;
+      case 'givemode': (function () {
+        var inc = monthlyIncome();
+        // switching keeps about the same amount
+        if (v === 'amt' && P.giveMode !== 'amt') P.giveMonthly = P.givingPct && inc ? String(Math.round(inc * P.givingPct / 100)) : P.giveMonthly;
+        if (v === 'pct' && P.giveMode === 'amt') P.givingPct = num(P.giveMonthly) && inc ? Math.round(num(P.giveMonthly) / inc * 100) : P.givingPct;
+        P.giveMode = v; save(); render();
+      })(); break;
       case 'answer': P[b.getAttribute('data-k')] = v;
         if (b.getAttribute('data-k') === 'retire' && (v === 'some' || v === 'full') && !(P.retirements || []).length) P.retirements = [{ id: uid(), owner: 0, type: '401(k)', pct: '', monthly: '', bal: '', from: 'pre' }];
         save(); render(); break;
@@ -2367,6 +2392,16 @@
       return;
     }
     if (t.hasAttribute('data-g')) { U.form[t.getAttribute('data-g')] = t.value; var gp = app.querySelector('[data-live="gper"]'); if (gp) gp.textContent = goalDateNote(U.form); return; }
+    if (t.hasAttribute('data-give')) {
+      var gk = t.getAttribute('data-give'), gv = Math.max(0, num(t.value));
+      if (gk === 'pct' || gk === 'pctnum') P.givingPct = Math.min(100, Math.round(gv * 10) / 10); else P.giveMonthly = t.value === '' ? '' : String(Math.round(gv * 100) / 100);
+      var twin = app.querySelector('[data-give="' + { pct: 'pctnum', pctnum: 'pct', amt: 'amtnum', amtnum: 'amt' }[gk] + '"]');
+      if (twin) { if (twin.type === 'range' && gv > +twin.max) twin.max = Math.ceil(gv); twin.value = gk.indexOf('num') > 0 ? gv : (gv || ''); }
+      var gb = app.querySelector('[data-live=givebig]'), gt = app.querySelector('[data-live=givetext]');
+      if (gb) gb.textContent = P.giveMode === 'amt' ? money(num(P.giveMonthly)) : (+P.givingPct || 0) + '%';
+      if (gt) gt.textContent = giveText();
+      save(); return;
+    }
     if (t.hasAttribute('data-whatif')) {
       U.whatIf = +t.value; var w = whatIfText(U.whatIf);
       if (w) { var dEl = app.querySelector('[data-live="wiDate"]'), sEl = app.querySelector('[data-live="wiSub"]'); if (dEl) dEl.textContent = w.date; if (sEl) sEl.textContent = w.sub; }

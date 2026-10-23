@@ -198,8 +198,8 @@
   function plan(p) {
     var ppm = FREQS[p.freq].perMonth;
     var rows = [];
-    var giving = p.givingPct ? Math.round(p.paycheck * p.givingPct / 100) : 0;
-    if (giving) rows.push({ label: 'Giving (' + p.givingPct + '%)', amount: giving, kind: 'give' });
+    var giving = p.giveAmt > 0 ? p.giveAmt : p.givingPct ? Math.round(p.paycheck * p.givingPct / 100) : 0;
+    if (giving) rows.push({ label: p.giveAmt > 0 ? 'Giving' : 'Giving (' + p.givingPct + '%)', amount: giving, kind: 'give' });
     p.bills.forEach(function (b) { if (+b.amount > 0) rows.push({ label: b.name || 'Bill', amount: b.amount / ppm, kind: 'bill', group: b.id }); });
     (p.saveRows || []).forEach(function (r) { if (+r.amount > 0) rows.push({ label: r.label, amount: r.amount / ppm, kind: 'save', key: r.key }); });
     if (+p.fun > 0) rows.push({ label: 'Fun money (wants)' + (p.funEst ? ' \u00b7 estimate' : ''), amount: p.fun / ppm, kind: 'fun' });
