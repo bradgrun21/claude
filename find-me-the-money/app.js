@@ -7,6 +7,10 @@
   var CONFIG = {
     feedbackUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSegoJHMVLzFlS6-o_XvC1Y6K4Dr_8qPa_fpCAMoywp8EnggzQ/viewform', // beta feedback form; shows a Feedback tab on every screen
     storageKey: 'fmtm.v1',
+    // Optional accounts, so a plan follows someone to any phone. These two values are public by design;
+    // each person can only read their own row (row level security on the plans table).
+    supabaseUrl: 'https://ktgwaedkaxsrqencglnu.supabase.co',
+    supabaseKey: 'sb_publishable_SRQX7Tks3rdEkwYcaavYbw_cAl5ce6q',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
@@ -77,8 +81,117 @@
   function trashed() {
     try { var t = JSON.parse(localStorage.getItem(TRASH) || 'null'); if (!t || !t.plan || F.daysBetween(F.fromIso(t.at), today()) > 30) return null; return t; } catch (e) { return null; }
   }
-  function save() { try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); storageOk = true; } catch (e) { storageOk = false; } }
+  // savedAt only moves when something really changed, so a phone that just opened the app never looks newer than the cloud
+  var lastJ = null;
+  function save() {
+    try {
+      var j = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
+      if (j !== lastJ) { if (lastJ !== null) P.savedAt = Date.now(); lastJ = j; cloudQueue(); }
+      localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); storageOk = true;
+    } catch (e) { storageOk = false; }
+  }
   var P = load();
+  lastJ = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
+
+  // ---------- account and sync (Supabase, optional) ----------
+  // Signed out, nothing leaves the phone. Signed in, the plan is saved to the person's own row after each change.
+  var AUTH = 'fmtm.auth', C = { state: 'idle', ready: false, timer: null, busy: false };
+  var S = (function () { try { return JSON.parse(localStorage.getItem(AUTH) || 'null'); } catch (e) { return null; } })();
+  function cloudOn() { return !!(CONFIG.supabaseUrl && CONFIG.supabaseKey); }
+  function keepAuth() { try { if (S) localStorage.setItem(AUTH, JSON.stringify(S)); else localStorage.removeItem(AUTH); } catch (e) {} }
+  function setSession(r) {
+    S = Object.assign(S || {}, { at: r.access_token, rt: r.refresh_token, exp: Date.now() + (r.expires_in || 3600) * 1000 });
+    if (r.user) { S.uid = r.user.id; S.email = r.user.email; }
+    keepAuth();
+  }
+  function sb(path, o) {
+    o = o || {};
+    var h = Object.assign({ apikey: CONFIG.supabaseKey, 'Content-Type': 'application/json' }, o.headers || {});
+    if (o.auth && S) h.Authorization = 'Bearer ' + S.at;
+    return fetch(CONFIG.supabaseUrl + path, { method: o.method || 'GET', headers: h, body: o.body ? JSON.stringify(o.body) : undefined }).then(function (r) {
+      return r.text().then(function (t) { var d = null; try { d = t ? JSON.parse(t) : null; } catch (e) {} if (!r.ok) { var er = new Error((d && (d.msg || d.error_description || d.message)) || 'HTTP ' + r.status); er.status = r.status; throw er; } return d; });
+    });
+  }
+  function fresh() {
+    if (!S) return Promise.reject(new Error('signed out'));
+    if (S.exp - Date.now() > 60000) return Promise.resolve();
+    return sb('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: S.rt } }).then(setSession, function (er) {
+      if (er.status === 400 || er.status === 401) { S = null; keepAuth(); C.state = 'expired'; }
+      throw er;
+    });
+  }
+  function cloudPaint() { if ((U.screen === 'settings' || U.screen === 'account') && !(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName))) render(); }
+  function adopt(row) {
+    if (P.setupDone) keepCopy();
+    P = Object.assign(blank(), row.data); lastJ = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
+    try { localStorage.setItem(CONFIG.storageKey, JSON.stringify(P)); } catch (e) {}
+    S.synced = P.savedAt || 0; keepAuth();
+  }
+  // Compares this phone with the account copy. Whichever changed since the last sync wins; if both did,
+  // the newer one wins and the other is kept as the 30-day "bring back" copy.
+  function cloudPull(first) {
+    if (!S || !cloudOn()) return Promise.resolve();
+    return fresh().then(function () { return sb('/rest/v1/plans?select=data,updated_at&user_id=eq.' + S.uid, { auth: true }); }).then(function (rows) {
+      var row = rows && rows[0], remote = row && row.data;
+      C.ready = true;
+      if (!remote || !remote.setupDone) { if (P.setupDone) return cloudPush(); C.state = 'saved'; return; }
+      var rAt = remote.savedAt || 0, lAt = P.savedAt || 0;
+      if (S.synced == null && P.setupDone && JSON.stringify(Object.assign(blank(), remote, { savedAt: 0 })) !== lastJ) { C.ready = false; U.cloudPick = { at: rAt, row: row }; go('cloudpick'); return; }
+      if (S.synced == null || !P.setupDone || (rAt > (S.synced || 0) && (lAt <= (S.synced || 0) || rAt > lAt))) {
+        if (rAt !== lAt || !P.setupDone) { adopt(row); C.state = 'saved'; if (first || !P.setupDone) U.screen = 'home'; render(); return; }
+      }
+      if (lAt > rAt) return cloudPush();
+      S.synced = rAt; keepAuth(); C.state = 'saved';
+    }).catch(function () { C.state = S ? 'offline' : 'expired'; }).then(cloudPaint);
+  }
+  function cloudPush() {
+    if (!S || !C.ready || !P.setupDone) return Promise.resolve();
+    if (C.busy) { cloudQueue(); return Promise.resolve(); }
+    C.busy = true; C.state = 'saving';
+    var at = P.savedAt || Date.now();
+    return fresh().then(function () {
+      return sb('/rest/v1/plans?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.uid, data: P, updated_at: new Date().toISOString() } });
+    }).then(function () { if (S) { S.synced = at; keepAuth(); } C.state = 'saved'; }, function () { C.state = S ? 'offline' : 'expired'; })
+      .then(function () { C.busy = false; cloudPaint(); });
+  }
+  function cloudQueue() { if (!S || !C.ready) return; clearTimeout(C.timer); C.timer = setTimeout(cloudPush, 1500); }
+  function signedIn(r) {
+    setSession(r); delete S.synced; keepAuth(); U.cloudStep = null; U.err = ''; track('account-signin');
+    return cloudPull(true).then(function () { if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
+  }
+  // A sign-in link opened in this browser lands here with the session in the address
+  function cloudStart() {
+    if (!cloudOn()) return;
+    var h = location.hash || '';
+    if (/access_token=/.test(h)) {
+      var q = {}; h.slice(1).split('&').forEach(function (kv) { var x = kv.split('='); q[x[0]] = decodeURIComponent(x[1] || ''); });
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+      S = { at: q.access_token, rt: q.refresh_token, exp: Date.now() + (+q.expires_in || 3600) * 1000 };
+      sb('/auth/v1/user', { auth: true }).then(function (u) { signedIn({ access_token: S.at, refresh_token: S.rt, expires_in: +q.expires_in || 3600, user: u }); }, function () { S = null; keepAuth(); });
+      return;
+    }
+    if (/error_description=/.test(h)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} U.err = 'That sign-in link expired. Ask for a new code below.'; U.screen = 'account'; }
+    if (S) cloudPull(false);
+  }
+  function syncText() {
+    return { saving: 'Saving…', saved: '✓ Saved to your account', offline: 'Offline. It’ll save when you’re back online.', expired: 'Signed out. Sign in again to keep saving.' }[C.state] || 'Checking your account…';
+  }
+  function accountCard() {
+    if (!cloudOn()) return '';
+    if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc(S.email || 'Signed in') + '</b>' +
+      '<span style="font-size:14px;color:var(--muted)" data-live="sync">' + syncText() + '</span>' +
+      '<span style="font-size:14px;color:var(--muted)">Sign in with this email on any phone, in Safari or the Home Screen app, and your plan is there.</span>' +
+      (U.cdel ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This deletes the copy saved in your account and signs you out. Your plan stays on this phone.</span></div><div class="grid2"><button type="button" class="outline" data-a="cdelno">Keep it</button><button type="button" class="primary danger" data-a="cdelyes">Delete it</button></div>'
+        : '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn ghost" data-a="cout">Sign out</button><button type="button" class="sharebtn ghost" data-a="cdel" style="color:var(--warn)">Delete my account copy</button></div>') + '</div>';
+    var st = U.cloudStep;
+    return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Save to an account</div><b>Keep your plan on every phone</b>' +
+      '<span style="font-size:14px;color:var(--muted)">Free. Sign in with your email and your plan follows you to a new phone, Safari or the Home Screen app. No password.</span>' +
+      (st && st.sent ? '<span style="font-size:14px">We emailed a 6-digit code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email.</span>' +
+        '<label class="field">Code<input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="123456"></label>' +
+        '<button type="button" class="primary" data-a="cverify">Sign in</button><div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="linkbtn" data-a="csend">Send a new code</button><button type="button" class="linkbtn" data-a="creset">Use a different email</button></div>'
+        : '<label class="field">Email<input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label><button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
+      (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') + '</div>';
+  }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 
   // a numeric copy of the saved data for the math, with a missed payday rolled forward
@@ -802,14 +915,15 @@
 
   var V = {
     welcome: function () {
-      var promises = ['Your budget, built for you. You just say yes.', 'A 7-step plan, from $1,000 saved to debt-free to generous', 'Your numbers never leave your phone'];
+      var promises = ['Your budget, built for you. You just say yes.', 'A 7-step plan, from $1,000 saved to debt-free to generous', 'Private: your numbers stay on your phone unless you save them to your account'];
       return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
         '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn’t know you had.</h1>' +
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
         (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
-          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you.</span><button type="button" class="linkbtn" data-a="edit" data-v="install" style="align-self:flex-start">Show me how \u203a</button></div>' : '') +
+          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you' + (cloudOn() ? ', unless you save it to an account' : '') + '.</span><button type="button" class="linkbtn" data-a="edit" data-v="install" style="align-self:flex-start">Show me how \u203a</button></div>' : '') +
         (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
+        (cloudOn() && !S ? '<button type="button" class="choice" data-a="go" data-v="account" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Already have an account?</b><span class="d">Sign in and your plan comes right back.</span></div></button>' : '') +
         (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
         (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
         '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
@@ -1460,18 +1574,28 @@
     },
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
-      return back('home') + '<h2>Settings</h2>' +
+      return back('home') + '<h2>Settings</h2>' + accountCard() +
         '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['import', 'Import a bank file'], ['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
-        '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">Everything is saved only on this phone. Save a backup file now and then, in case you switch phones or clear your browser.</p>' +
+        '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
         '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
-        (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone. It can’t be undone unless you have a backup.</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
+        (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone' + (S ? ' and signs you out. The copy in your account stays, so you can sign in again to get it back.' : '. It can’t be undone unless you have a backup.') + '</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
         (CONFIG.feedbackUrl ? '<a class="outline" style="text-decoration:none;color:var(--ink)" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener">Send feedback</a>' : '') +
         '<a class="textbtn" style="text-align:center;text-decoration:none;display:block;padding-top:12px" href="privacy.html">Privacy</a>' +
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
+    },
+    account: function () {
+      return back(P.setupDone ? 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : 'Sign in') + '</h2>' + (S ? '' : '<p>Already saved a plan to your account? Sign in and it comes right back.</p>') + accountCard();
+    },
+    cloudpick: function () {
+      var pk = U.cloudPick; if (!pk) return V.home();
+      var when = function (t) { return t ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'earlier'; };
+      return '<h2>Which plan do you want?</h2><p>Your account already has a plan, and so does this phone. Pick the one to keep. The other is saved for 30 days, so you can bring it back from Settings.</p>' +
+        '<button type="button" class="choice best" data-a="cpick" data-v="cloud" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>The plan in my account</b><span class="d">Last changed ' + when(pk.at) + '</span></div></button>' +
+        '<button type="button" class="choice" data-a="cpick" data-v="local" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>The plan on this phone</b><span class="d">Last changed ' + when(P.savedAt) + '</span></div></button>';
     },
     restore: function () {
       var tr = trashed();
@@ -1934,6 +2058,38 @@
       case 'ics': download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break;
       case 'backup': download('find-me-the-money-backup-' + F.isoDay(today()) + '.json', 'application/json', JSON.stringify(P, null, 2)); break;
       case 'del': U.confirmDelete = true; render(); break;
+      case 'csend': (function () {
+        var el = app.querySelector('[data-cemail]'), em = String(el ? el.value : (U.cloudStep && U.cloudStep.email) || '').trim();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { U.err = 'That email doesn\u2019t look right.'; render(); return; }
+        U.cloudStep = { email: em, sent: false }; U.err = '';
+        var bt = app.querySelector('[data-a=csend]'); if (bt) { bt.disabled = true; bt.textContent = 'Sending\u2026'; }
+        sb('/auth/v1/otp?redirect_to=' + encodeURIComponent(location.origin + location.pathname), { method: 'POST', body: { email: em, create_user: true } })
+          .then(function () { U.cloudStep = { email: em, sent: true }; track('account-code'); }, function (er) { U.err = er.status === 429 ? 'Too many codes asked for. Wait a minute, then try again.' : 'We couldn\u2019t send the email. Check your connection and try again.'; })
+          .then(function () { render(); var c = app.querySelector('[data-ccode]'); if (c) c.focus(); });
+      })(); break;
+      case 'cverify': (function () {
+        var el = app.querySelector('[data-ccode]'), code = String(el && el.value || '').replace(/\s/g, '');
+        if (!/^\d{6,10}$/.test(code)) { U.err = 'Enter the code from the email.'; render(); return; }
+        var bt = app.querySelector('[data-a=cverify]'); if (bt) { bt.disabled = true; bt.textContent = 'Signing in\u2026'; }
+        sb('/auth/v1/verify', { method: 'POST', body: { type: 'email', email: U.cloudStep.email, token: code } })
+          .then(signedIn, function () { U.err = 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
+      })(); break;
+      case 'creset': U.cloudStep = null; U.err = ''; render(); break;
+      case 'cout': if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
+      case 'cdel': U.cdel = true; render(); break;
+      case 'cdelno': U.cdel = false; render(); break;
+      case 'cdelyes': (function () {
+        U.cdel = false;
+        fresh().then(function () { return sb('/rest/v1/plans?user_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
+          .then(function () { sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; track('account-delete'); U.toast = ['Your account copy is deleted.', 'Your plan stays on this phone.', true]; render(); },
+            function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
+      })(); break;
+      case 'cpick': (function () {
+        var pk = U.cloudPick; U.cloudPick = null; C.ready = true;
+        if (v === 'cloud') adopt(pk.row);
+        else { try { localStorage.setItem(TRASH, JSON.stringify({ at: F.isoDay(today()), plan: Object.assign(blank(), pk.row.data) })); } catch (err) {} S.synced = -1; keepAuth(); cloudPush(); }
+        U.toast = ['You\u2019re signed in.', 'Your plan now saves to your account.', true]; go(P.setupDone ? 'home' : 'welcome');
+      })(); break;
       case 'delno': U.confirmDelete = false; render(); break;
       case 'chstart':
         if (P.challenges.filter(function (c) { return !c.ended; }).length >= 3) break;
@@ -2032,7 +2188,7 @@
         var ok = function () { U.copied = true; render(); };
         try { navigator.clipboard.writeText(txt).then(ok, function () { selectCaption(); }); } catch (err) { selectCaption(); }
         break;
-      case 'delyes': keepCopy(); try { localStorage.removeItem(CONFIG.storageKey); } catch (err) {} P = blank(); U.confirmDelete = false; U.toast = null; go('welcome'); break;
+      case 'delyes': if (S) { S = null; keepAuth(); C.ready = false; } keepCopy(); try { localStorage.removeItem(CONFIG.storageKey); } catch (err) {} P = blank(); U.confirmDelete = false; U.toast = null; go('welcome'); break;
     }
   });
 
@@ -2190,7 +2346,8 @@
   app.addEventListener('pointercancel', endDrag);
 
   // a fresh day can make a payday due; re-render when the app comes back to the front
-  document.addEventListener('visibilitychange', function () { if (!document.hidden && U.screen === 'home') render(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { if (C.timer) { clearTimeout(C.timer); cloudPush(); } return; } if (S && !C.busy) cloudPull(false); if (U.screen === 'home') render(); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
+  cloudStart();
   render();
 })();
