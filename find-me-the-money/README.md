@@ -112,7 +112,7 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 *An educational budgeting tool, not financial, tax or investment advice.*
 
 ## Still to set up
-- [ ] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
-- [ ] Supabase SMTP: sender name "Find Me the Money"
+- [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
+- [x] Supabase SMTP: sender name "Find Me the Money"
 - [ ] Later: own domain + Resend for sign-in emails (keeps them out of junk)
 - [ ] OneSignal App ID for payday and money date reminders
