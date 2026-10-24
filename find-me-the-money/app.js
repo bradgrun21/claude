@@ -215,7 +215,9 @@
   function signedIn(r) {
     setSession(r); delete S.synced; keepAuth(); setBase(null); U.cloudStep = null; U.err = ''; track('account-signin');
     if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
-    return cloudPull(true).then(function () { if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
+    return cloudPull(true).then(function () {
+      if (U.afterSave && U.screen !== 'cloudpick' && !standalone()) { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; }
+      if (U.afterSave && U.screen !== 'cloudpick') { U.afterSave = false; U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('home'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
   }
   // A sign-in link opened in this browser lands here with the session in the address
   function cloudStart() {
@@ -279,14 +281,18 @@
   }
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
 
+  // expenses from the 30-second screen include fun money, so no separate guess is added;
+  // once fun money is set, it comes out of that one number instead of being counted twice
+  function quickAll() { return !!(P.basicsAuto && P.quick && !itemized()); }
+  function basicsNet() { return quickAll() && funSet() ? Math.max(0, num(P.basics) - num(P.fun)) : num(P.basics); }
   // a numeric copy of the saved data for the math, with a missed payday rolled forward
   function profile() {
     return {
       paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: giveAmt() ? 0 : P.givingPct, giveAmt: giveAmt() / F.FREQS[P.freq].perMonth, savings: num(P.savings),
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
-      fun: funSet() ? num(P.fun) : Math.round(monthlyIncome() * 0.1 / 10) * 10, funEst: !funSet(),
+      fun: funSet() ? num(P.fun) : quickAll() ? 0 : Math.round(monthlyIncome() * 0.1 / 10) * 10, funEst: !funSet(),
       // one "bills and basics" number until the person lists bills one by one
-      bills: itemized() ? F.billGroups(P.bills) : [{ name: 'Bills and basics', amount: num(P.basics) }],
+      bills: itemized() ? F.billGroups(P.bills) : [{ name: 'Bills and basics', amount: basicsNet() }],
       // interest is optional; a blank rate is estimated at 20%
       debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       efMonths: efMonths(), saveRows: saveRows(),
@@ -523,9 +529,9 @@
     var top = P.setupDone ? '<div>' + back(U.wizReturn || 'settings') + '</div>'
       : '<div style="display:flex;align-items:center;gap:12px">' + back(n === 1 ? 'path' : WIZ[n - 2]) +
         '<div class="bar"><i style="width:' + (n / WIZ.length * 100) + '%"></i></div><span style="font-size:13px;font-weight:600;color:var(--faint)">' + n + ' of ' + WIZ.length + '</span></div>';
-    var path = st && !P.setupDone ? journey(st, { focus: true, key: 'wiz-' + name, from: U.lastFocus == null ? 1 : U.lastFocus, small: true }) : '';
-    if (st && !P.setupDone) U.lastFocus = st;
-    var eyebrow = st ? '<div class="eyebrow">Step ' + st + ' \u00b7 ' + F.STEPS[st - 1][0] + (name === 'pay' || name === 'basics' || name === 'bills' ? ' \u00b7 your numbers' : '') + '</div>' : '';
+    var path = '';
+    var mine = name === 'pay' || name === 'basics' || name === 'bills';
+    var eyebrow = st ? '<div class="eyebrow">' + (mine ? 'Your numbers' : 'Step ' + st + ' \u00b7 ' + F.STEPS[st - 1][0]) + '</div>' : '';
     return top + path +
       '<div class="stack" style="gap:8px;margin-top:4px">' + eyebrow + '<h2>' + title + '</h2><p>' + sub + '</p></div>';
   }
@@ -625,7 +631,7 @@
         });
         return out.push(line({ cat: r.group === 'subs' ? 'want' : 'need', label: esc(r.label), amount: r.amount * K, open: 'g:' + r.group, kids: kids, skeys: kids.map(function (k) { return k.skey; }), mon: r.amount * pl.ppm }));
       }
-      if (r.kind === 'bill') return out.push(line({ skey: 'basics', mon: num(P.basics), cat: 'need', label: esc(r.label), sub: 'One number for now. Add needs below to list them one by one.', amount: r.amount * K, edit: 'basics', raw: round2(num(P.basics) / d) }));
+      if (r.kind === 'bill') return out.push(line({ skey: 'basics', mon: num(P.basics), cat: 'need', label: esc(r.label), sub: 'One number for now. Add needs below to list them one by one.', amount: r.amount * K, edit: 'basics', raw: round2(basicsNet() / d) }));
       if (r.kind === 'min') {
         var dk = [];
         P.debts.forEach(function (x, i) { if (num(x.bal) > 0) dk.push(line({ label: esc(x.name || 'Debt'), sub: money(num(x.bal)) + ' left', amount: num(x.min) / d, edit: 'dmin:' + i, raw: round2(num(x.min) / d) })); });
@@ -648,7 +654,7 @@
   function budgetCommit(key, raw) {
     var pl = F.plan(profile()), d = U.planMonth ? 1 : pl.ppm, v = Math.max(0, num(raw)), m = String(round2(v * d)), parts = key.split(':'), i = +parts[1];
     if (key === 'give') { if (giveAmt()) P.giveMonthly = m; else P.givingPct = Math.min(100, Math.round(v * 10) / 10); }
-    else if (key === 'basics') P.basics = m;
+    else if (key === 'basics') { P.basics = m; P.basicsAuto = false; }
     else if (parts[0] === 'bill') P.bills[i].amount = P.bills[i].per === 'yr' ? String(round2(v)) : m;
     else if (parts[0] === 'dmin') P.debts[i].min = m;
     else if (key === 'fun') P.fun = m;
@@ -1024,8 +1030,6 @@
         '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn’t know you had.</h1>' +
         '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
         '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
-        (isIOS() && !standalone() ? '<div class="card stack homefirst" style="padding:14px 18px;gap:8px"><b>On iPhone? Add it to your Home Screen first.</b>' +
-          '<span style="font-size:14px;color:var(--muted)">Tap ' + ICON.share + ' <b>Share</b> \u2192 <b>Add to Home Screen</b>, then open it from there. The Home Screen app keeps its own copy, so a plan built here in Safari won\u2019t follow you' + (cloudOn() ? ', unless you save it to an account' : '') + '.</span><button type="button" class="linkbtn" data-a="edit" data-v="install" style="align-self:flex-start">Show me how \u203a</button></div>' : '') +
         (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
         (cloudOn() && !S ? '<button type="button" class="choice" data-a="cjoinstart" style="text-align:left"><div class="ic">' + ICON.people + '</div><div><b>Joining your spouse\u2019s budget?</b><span class="d">Sign in and enter the invite code they sent you.</span></div></button>' : '') +
         (cloudOn() && !S ? '<button type="button" class="choice" data-a="go" data-v="account" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Already have an account?</b><span class="d">Sign in and your plan comes right back.</span></div></button>' : '') +
@@ -1039,7 +1043,7 @@
     path: function () {
       var anim = !(U.anim = U.anim || {}).path; U.anim.path = true;
       return back(P.quick ? 'claim' : 'welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">The path</div><h2>7 steps from stressed to free</h2>' +
-        '<p>Everyone walks the same path, one step at a time. Three quick questions and we’ll show you where you are.</p></div>' +
+        '<p>Everyone walks the same path, one step at a time. A few quick questions and we’ll show you where you are.</p></div>' +
         '<div class="card path' + (anim ? ' anim' : '') + '">' + F.STEPS.map(function (st, i) {
           return '<div class="pstep" style="--d:' + (0.25 + i * 0.42).toFixed(2) + 's"><div class="pdot"><b>' + (i + 1) + '</b></div><div><div class="t">' + st[0] + '</div><small>' + STEP_WHY[i] + '</small></div></div>';
         }).join('') + '</div>' +
@@ -1053,7 +1057,7 @@
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
         (P.incomes && P.incomes.length ? incomeCards(true) : '<button type="button" class="linkbtn" data-a="incadd" style="align-self:flex-start;font-size:14px">+ Add a second paycheck (spouse or second job)</button>') +
         '<small class="qhint" data-live="qmonth">' + quickMonthNote() + '</small>' +
-        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Rent, utilities, phone, groceries, gas, insurance, subscriptions. Leave out debt payments.</small>' +
+        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Everything you spend in a month: rent, bills, groceries, gas, eating out, shopping. Leave out debt payments.</small>' +
         '<div class="grid2">' + field('Total debt', 'qDebt', { ph: '0', min: 0 }) + field('Debt payments / mo', 'qMin', { ph: '0', min: 0 }) + '</div>' +
         '<small class="qhint">Credit cards, car, student loans, buy-now-pay-later. Not your home.</small></div>' +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') +
@@ -1214,12 +1218,14 @@
     reveal: function () {
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, rows = [];
       var head, sub;
-      if (o.target) {
+      var short = pl.extra <= 0 && o.step <= 3 ? Math.ceil(-pl.extra) : -1;
+      if (short >= 0) { head = short > 0 ? 'Let\u2019s find ' + money(short) : 'Let\u2019s find a little extra'; sub = short > 0 ? 'Your plan is ' + money(short) + ' short each paycheck. Find it and your countdown starts. We\u2019ll show you where to look.' : 'Every dollar has a job, with nothing left for your step yet. A little extra starts your countdown.'; }
+      else if (o.target) {
         var gap = o.debtFree && o.debtFreeMins ? F.daysBetween(o.debtFree, o.debtFreeMins) : 0;
         head = o.debtFree ? 'Debt-free by ' + shortDate(o.debtFree) : 'Let\u2019s find more room';
-        sub = o.debtFree ? (o.debtFreeMins ? (gap > 0 ? span(gap) + ' sooner than paying minimums.' : 'Right on schedule.') : 'Minimum payments alone would never get you there.') : 'Right now your paycheck doesn\u2019t cover everything. We\u2019ll find the money together.';
-        if (o.step === 1 && o.cushion) rows.push(['First: your $1,000 cushion', shortDate(o.cushion)]);
-        if (o.targetDone) rows.push(['Then ' + esc(o.target.name) + ' is gone', longDate(o.targetDone)]);
+        sub = o.debtFree ? (o.debtFreeMins ? (gap > 0 ? span(gap) + ' sooner than paying minimums.' : 'Every dollar has a job.') : 'Minimum payments alone would never get you there.') : 'Right now your paycheck doesn\u2019t cover everything. We\u2019ll find the money together.';
+        if (o.step === 1 && o.cushion && short < 0) rows.push(['First: your $1,000 cushion', shortDate(o.cushion)]);
+        if (o.targetDone) rows.push([o.state.debts.length > 1 ? 'Then ' + esc(o.target.name) + ' is paid off' : 'Then you\u2019re debt-free', longDate(o.targetDone)]);
       } else {
         head = 'No debt to pay off'; sub = 'Nice. Your plan starts with savings.';
         if (o.cushion && o.step === 1) rows.push(['Your $1,000 cushion', shortDate(o.cushion)]);
@@ -1230,16 +1236,15 @@
         '<div class="card stack" style="padding:18px 18px 16px;gap:12px"><div class="eyebrow">Where you are on the path</div>' + journey(o.step, { key: 'reveal', from: 0, progress: stepProgress(o) }) +
         '<div><b>Step ' + Math.min(o.step, 7) + ': ' + F.STEPS[Math.min(o.step, 7) - 1][0] + '</b><small style="display:block;color:var(--muted);font-size:14px;margin-top:2px">' + STEP_WHY[Math.min(o.step, 7) - 1] + '</small></div>' +
         '<div class="glance">' + pathGlance(o, p).map(function (r, i) { return '<div class="row' + (i + 1 === o.step ? ' here' : '') + '"><span><span class="gn">' + (i + 1) + '</span>' + F.STEPS[i][0] + '</span><span class="gs' + (r[1] ? ' ok' : '') + '">' + r[0] + '</span></div>'; }).join('') + '</div></div>' +
-        (rows.length ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
-        whatIfHtml(o, false) +
-        '<div class="note">' + ICON.info + '<span>This is an estimate from your answers. It sharpens as you set your fun money and import a bank file; the 7-Day Money Reset walks you through it, a couple of minutes a day.</span></div>' +
-        (pl.tight ? '<p style="font-size:14px;color:var(--warn)">Your paycheck doesn\u2019t cover everything yet. That\u2019s exactly what we\u2019re here to fix.</p>' : '') +
+        (rows.length && short < 0 ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
+        '<div class="note">' + ICON.info + '<span>An estimate from your answers. It gets sharper as you go.</span></div>' +
         '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button><button type="button" class="textbtn" data-a="go" data-v="savings">Change my answers</button></div>';
     },
     install: function () {
       var ios = isIOS();
       return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><h2>Add it to your Home Screen</h2><p>' + (ios ? 'On iPhone, Safari can clear saved data from websites you haven\u2019t opened in about a week. Apps on your Home Screen are safe, and they open like a real app.' : 'It opens like a real app and is one tap away on payday.') + '</p></div>' +
-        (ios && !standalone() && P.setupDone ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
+        (ios && !standalone() && P.setupDone && cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>' + (S ? 'Your plan comes with you' : 'First: save your plan with your email') + '</b><span style="font-size:14px;color:var(--muted)">' + (S ? 'Open the Home Screen app and sign in with ' + esc(S.email || 'your email') + '. Your plan will be there.' : 'The Home Screen app starts empty. Save your plan first, then sign in there with the same email.') + '</span>' + (S ? '' : '<button type="button" class="outline" data-a="edit" data-v="account">Save my plan</button>') + '</div>' : '') +
+        (ios && !standalone() && P.setupDone && !cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
           '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
         guideBox(ios ? 'ios' : 'android') +
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
@@ -1407,13 +1412,19 @@
         var nxt = step === 2 ? o.state.debts.filter(function (d) { return d.bal > 0 && d.id !== o.target.id; }).sort(function (a, b) { return a.bal - b.bal; })[0] : null;
         var lead = step === 1 ? 'Then debt-free ' + shortDate(o.debtFree) + ', ' : (nxt ? 'Next up: ' + esc(nxt.name) + '. ' : 'Last one! ') + 'Debt-free ' + shortDate(o.debtFree) + ', ';
         var gap = F.daysBetween(o.debtFree, o.debtFreeMins);
-        vs = lead + (gap > 0 ? '<b style="color:var(--sun-soft)">' + span(gap) + ' sooner</b> than paying minimums' : 'right on schedule');
+        vs = gap > 0 ? lead + '<b style="color:var(--sun-soft)">' + span(gap) + ' sooner</b> than paying minimums' : lead.replace(/, $/, '.');
       } else if (o.debtFree && !o.debtFreeMins && step <= 2) vs = 'Debt-free ' + shortDate(o.debtFree) + '. Minimum payments alone would never get you there.';
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
       var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
         '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
         '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
+      var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
+      if (short >= 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
+        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + (short > 0 ? 'You\u2019re ' + money(short) + ' short each paycheck.' : 'Every dollar has a job. None is left for your step yet.') + '</div>' +
+        '<div style="font-size:15px;color:rgba(255,255,255,.88)">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</div>' +
+        '<div class="stack" style="gap:8px">' + [quickAll() && !funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['go', 'import', 'Find it in my bank file']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
+        homeRest(o, step, snow0(o, step));
       var hero = '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">' + h.label + '</div>' +
         (cd ? '<div class="cd" style="grid-template-columns:repeat(' + cd.length + ',minmax(0,1fr))">' + cd.map(function (x) { return '<div><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div><div style="font-size:15px">on ' + longDate(h.date) + '</div>'
           : step >= 4 ? '<div style="font-family:var(--display);font-size:36px;line-height:1.1;color:var(--sun-soft)">Debt-free with a full safety net.</div>'
@@ -1421,22 +1432,13 @@
         (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
         (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + paydayStrip + '</div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
-      var snow = o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
-        o.state.debts.slice().sort(function (a, b) { return a.bal - b.bal; }).sort(function (a, b) { return (a.bal <= 0) - (b.bal <= 0); }).map(function (d) {
-          var d0 = P.debts.filter(function (x) { return x.id === d.id; })[0], orig = Math.max(num(d0.orig), d.bal) || 1, paid = d.bal <= 0, isT = o.target && o.target.id === d.id && step === 2;
-          return '<div class="debt' + (paid ? ' paid' : '') + '"><div class="top"><span>' + esc(d.name) + (isT ? '<span class="target">Snowball target</span>' : '') + '</span><b>' + (paid ? 'Paid off' : money(d.bal)) + '</b></div>' +
-            '<div class="bar" style="flex:none"><i style="width:' + Math.max(paid ? 100 : 1, (orig - d.bal) / orig * 100) + '%"></i></div></div>';
-        }).join('') + '</div>' : '';
+      var snow = snow0(o, step);
       var sp = P.tx.length ? spending() : null;
       var nw = sp ? '<button type="button" class="card" data-a="' + (sp.unsorted.length ? 'sortstart' : 'go" data-v="spend') + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:10px">' +
           '<span style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-family:var(--display);font-weight:600;font-size:18px">' + (sp.unsorted.length ? 'Finish sorting your spending' : 'Needs vs wants') + '</span><span style="font-size:13px;color:var(--faint)">Open ›</span></span>' + splitHtml(sp.t) +
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
-        : '<button type="button" class="card" data-a="go" data-v="import" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:6px"><span style="font-family:var(--display);font-weight:600;font-size:18px">See where your money goes</span><span style="font-size:14px;color:var(--muted)">Import a bank CSV and sort it into needs and wants. Read on this phone, never uploaded.</span></button>';
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-        '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1) + hero + todayStep() + saveNudge() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + streakCard() + calendarCard() + checklist() + snow + nw +
-        '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
-        '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + journey(step, { small: true, progress: stepProgress(o) }) + (U.showLadder ? ladderHtml(step) : '') + '</div>' +
-        '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+        : '';
+      return homeTop(toast) + hero + homeRest(o, step, snow, nw);
     },
 
     checkin: function () {
@@ -1519,12 +1521,14 @@
           '<span style="font-size:14px;color:var(--muted)">' + d.blurb + '</span>' +
           '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
       };
+      var few = function (l, k) { return (U.chAll || {})[k] ? l : l.slice(0, 3); };
+      var seeAll = function (l, k) { return !(U.chAll || {})[k] && l.length > 3 ? '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="chall" data-v="' + k + '">See all ' + l.length + '</button>' : ''; };
       var earnPick = pick.filter(function (d) { return d.tag === 'Earn'; }), restPick = pick.filter(function (d) { return d.tag !== 'Earn'; });
       return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
         (active.length ? active.map(card).join('') : '<div class="note">' + ICON.info + '<span>No challenge running. Start one below; the 7-day ones are a great first win.</span></div>') +
         (active.length >= 3 ? '<p style="margin-top:10px">You\u2019re running 3. Finish or stop one to start another.</p>' : '') +
-        (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t. Track every dollar and put it to work.</p>' + earnPick.map(startCard).join('') : '') +
-        (restPick.length ? '<h3 style="margin-top:10px">Spend less, save more</h3>' + restPick.map(startCard).join('') : '') +
+        (restPick.length ? '<h3 style="margin-top:10px">Spend less, save more</h3>' + few(restPick, 'rest').map(startCard).join('') + seeAll(restPick, 'rest') : '') +
+        (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t.</p>' + few(earnPick, 'earn').map(startCard).join('') + seeAll(earnPick, 'earn') : '') +
         (done.length ? '<h3 style="margin-top:10px">Finished</h3><div class="card">' + done.map(function (c) {
           var d = F.challengeDef(c.id), ok = c.ended === 'done';
           return '<div class="row"><div style="min-width:0">' + d.title + '<small>' + (ok ? 'Completed ' : c.ended === 'quit' ? 'Stopped ' : 'Ended ') + dayMonth(F.fromIso(c.endedOn)) + (c.note ? ' \u00b7 ' + esc(c.note) : '') + '</small></div>' +
@@ -1563,7 +1567,7 @@
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
         (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + moneyDateCard() + goalsCard() +
+        celebration(2, ['plan', 'unlock']) + goalsCard() + moneyDateCard() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
@@ -1691,10 +1695,18 @@
         '<a class="textbtn" style="text-align:center;text-decoration:none;display:block;padding-top:12px" href="privacy.html">Privacy</a>' +
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
     },
+    saveinstall: function () {
+      var ios = isIOS();
+      return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
+        '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">' + (S ? '\u2713 Saved \u00b7 one more thing' : 'One more thing') + '</div><h2>Put it on your Home Screen</h2>' +
+        '<p>It opens like an app, one tap away on payday.' + (S ? ' When you open it from there, sign in with the same email and your plan will be waiting.' : '') + '</p></div>' +
+        guideBox(ios ? 'ios' : 'android') +
+        '<div class="push"><button type="button" class="primary" data-a="installok">Done, go to my plan</button><button type="button" class="textbtn" data-a="installlater">I\u2019ll do it later</button></div>';
+    },
     savesetup: function () {
       return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
         '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">Last step</div><h2>Save your progress</h2>' +
-        '<p>Your plan is built. Save it to your account so it\u2019s safe if you lose your phone, get a new one, or add the app to your Home Screen. Free, and no password.</p></div>' +
+        '<p>Your plan is built. Save it with your email so it\u2019s safe if you lose your phone or get a new one. Free, and no password.' + (!standalone() ? ' Next, we\u2019ll show you how to put it on your Home Screen.' : '') + '</p></div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px">' + signInForm() + '</div>' +
         '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>';
     },
@@ -1924,11 +1936,29 @@
       '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Today \u00b7 Day ' + (st.next + 1) + ' of 7</span>' +
       '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + st.def.days[st.next].title + '</span><span style="font-size:13px;color:var(--muted)">2 minutes \u00b7 one small step</span></span><span aria-hidden="true">\u203a</span></button>';
   }
+  function homeTop(toast) {
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
+      '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1);
+  }
+  function homeRest(o, step, snow, nw) {
+    return todayStep() + saveNudge() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + checklist() + streakCard() + calendarCard() + (snow || '') + (nw || '') +
+      '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
+      '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? journey(step, { small: true, progress: stepProgress(o) }) + ladderHtml(step) : '') + '</div>' +
+      '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+  }
+  function snow0(o, step) {
+    return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
+        o.state.debts.slice().sort(function (a, b) { return a.bal - b.bal; }).sort(function (a, b) { return (a.bal <= 0) - (b.bal <= 0); }).map(function (d) {
+          var d0 = P.debts.filter(function (x) { return x.id === d.id; })[0], orig = Math.max(num(d0.orig), d.bal) || 1, paid = d.bal <= 0, isT = o.target && o.target.id === d.id && step === 2;
+          return '<div class="debt' + (paid ? ' paid' : '') + '"><div class="top"><span>' + esc(d.name) + (isT ? '<span class="target">Snowball target</span>' : '') + '</span><b>' + (paid ? 'Paid off' : money(d.bal)) + '</b></div>' +
+            '<div class="bar" style="flex:none"><i style="width:' + Math.max(paid ? 100 : 1, (orig - d.bal) / orig * 100) + '%"></i></div></div>';
+        }).join('') + '</div>' : '';
+  }
   // what's still an estimate, one tap each
   function checklist() {
     var items = [
       ['savings', 'Add your emergency savings', 'Sharpens your $1,000 cushion date', savingsSet()],
-      ['fun', 'Set your fun money', 'Right now we\u2019re guessing 10% of your pay', funSet()],
+      ['fun', 'Set your fun money', quickAll() ? 'Give eating out and shopping a limit' : 'Right now we\u2019re guessing 10% of your pay', funSet()],
       ['import', 'See where your money goes', 'Import a bank file and sort it', P.tx.length > 0],
       ['bills', 'List your bills one by one', 'Optional: more exact than one number', itemized()]
     ];
@@ -1937,11 +1967,13 @@
     if (CONFIG.communityUrl) items.push(['community', 'Join the FREE community', 'Share wins and get your questions answered', !!P.communityJoined]);
     var done = items.filter(function (x) { return x[3]; }).length;
     if (done === items.length) return '';
-    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Finish setting up</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + items.length + '</span></div>' +
+    var left = items.filter(function (x) { return !x[3]; }), total = items.length;
+    if (!U.allSteps) items = left.slice(0, 2);
+    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Finish setting up</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + total + '</span></div>' +
       items.map(function (x) {
         return x[3] ? '<div class="planrow locked"><span class="dot on" aria-hidden="true">' + ICON.check('#fff', 12) + '</span><span style="flex:1"><s style="color:var(--faint)">' + x[1] + '</s></span></div>'
           : '<button type="button" class="planrow" data-a="edit" data-v="' + x[0] + '"><span class="dot today" aria-hidden="true"></span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">' + x[1] + '</span><small style="color:var(--faint)">' + x[2] + '</small></span><span aria-hidden="true">\u203a</span></button>';
-      }).join('') + '</div>';
+      }).join('') + (!U.allSteps && left.length > 2 ? '<button type="button" class="textbtn" data-a="allsteps" style="min-height:36px;padding:6px 0 0">Show all ' + left.length + ' left</button>' : '') + '</div>';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
   function streakCard() {
@@ -2145,9 +2177,11 @@
         if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
         snapshot(); save(); track('setup-done');
         U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true];
-        if (cloudOn() && !S) { U.cloudStep = null; U.err = ''; go('savesetup'); } else go('home');
+        if (cloudOn() && !S) { U.cloudStep = null; U.err = ''; U.afterSave = true; go('savesetup'); } else if (S && !standalone()) { U.afterSave = true; go('saveinstall'); } else go('home');
         break;
-      case 'saveskip': track('save-skip'); go('home'); break;
+      case 'saveskip': track('save-skip'); U.afterSave = false; go('home'); break;
+      case 'installlater': U.afterSave = false; go('home'); break;
+      case 'installok': P.installSeen = true; save(); U.afterSave = false; track('install-seen'); go('home'); break;
       case 'savenudgeoff': P.saveNudgeOff = true; save(); render(); break;
       case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
       case 'basicpick': P.basicsAuto = false; P.basics = v; save(); render(); break;
@@ -2183,6 +2217,8 @@
       case 'ics': download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break;
       case 'backup': download('find-me-the-money-backup-' + F.isoDay(today()) + '.json', 'application/json', JSON.stringify(P, null, 2)); break;
       case 'del': U.confirmDelete = true; render(); break;
+      case 'allsteps': U.allSteps = true; render(); break;
+      case 'chall': U.chAll = U.chAll || {}; U.chAll[v] = true; render(); break;
       case 'csend': (function () {
         var el = app.querySelector('[data-cemail]'), em = String(el ? el.value : (U.cloudStep && U.cloudStep.email) || '').trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { U.err = 'That email doesn\u2019t look right.'; render(); return; }
