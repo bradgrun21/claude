@@ -558,3 +558,9 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 
 /* shared budget invite code */
 .invitecode { font-size: 30px; font-weight: 700; letter-spacing: 6px; text-align: center; padding: 12px; border-radius: 16px; background: rgba(42,107,102,.08); color: #2A6B66; font-variant-numeric: tabular-nums; }
+
+/* bubble tabs that scroll sideways */
+.tabchips { display: flex; gap: 8px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; margin: 4px -16px 2px; padding: 2px 16px 6px; -webkit-overflow-scrolling: touch; }
+.tabchips::-webkit-scrollbar { display: none; }
+.tabchips .chip { flex: none; white-space: nowrap; }
+.tabchips .chip.on { background: #2A6B66; color: #fff; border-color: #2A6B66; }

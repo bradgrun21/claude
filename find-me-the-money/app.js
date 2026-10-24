@@ -14,6 +14,7 @@
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
+    coachingUrl: '', // where "Learn about coaching" goes (paid level or booking page); empty uses the community link
     // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
     // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
     partners: {
@@ -54,7 +55,7 @@
   function blank() {
     return { v: 1, setupDone: false, paycheck: '', freq: 'biweekly', nextPay: F.isoDay(F.addDays(today(), 7)),
       bills: [['Rent', 'home'], ['Electricity', 'utilities'], ['Internet', 'utilities'], ['Phone', 'utilities'], ['Groceries', 'food'], ['Gas', 'transport'], ['Car insurance', 'transport']].map(function (x) { return { name: x[0], amount: '', group: x[1] }; }),
-      debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
+      debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', payVaries: false, payHist: [], payBasis: 'low', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
       efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, payAuto: false, basicsAuto: false,
@@ -290,7 +291,7 @@
     return {
       paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: giveAmt() ? 0 : P.givingPct, giveAmt: giveAmt() / F.FREQS[P.freq].perMonth, savings: num(P.savings),
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
-      fun: funSet() ? num(P.fun) : quickAll() ? 0 : Math.round(monthlyIncome() * 0.1 / 10) * 10, funEst: !funSet(),
+      fun: funSet() ? num(P.fun) : 0, funEst: false,
       // one "bills and basics" number until the person lists bills one by one
       bills: itemized() ? F.billGroups(P.bills) : [{ name: 'Bills and basics', amount: basicsNet() }],
       // interest is optional; a blank rate is estimated at 20%
@@ -981,6 +982,28 @@
     var q = P.quick || {}, pay = num(q.pay), exp = num(q.exp), debt = num(q.debt), min = num(q.min), noJob = Math.round(pay - exp - min);
     return { pay: pay, exp: exp, debt: debt, min: Math.round(min), noJob: noJob, total: Math.max(0, Math.round(min + Math.max(0, noJob))) };
   }
+  // Pay that changes: plan on a safe number from recent paychecks; every check-in adds the real amount
+  function payStats() {
+    var v = (P.payHist || []).map(function (x) { return num(x.amount); }).filter(function (n) { return n > 0; });
+    if (v.length < 2) return null;
+    return { n: v.length, low: Math.min.apply(null, v), avg: v.reduce(function (a, b) { return a + b; }, 0) / v.length, high: Math.max.apply(null, v) };
+  }
+  function payFromHist() { var st = payStats(); if (st && P.payVaries) P.paycheck = String(Math.round(P.payBasis === 'avg' ? st.avg : st.low)); }
+  function payVaryBox() {
+    var st = payStats(), hist = P.payHist || [];
+    return '<div class="field">Does your pay change from check to check?<div class="seg" role="group" aria-label="Does your pay change" style="align-self:flex-start">' +
+      [[false, 'About the same'], [true, 'It changes']].map(function (o) { var on = !!P.payVaries === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="payvary" data-v="' + (o[0] ? '1' : '') + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
+      (!P.payVaries ? '' : '<div class="stack" style="gap:10px"><small style="color:var(--muted);font-size:14px">Tips, commission, gig work or changing hours? Add your last few paychecks. We’ll plan on a safe number, and every payday check-in adds the real one.</small>' +
+        hist.map(function (x, i) { return '<div class="rowedit" style="grid-template-columns:minmax(0,1fr) auto"><input type="number" inputmode="decimal" aria-label="Paycheck ' + (i + 1) + '" data-f="x" data-list="payHist" data-i="' + i + '" data-k="amount" value="' + esc(x.amount) + '" placeholder="$ take-home"><button type="button" class="x" data-a="rm" data-v="payHist" data-i="' + i + '" aria-label="Remove paycheck ' + (i + 1) + '">×</button></div>'; }).join('') +
+        (hist.length < 8 ? '<button type="button" class="chip" data-a="payhistadd" style="align-self:flex-start">+ Add a paycheck</button>' : '') +
+        '<div data-live="paystats">' + payStatsHtml(st) + '</div></div>');
+  }
+  function payStatsHtml(st) {
+    if (!st) return '<small style="color:var(--faint)">Add at least 2 to see your safe number. Until then, use a lower-than-usual paycheck above.</small>';
+    return '<div class="field">Plan on<div class="seg" role="group" aria-label="Plan on" style="align-self:flex-start">' + [['low', 'My lowest: ' + money(st.low)], ['avg', 'My average: ' + money(st.avg)]].map(function (o) {
+      var on = (P.payBasis || 'low') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="paybasis" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
+      '<small style="color:var(--muted);font-size:14px">' + ((P.payBasis || 'low') === 'low' ? 'Safest: your plan works even on a slow payday. Bigger checks go to your step at check-in.' : 'Your plan follows a typical payday. On slower ones, lean on your cushion or fun money.') + '</small>';
+  }
   // Paycheck 2, 3...: name, amount, how often, next payday. compact = the 30-second screen
   function incomeCards(compact) {
     return (P.incomes || []).map(function (x, i) {
@@ -1080,10 +1103,10 @@
     },
     pay: function () {
       var two = P.household === 'shared' || (P.incomes || []).length > 0;
-      return wizardHead('pay', two ? 'Your paychecks' : 'Your paycheck', 'What actually lands in your account, after taxes. If it changes, use a typical one.' + (P.quick && num(P.quick.pay) ? ' Already filled in from your quick numbers. Just add your next payday.' : '')) +
+      return wizardHead('pay', two ? 'Your paychecks' : 'Your paycheck', 'What actually lands in your account, after taxes. If it changes from check to check, tell us below.' + (P.quick && num(P.quick.pay) ? ' Already filled in from your quick numbers. Just add your next payday.' : '')) +
         '<div class="field">Whose paychecks are in this plan?' + choice('household', [['single', 'Just mine'], ['shared', 'Mine and my spouse\u2019s']], 'household') + '</div>' +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + (two ? '<div class="paylabel"><b>Paycheck 1</b><input type="text" data-f="payLabel" value="' + esc(P.payLabel || '') + '" placeholder="You" aria-label="Whose paycheck" maxlength="20"></div>' : '') +
-        field('Take-home pay per paycheck', 'paycheck', { ph: '1600', min: 0 }) +
+        field('Take-home pay per paycheck', 'paycheck', { ph: '1600', min: 0 }) + payVaryBox() +
         '<div class="field">How often' + (two ? '?' : ' are you paid?') + '<div class="seg wrap" role="group" aria-label="How often">' + Object.keys(F.FREQS).map(function (k) {
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
         field('Next payday', 'nextPay', { type: 'date' }) + '</div>' +
@@ -1100,7 +1123,7 @@
     },
     basics: function () {
       var picks = [1500, 2000, 2500, 3000, 3500];
-      return wizardHead('basics', 'Your monthly expenses', 'About how much goes to rent, utilities, phone, insurance, groceries and gas each month? A rough number is fine. This also sizes your full safety net.') +
+      return wizardHead('basics', 'Your monthly expenses', 'About how much do you spend in a month on everything but debt payments? Rent, bills, groceries, gas, eating out, shopping. A rough number is fine.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Each month, about', 'basics', { ph: '2000', min: 0 }) +
         '<div class="chips">' + picks.map(function (v) { var on = num(P.basics) === v; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="basicpick" data-v="' + v + '">' + money(v) + '</button>'; }).join('') + '</div>' +
         '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' +
@@ -1375,7 +1398,7 @@
         '<div class="left' + (pl.tight ? ' tight' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '–' + money(-pl.extra * k) : '$0 ✓') + '</span></div>' +
         (P.setupDone ? whatIfHtml(o, true) : '') +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or look for money in your bank file.</p>' : '') +
-        (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="settings" style="align-self:center">Debts, savings and other details</button>'
+        (P.setupDone ? nwCard() + snow0(o, step) : '') + (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="settings" style="align-self:center">Debts, savings and other details</button>'
           : '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button></div>');
     },
 
@@ -1423,7 +1446,7 @@
       if (short >= 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
         '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + (short > 0 ? 'You\u2019re ' + money(short) + ' short each paycheck.' : 'Every dollar has a job. None is left for your step yet.') + '</div>' +
         '<div style="font-size:15px;color:rgba(255,255,255,.88)">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</div>' +
-        '<div class="stack" style="gap:8px">' + [quickAll() && !funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['go', 'import', 'Find it in my bank file']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
+        '<div class="stack" style="gap:8px">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['go', 'import', 'Find it in my bank file']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
         homeRest(o, step, snow0(o, step));
       var hero = '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">' + h.label + '</div>' +
         (cd ? '<div class="cd" style="grid-template-columns:repeat(' + cd.length + ',minmax(0,1fr))">' + cd.map(function (x) { return '<div><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div><div style="font-size:15px">on ' + longDate(h.date) + '</div>'
@@ -1433,11 +1456,7 @@
         (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + paydayStrip + '</div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var snow = snow0(o, step);
-      var sp = P.tx.length ? spending() : null;
-      var nw = sp ? '<button type="button" class="card" data-a="' + (sp.unsorted.length ? 'sortstart' : 'go" data-v="spend') + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:10px">' +
-          '<span style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-family:var(--display);font-weight:600;font-size:18px">' + (sp.unsorted.length ? 'Finish sorting your spending' : 'Needs vs wants') + '</span><span style="font-size:13px;color:var(--faint)">Open ›</span></span>' + splitHtml(sp.t) +
-          '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
-        : '';
+      var nw = nwCard();
       return homeTop(toast) + hero + homeRest(o, step, snow, nw);
     },
 
@@ -1451,6 +1470,7 @@
             '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm)) + '">Paid the minimum</button>' +
             '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="0">Paid it off!</button></div>' : '';
           return '<label class="field">' + esc(d.name) + ' balance<input type="number" inputmode="decimal" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>' + quick; }).join('') + '</div>' : '') +
+        (P.payVaries ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>This paycheck</b><label class="field">What landed in your account?<input type="number" inputmode="decimal" data-thispay value="' + esc(U.thisPay || '') + '" placeholder="' + esc(P.paycheck) + '"></label><span data-live="thispay" style="font-size:14px;color:var(--muted)">Your plan uses ' + money(num(P.paycheck)) + '.</span></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Savings</b>' + field('Emergency savings', 'savings') +
         ((o.step === 1 || o.step === 3) && o.plan.extra > 0 ? '<div class="chips"><button type="button" class="chip" data-a="quick" data-k="savings" data-v="' + Math.round(num(P.savings) + o.plan.extra) + '">Added the plan amount (' + money(o.plan.extra) + ')</button></div>' : '') +
         P.goals.map(function (g, i) { return '<label class="field">Saved for ' + esc(g.name) + '<input type="number" inputmode="decimal" data-f="x" data-list="goals" data-i="' + i + '" data-k="saved" value="' + esc(g.saved || 0) + '"></label>'; }).join('') + '</div>' +
@@ -1521,19 +1541,24 @@
           '<span style="font-size:14px;color:var(--muted)">' + d.blurb + '</span>' +
           '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
       };
-      var few = function (l, k) { return (U.chAll || {})[k] ? l : l.slice(0, 3); };
-      var seeAll = function (l, k) { return !(U.chAll || {})[k] && l.length > 3 ? '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="chall" data-v="' + k + '">See all ' + l.length + '</button>' : ''; };
-      var earnPick = pick.filter(function (d) { return d.tag === 'Earn'; }), restPick = pick.filter(function (d) { return d.tag !== 'Earn'; });
+
+      var allDone = P.challenges.filter(function (c) { return c.ended === 'done'; }).reverse();
+      var tab = U.chTab || 'suggested';
+      var inTab = function (d) { return tab === 'bills' ? d.tag === 'Bills' || d.tag === 'Debt' : tab === 'earn' ? d.tag === 'Earn' || d.tag === 'Income' : d.tag === tab; };
+      var easy = pick.slice().sort(function (a, b) { return (a.days || 99) - (b.days || 99); });
+      var list = tab === 'suggested' ? (U.chAllSug ? easy : easy.slice(0, 3)) : pick.filter(inTab);
+      var body = tab === 'done'
+        ? (allDone.length ? '<div class="card">' + allDone.map(function (c) {
+            var d = F.challengeDef(c.id);
+            return '<div class="row"><div style="min-width:0">' + d.title + '<small>Completed ' + dayMonth(F.fromIso(c.endedOn)) + (c.note ? ' · ' + esc(c.note) : '') + '</small></div>' +
+              '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="sharech" data-v="' + c.uid + '">' + ICON.share + ' Share</button></div>';
+          }).join('') + '</div>' : '<div class="note">' + ICON.info + '<span>Finished challenges land here, each with a card to share.</span></div>')
+        : (tab === 'earn' ? '<p style="font-size:14px">Cutting has a limit. Earning doesn’t.</p>' : '') + (list.length ? list.map(startCard).join('') : '<div class="note">' + ICON.info + '<span>You’re running every challenge in this group.</span></div>') +
+          (tab === 'suggested' && !U.chAllSug && easy.length > 3 ? '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="challsug">Show all ' + easy.length + '</button>' : '');
       return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
-        (active.length ? active.map(card).join('') : '<div class="note">' + ICON.info + '<span>No challenge running. Start one below; the 7-day ones are a great first win.</span></div>') +
-        (active.length >= 3 ? '<p style="margin-top:10px">You\u2019re running 3. Finish or stop one to start another.</p>' : '') +
-        (restPick.length ? '<h3 style="margin-top:10px">Spend less, save more</h3>' + few(restPick, 'rest').map(startCard).join('') + seeAll(restPick, 'rest') : '') +
-        (earnPick.length ? '<h3 style="margin-top:10px">Earn more</h3><p style="font-size:14px;margin-top:-4px">Cutting has a limit. Earning doesn\u2019t.</p>' + few(earnPick, 'earn').map(startCard).join('') + seeAll(earnPick, 'earn') : '') +
-        (done.length ? '<h3 style="margin-top:10px">Finished</h3><div class="card">' + done.map(function (c) {
-          var d = F.challengeDef(c.id), ok = c.ended === 'done';
-          return '<div class="row"><div style="min-width:0">' + d.title + '<small>' + (ok ? 'Completed ' : c.ended === 'quit' ? 'Stopped ' : 'Ended ') + dayMonth(F.fromIso(c.endedOn)) + (c.note ? ' \u00b7 ' + esc(c.note) : '') + '</small></div>' +
-            (ok ? '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="sharech" data-v="' + c.uid + '">' + ICON.share + ' Share</button>' : '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="chstart" data-v="' + c.id + '"' + (active.length >= 3 || activeIds.indexOf(c.id) >= 0 ? ' disabled' : '') + '>Try again</button>') + '</div>';
-        }).join('') + '</div>' : '');
+        (active.length ? active.map(card).join('') : '') +
+        (active.length >= 3 ? '<p style="margin-top:10px">You’re running 3. Finish or stop one to start another.</p>' : '') +
+        tabChips('chtab', tab, [['suggested', 'Suggested'], ['Food', 'Food'], ['Spending', 'Spending'], ['bills', 'Bills & debt'], ['Savings', 'Saving'], ['earn', 'Earn more'], ['done', 'Completed' + (allDone.length ? ' (' + allDone.length + ')' : '')]]) + body;
     },
 
     moneydate: function () {
@@ -1567,7 +1592,7 @@
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
         (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + goalsCard() + moneyDateCard() +
+        celebration(2, ['plan', 'unlock']) + goalsCard() + calendarCard() + moneyDateCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
@@ -1628,40 +1653,55 @@
     },
     community: function () {
       var url = CONFIG.communityUrl, joined = P.communityJoined, latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? -1 : 1; }).pop();
-      var inside = [
+      var free = [
         ['Payday check-ins, together', 'Every payday, a thread where everyone shares how it went. Streaks are easier with company.'],
         ['Live challenges', 'Run the Cushion Sprint or a No-Spend Weekend with a group, and cheer each other on.'],
-        ['Ask anything', 'Stuck on a bill, a debt or a tough month? Ask people walking the same path.'],
-        ['Coaching', 'Group and one-on-one coaching with a certified financial coach.']
+        ['Ask anything', 'Stuck on a bill, a debt or a tough month? Ask people walking the same path.']
       ];
+      var coach = [
+        ['Live coaching calls', 'Group calls with Brad, a certified financial coach. Bring your questions, leave with a next step.'],
+        ['A coach looks at your budget', 'Post your plan and get real feedback on what to change.'],
+        ['An accountability group', 'A small group that checks in with you, so you keep going on the hard months.'],
+        ['One-on-one coaching', 'A private session each month to work through your plan together. Limited spots.']
+      ];
+      var list = function (l) { return '<div class="card stack" style="padding:6px 18px">' + l.map(function (x) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + x[0] + '</b><small style="color:var(--muted);font-size:14px;margin-top:3px;display:block">' + x[1] + '</small></div></div>'; }).join('') + '</div>'; };
+      var curl = CONFIG.coachingUrl || url;
       return '<div style="margin-top:8px"><div class="eyebrow">The Find Me the Money community</div><h2>You don’t have to do this alone</h2>' +
-        '<p style="margin-top:6px">People who stick with a plan usually have someone in their corner. Join others working the same 7 steps.</p></div>' +
-        '<div class="card stack" style="padding:6px 18px">' + inside.map(function (x) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + x[0] + '</b><small style="color:var(--muted);font-size:14px;margin-top:2px">' + x[1] + '</small></div></div>'; }).join('') + '</div>' +
-        (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the community') + '</a>'
-          : '<button type="button" class="primary" disabled>Community opening soon</button>') +
+        '<p style="margin-top:6px">People who stick with a plan usually have someone in their corner.</p></div>' +
+        '<div class="stack" style="gap:10px"><div class="eyebrow">Free community</div><h3>Walk the 7 steps with others</h3>' + list(free) +
+        (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the FREE community') + '</a>'
+          : '<button type="button" class="primary" disabled>Community opening soon</button>') + '</div>' +
+        '<div class="stack coachsec" style="gap:10px;margin-top:10px"><div class="eyebrow">Coaching</div><h3>Get a coach in your corner</h3><p style="font-size:15px">For when you want a plan built with you, not just for you.</p>' + list(coach) +
+        (curl ? '<a class="outline" style="text-decoration:none;display:grid;place-items:center;color:var(--ink)" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + '</div>' +
         (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
         (CONFIG.youtubeUrl ? '<a class="card ytcard" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube"><span class="yt-ic" aria-hidden="true">\u25B6</span><span><b>Watch on YouTube</b><small>Short videos: find your money, payday wins, debt-free date reveals</small></span><span aria-hidden="true">\u203a</span></a>' : '') +
-        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget and numbers stay on this phone. Only what you choose to post is shared.</span></div>' +
+        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget stays private. Only what you choose to post is shared.</span></div>' +
         // your wins, right under the community: challenges and milestones
-        '<div id="wins" class="stack" style="gap:10px;margin-top:14px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div>' +
+        '<div id="wins" class="stack" style="gap:10px;margin-top:14px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div>' + (P.setupDone ? streakCard() : '') +
         '<div class="seg wins-seg" role="group" aria-label="Wins" style="align-self:flex-start">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
           var on = (U.winsView || 'challenges') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="winsview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
         (U.winsView === 'milestones' ? V.milestones() : V.challenges());
     },
     milestones: function () {
       var f = facts(), earned = F.BADGES.filter(function (b) { return P.badges[b.id]; }), locked = F.BADGES.filter(function (b) { return !P.badges[b.id]; });
-      var o = F.outlook(profile(), today()), st = Math.min(o.step, 7);
+      var o = F.outlook(profile(), today()), st = Math.min(o.step, 7), mt = U.msTab || 'next';
+      var grp = function (id) { return /^(plan|sorted|checkin-1|plan-1|storyteller)$/.test(id) ? 'start' : /^(saved-|cushion|safety-net|goal-)/.test(id) ? 'saving' : /^(payoff-|paid-|debt-free)/.test(id) ? 'debt' : /^streak-/.test(id) ? 'streak' : /^days-/.test(id) ? 'days' : 'more'; };
+      var nextUp = locked.slice().sort(function (a, b) { var pa = F.badgeProgress(a, f), pb = F.badgeProgress(b, f); return (pb ? pb.ratio : 0) - (pa ? pa.ratio : 0); });
+      var shown = mt === 'next' ? (U.msAll ? nextUp : nextUp.slice(0, 3)) : locked.filter(function (b) { return grp(b.id) === mt; });
       var pathCard = '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><div class="eyebrow">Your path</div><b>Step ' + st + ': ' + F.STEPS[st - 1][0] + '</b></div>' +
         '<button type="button" class="sharebtn" data-a="sharestep" data-v="">' + ICON.share + ' Share</button></div>' + journey(st, { small: true, progress: stepProgress(o) }) + '</div>';
       return '<div style="margin-top:8px"><div class="eyebrow">' + earned.length + ' of ' + F.BADGES.length + ' earned</div><h2>Milestones</h2><p style="margin-top:6px">Little wins along the way. Tap one to share it.</p></div>' + celebration(9, 'badge') + pathCard +
-        (earned.length ? '<div class="grid2">' + earned.map(function (b) {
+        tabChips('mstab', mt, [['next', 'Up next'], ['start', 'Getting started'], ['saving', 'Saving'], ['debt', 'Debt'], ['streak', 'Streaks'], ['days', 'Days back'], ['more', 'Challenges & earning'], ['earned', 'Earned' + (earned.length ? ' (' + earned.length + ')' : '')]]) +
+        (mt === 'earned'
+          ? (earned.length ? '<div class="grid2">' + earned.map(function (b) {
           return '<button type="button" class="tile medal-tile" data-a="sharebadge" data-v="' + b.id + '"><span class="medal on">' + ICON.medal + '</span><b>' + b.title + '</b><span class="k">' + b.desc + '</span><span class="k" style="color:var(--sun-ink)">' + ICON.share + ' Share</span></button>';
-        }).join('') + '</div>' : '') +
-        '<h3 style="margin-top:6px">Up next</h3><div class="grid2">' + locked.map(function (b) {
-          var pr = F.badgeProgress(b, f);
-          return '<div class="tile medal-tile locked"><span class="medal">' + ICON.medal + '</span><b>' + b.title + '</b><span class="k">' + b.desc + '</span>' +
-            (pr ? '<span class="bar goalbar" style="flex:none;height:5px"><i style="width:' + Math.max(2, pr.ratio * 100) + '%"></i></span><span class="k">' + pr.label + '</span>' : '') + '</div>';
-        }).join('') + '</div>';
+        }).join('') + '</div>' : '<div class="note">' + ICON.info + '<span>Milestones you earn land here, each with a card to share.</span></div>')
+          : (shown.length ? '<div class="grid2">' + shown.map(function (b) {
+              var pr = F.badgeProgress(b, f);
+              return '<div class="tile medal-tile locked"><span class="medal">' + ICON.medal + '</span><b>' + b.title + '</b><span class="k">' + b.desc + '</span>' +
+                (pr ? '<span class="bar goalbar" style="flex:none;height:5px"><i style="width:' + Math.max(2, pr.ratio * 100) + '%"></i></span><span class="k">' + pr.label + '</span>' : '') + '</div>';
+            }).join('') + '</div>' : '<div class="note">' + ICON.info + '<span>You\u2019ve earned every milestone in this group.</span></div>') +
+            (mt === 'next' && !U.msAll && nextUp.length > 3 ? '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="msall">Show all ' + nextUp.length + '</button>' : ''));
     },
 
     share: function () {
@@ -1779,6 +1819,8 @@
     return cur;
   }
   function checkDone() {
+    if (P.payVaries && num(U.thisPay) > 0) { P.payHist = (P.payHist || []).concat([{ id: uid(), amount: String(num(U.thisPay)), date: F.isoDay(today()) }]).slice(-8); payFromHist(); }
+    U.thisPay = '';
     var now = today(), prevDebts = P.prevBalances || {};
     P.debts.forEach(function (d) { if (num(d.bal) > num(d.orig)) d.orig = num(d.bal); });
     var cur = balancesNow();
@@ -1936,15 +1978,33 @@
       '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Today \u00b7 Day ' + (st.next + 1) + ' of 7</span>' +
       '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + st.def.days[st.next].title + '</span><span style="font-size:13px;color:var(--muted)">2 minutes \u00b7 one small step</span></span><span aria-hidden="true">\u203a</span></button>';
   }
+  function nwCard() {
+      var sp = P.tx.length ? spending() : null;
+      return sp ? '<button type="button" class="card" data-a="' + (sp.unsorted.length ? 'sortstart' : 'go" data-v="spend') + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:10px">' +
+          '<span style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-family:var(--display);font-weight:600;font-size:18px">' + (sp.unsorted.length ? 'Finish sorting your spending' : 'Needs vs wants') + '</span><span style="font-size:13px;color:var(--faint)">Open ›</span></span>' + splitHtml(sp.t) +
+          '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
+        : '';
+  }
+  // a row of bubble tabs that scrolls sideways
+  function tabChips(action, cur, opts) {
+    return '<div class="tabchips" role="tablist">' + opts.map(function (o) { var on = cur === o[0]; return '<button type="button" role="tab" class="chip' + (on ? ' on' : '') + '" aria-selected="' + on + '" data-a="' + action + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
+  }
   function homeTop(toast) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
       '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1);
   }
+  // Home stays simple: the countdown, then one thing to do next
+  function nextThing() {
+    if (mdDueNow()) return moneyDateCard();
+    var t = todayStep(); if (t) return t;
+    return checklist();
+  }
+  function pathCard(o, step) {
+    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
+      '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? journey(step, { small: true, progress: stepProgress(o) }) + ladderHtml(step) : '') + '</div>';
+  }
   function homeRest(o, step, snow, nw) {
-    return todayStep() + saveNudge() + (mdDueNow() ? moneyDateCard() : '') + homeSpend() + checklist() + streakCard() + calendarCard() + (snow || '') + (nw || '') +
-      '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
-      '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? journey(step, { small: true, progress: stepProgress(o) }) + ladderHtml(step) : '') + '</div>' +
-      '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+    return nextThing() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
   }
   function snow0(o, step) {
     return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
@@ -1958,7 +2018,7 @@
   function checklist() {
     var items = [
       ['savings', 'Add your emergency savings', 'Sharpens your $1,000 cushion date', savingsSet()],
-      ['fun', 'Set your fun money', quickAll() ? 'Give eating out and shopping a limit' : 'Right now we\u2019re guessing 10% of your pay', funSet()],
+      ['fun', 'Set your fun money', 'Optional: give eating out and shopping a limit', funSet()],
       ['import', 'See where your money goes', 'Import a bank file and sort it', P.tx.length > 0],
       ['bills', 'List your bills one by one', 'Optional: more exact than one number', itemized()]
     ];
@@ -1968,12 +2028,12 @@
     var done = items.filter(function (x) { return x[3]; }).length;
     if (done === items.length) return '';
     var left = items.filter(function (x) { return !x[3]; }), total = items.length;
-    if (!U.allSteps) items = left.slice(0, 2);
-    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Finish setting up</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + total + '</span></div>' +
+    if (!U.allSteps) items = left.slice(0, 1);
+    return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0 0 4px"><h3>Your next step</h3><span style="font-size:13px;color:var(--faint)">' + done + ' of ' + total + '</span></div>' +
       items.map(function (x) {
         return x[3] ? '<div class="planrow locked"><span class="dot on" aria-hidden="true">' + ICON.check('#fff', 12) + '</span><span style="flex:1"><s style="color:var(--faint)">' + x[1] + '</s></span></div>'
           : '<button type="button" class="planrow" data-a="edit" data-v="' + x[0] + '"><span class="dot today" aria-hidden="true"></span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">' + x[1] + '</span><small style="color:var(--faint)">' + x[2] + '</small></span><span aria-hidden="true">\u203a</span></button>';
-      }).join('') + (!U.allSteps && left.length > 2 ? '<button type="button" class="textbtn" data-a="allsteps" style="min-height:36px;padding:6px 0 0">Show all ' + left.length + ' left</button>' : '') + '</div>';
+      }).join('') + (!U.allSteps && left.length > 1 ? '<button type="button" class="textbtn" data-a="allsteps" style="min-height:36px;padding:6px 0 0">See all ' + left.length + ' left</button>' : '') + '</div>';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
   function streakCard() {
@@ -2056,7 +2116,7 @@
         if (v === 'bills') P.bills.push({ name: '', amount: '' });
         else P.debts.push({ id: uid(), name: '', bal: '', orig: '', min: '', apr: '' });
         save(); render(); break;
-      case 'rm': P[v].splice(i, 1); if (v === 'funParts') { var fs = P.funParts.reduce(function (a, x) { return a + num(x.amount); }, 0); if (fs > 0) P.fun = String(fs); } save(); render(); break;
+      case 'rm': P[v].splice(i, 1); if (v === 'funParts') { var fs = P.funParts.reduce(function (a, x) { return a + num(x.amount); }, 0); if (fs > 0) P.fun = String(fs); } if (v === 'payHist') payFromHist(); save(); render(); break;
       case 'billadd': (function (g) {
         P.bills.push({ name: v, amount: '', group: g, per: b.getAttribute('data-per') || '' }); save(); render();
         var ins = app.querySelectorAll('[data-list=bills][data-i="' + (P.bills.length - 1) + '"]'); if (ins.length) ins[v ? 1 : 0].focus();
@@ -2218,7 +2278,13 @@
       case 'backup': download('find-me-the-money-backup-' + F.isoDay(today()) + '.json', 'application/json', JSON.stringify(P, null, 2)); break;
       case 'del': U.confirmDelete = true; render(); break;
       case 'allsteps': U.allSteps = true; render(); break;
-      case 'chall': U.chAll = U.chAll || {}; U.chAll[v] = true; render(); break;
+      case 'payvary': P.payVaries = !!v; if (P.payVaries && !(P.payHist || []).length) P.payHist = [{ id: uid(), amount: P.paycheck || '' }, { id: uid(), amount: '' }]; payFromHist(); save(); render(); break;
+      case 'payhistadd': P.payHist = P.payHist || []; P.payHist.push({ id: uid(), amount: '' }); save(); render(); (function () { var el = app.querySelectorAll('[data-list=payHist]'); if (el.length) el[el.length - 1].focus(); })(); break;
+      case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
+      case 'chtab': U.chTab = v; U.chAllSug = false; render(); break;
+      case 'challsug': U.chAllSug = true; render(); break;
+      case 'mstab': U.msTab = v; U.msAll = false; render(); break;
+      case 'msall': U.msAll = true; render(); break;
       case 'csend': (function () {
         var el = app.querySelector('[data-cemail]'), em = String(el ? el.value : (U.cloudStep && U.cloudStep.email) || '').trim();
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { U.err = 'That email doesn\u2019t look right.'; render(); return; }
@@ -2375,6 +2441,7 @@
       case 'saveimg': P.shares = (P.shares || 0) + 1; save(); download('find-me-the-money-win.png', 'image/png', U.cardImg.blob); track('share-save'); break;
       case 'youtube': track('youtube'); break;
       case 'feedback': track('feedback-' + U.screen); break;
+      case 'coaching': track('coaching'); break;
       case 'joincommunity': P.communityJoined = true; save(); track('community'); setTimeout(render, 300); break;
       case 'postcommunity':
         // Skool can't take a post from another site, so copy the caption, save the card, and open the community to paste it
@@ -2399,6 +2466,7 @@
     if (t.hasAttribute('data-f')) {
       if (t.hasAttribute('data-list')) P[t.getAttribute('data-list')][+t.getAttribute('data-i')][t.getAttribute('data-k')] = t.value;
       if (t.getAttribute('data-f') === 'basics') P.basicsAuto = false;
+      if (t.getAttribute('data-list') === 'payHist') { payFromHist(); var pin = app.querySelector('[data-f=paycheck]'); if (pin && pin !== t) pin.value = P.paycheck; var ps = app.querySelector('[data-live=paystats]'); if (ps) ps.innerHTML = payStatsHtml(payStats()); }
       if (t.getAttribute('data-list') === 'debts' && P.debts[+t.getAttribute('data-i')]) delete P.debts[+t.getAttribute('data-i')].quick;
       if (t.getAttribute('data-list') === 'funParts') {
         var fsum = (P.funParts || []).reduce(function (a, x) { return a + num(x.amount); }, 0);
@@ -2428,6 +2496,11 @@
       return;
     }
     if (t.hasAttribute('data-g')) { U.form[t.getAttribute('data-g')] = t.value; var gp = app.querySelector('[data-live="gper"]'); if (gp) gp.textContent = goalDateNote(U.form); return; }
+    if (t.hasAttribute('data-thispay')) {
+      U.thisPay = t.value; var tp = num(t.value), plan = num(P.paycheck), el = app.querySelector('[data-live=thispay]');
+      if (el) el.textContent = !tp ? 'Your plan uses ' + money(plan) + '.' : tp > plan ? money(tp - plan) + ' more than your plan. Put it toward your step: add it to your savings or debt below.' : tp < plan ? money(plan - tp) + ' less than your plan. Cover it from fun money or a flexible bill this time.' : 'Right on your plan.';
+      return;
+    }
     if (t.hasAttribute('data-give')) {
       var gk = t.getAttribute('data-give'), gv = Math.max(0, num(t.value));
       if (gk === 'pct' || gk === 'pctnum') P.givingPct = Math.min(100, Math.round(gv * 10) / 10); else P.giveMonthly = t.value === '' ? '' : String(Math.round(gv * 100) / 100);
