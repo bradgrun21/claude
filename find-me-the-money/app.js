@@ -14,7 +14,7 @@
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
-    coachingUrl: '', // where "Learn about coaching" goes (paid level or booking page); empty uses the community link
+    coachingUrl: 'https://www.skool.com/find-me-the-money-1929/plans?src=join', // where "Learn about coaching" goes (paid level or booking page); empty uses the community link
     // Partner links for Earn challenges. Leave url empty until you're approved for an official affiliate or partner
     // program (not a personal referral code). The disclosure shows automatically next to any link that's set.
     partners: {
@@ -1654,10 +1654,9 @@
         ['Ask anything', 'Stuck on a bill, a debt or a tough month? Ask people walking the same path.']
       ];
       var coach = [
-        ['Live coaching calls', 'Group calls with Brad, a certified financial coach. Bring your questions, leave with a next step.'],
-        ['A coach looks at your budget', 'Post your plan and get real feedback on what to change.'],
+        ['2 live coaching calls a month', 'Bring your questions and leave with a clear next step.'],
         ['An accountability group', 'A small group that checks in with you, so you keep going on the hard months.'],
-        ['One-on-one coaching', 'A private session each month to work through your plan together. Limited spots.']
+        ['Feedback on your budget', 'Post your plan and get real feedback from a coach on what to change.']
       ];
       var list = function (l) { return '<div class="card stack" style="padding:6px 18px">' + l.map(function (x) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + x[0] + '</b><small style="color:var(--muted);font-size:14px;margin-top:3px;display:block">' + x[1] + '</small></div></div>'; }).join('') + '</div>'; };
       var curl = CONFIG.coachingUrl || url;
@@ -1667,7 +1666,8 @@
         (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the FREE community') + '</a>'
           : '<button type="button" class="primary" disabled>Community opening soon</button>') + '</div>' +
         '<div class="stack coachsec" style="gap:10px;margin-top:10px"><div class="eyebrow">Coaching</div><h3>Get a coach in your corner</h3><p style="font-size:15px">For when you want a plan built with you, not just for you.</p>' + list(coach) +
-        (curl ? '<a class="outline" style="text-decoration:none;display:grid;place-items:center;color:var(--ink)" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + '</div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:6px"><b>Who\u2019s Brad?</b><span style="font-size:14px;color:var(--muted)">I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</span></div>' +
+        (curl ? '<a class="outline" style="text-decoration:none;display:grid;place-items:center;color:var(--ink)" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><p style="font-size:13px;text-align:center;color:var(--muted)">\ud83c\udf05 Founding Members: price locked for life, first 25 only</p>' : '') + '</div>' +
         (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
         (CONFIG.youtubeUrl ? '<a class="card ytcard" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube"><span class="yt-ic" aria-hidden="true">\u25B6</span><span><b>Watch on YouTube</b><small>Short videos: find your money, payday wins, debt-free date reveals</small></span><span aria-hidden="true">\u203a</span></a>' : '') +
         '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget stays private. Only what you choose to post is shared.</span></div>' +
