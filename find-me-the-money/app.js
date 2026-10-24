@@ -289,7 +289,7 @@
   // a numeric copy of the saved data for the math, with a missed payday rolled forward
   function profile() {
     return {
-      paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), givingPct: giveAmt() ? 0 : P.givingPct, giveAmt: giveAmt() / F.FREQS[P.freq].perMonth, savings: num(P.savings),
+      paycheck: householdPaycheck(), freq: P.freq, nextPay: F.rollPayday(P.nextPay, P.freq, today()), stepAmt: P.stepAmt === '' || P.stepAmt == null ? 0 : num(P.stepAmt), givingPct: giveAmt() ? 0 : P.givingPct, giveAmt: giveAmt() / F.FREQS[P.freq].perMonth, savings: num(P.savings),
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
       fun: funSet() ? num(P.fun) : 0, funEst: false,
       // one "bills and basics" number until the person lists bills one by one
@@ -662,6 +662,8 @@
     else if (parts[0] === 'part') { P.funParts[i].amount = m; P.fun = String(funParts().reduce(function (t, x) { return t + num(x.amount); }, 0)); }
     else if (parts[0] === 'ret') { P.retirements[i].monthly = m; P.retirements[i].pct = ''; }
     else if (key === 'college') P.collegeMonthly = m;
+    else if (key === 'step') P.stepAmt = String(round2(v * d / pl.ppm));
+    else if (key === 'pay') { P.paycheck = String(round2(v * d / pl.ppm)); }
     save();
   }
   // add a need (files itself into the right bill group) or a want (a part of fun money)
@@ -681,6 +683,16 @@
       P.fun = String(funParts().reduce(function (t, x) { return t + num(x.amount); }, 0));
     }
     save();
+  }
+  // income at the top of the budget: every paycheck and other money, with a way to add more
+  function incomeSection(mo, ppm) {
+    var K = mo ? ppm : 1, rows = [];
+    rows.push({ cat: 'inc', label: esc(P.payLabel || ((P.incomes || []).length ? 'Paycheck 1' : 'Paycheck')), amount: num(P.paycheck) * K, edit: 'pay', raw: round2(num(P.paycheck) * K) });
+    (P.incomes || []).forEach(function (x, i) { var m = num(x.amount) * F.FREQS[x.freq || 'biweekly'].perMonth; if (m > 0) rows.push({ cat: 'inc', label: esc(x.label || 'Paycheck ' + (i + 2)), sub: F.FREQS[x.freq || 'biweekly'].label, amount: m / (mo ? 1 : ppm) }); });
+    (P.otherIncome || []).forEach(function (x) { if (num(x.amount) > 0) rows.push({ cat: 'inc', label: esc(x.label || 'Other income'), sub: 'Monthly', amount: num(x.amount) / (mo ? 1 : ppm) }); });
+    var tot = rows.reduce(function (t, r) { return t + r.amount; }, 0);
+    return '<div class="bhead"><span><span class="key c-inc"></span>Income</span><span>' + money(tot) + '</span></div>' + rows.map(function (r) { return budgetLine(r, mo); }).join('') +
+      '<button type="button" class="linkbtn" data-a="edit" data-v="pay" style="align-self:flex-start;font-size:14px;padding:6px 0 10px">+ Add income</button>';
   }
   function budgetLine(r, mo) {
     var unit = r.unit === '%' ? '%' : r.unit === 'yr' ? '/yr' : mo ? '/mo' : '/paycheck';
@@ -800,7 +812,7 @@
   }
   function whatIfHtml(o, inBudget) {
     var w = whatIfText(U.whatIf || 0); if (!w) return '';
-    var perMonth = Math.max(0, o.plan.extra) * o.plan.ppm, max = whatIfMax(), v = Math.min(U.whatIf || 0, max);
+    var perMonth = o.plan.toStep * o.plan.ppm, max = whatIfMax(), v = Math.min(U.whatIf || 0, max);
     return '<div class="card stack whatif" style="padding:18px;gap:10px"><div class="eyebrow">What if you found more?</div>' +
       '<div><span style="color:var(--muted);font-size:14px">' + w.label + '</span><div class="wi-date" data-live="wiDate">' + w.date + '</div><small data-live="wiSub" style="color:var(--muted);font-size:14px">' + w.sub + '</small></div>' +
       '<input type="range" min="0" max="' + max + '" step="25" value="' + v + '" data-whatif="1" aria-label="Extra dollars a month">' +
@@ -1022,14 +1034,7 @@
   }
   function quickApply() {
     P.quick = { pay: monthlyIncome(), exp: num(P.qExp), debt: num(P.qDebt), min: num(P.qMin) };
-    if (P.quick.exp && (!num(P.basics) || P.basicsAuto)) { P.basics = String(P.quick.exp); P.basicsAuto = true; }
-    // one starter line for debts; the debt step asks them to split it into each card and loan
-    var ph = P.debts.filter(function (d) { return d.quick; })[0];
-    if (P.quick.debt > 0) {
-      var min = P.quick.min || Math.max(25, Math.round(P.quick.debt * 0.03));
-      if (ph) { ph.bal = String(P.quick.debt); ph.orig = String(P.quick.debt); ph.min = String(min); }
-      else if (!P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: String(P.quick.debt), orig: String(P.quick.debt), min: String(min), apr: '', quick: true });
-    } else if (ph) P.debts.splice(P.debts.indexOf(ph), 1);
+    // the 30-second numbers only power the estimate; the budget starts empty and the person fills it in
   }
   // how far along the current step is, 0 to 1
   function stepProgress(o) {
@@ -1118,7 +1123,8 @@
     },
     basics: function () {
       var picks = [1500, 2000, 2500, 3000, 3500];
-      return wizardHead('basics', 'Your monthly expenses', 'About how much do you spend in a month on everything but debt payments? Rent, bills, groceries, gas, eating out, shopping. A rough number is fine.') +
+      var qHint = P.quick && num(P.quick.exp) && !num(P.basics) ? '<div class="note">' + ICON.info + '<span>On the quick screen you said about <b>' + money(P.quick.exp) + '</b> a month. Type the number you want in your budget.</span></div>' : '';
+      return qHint + wizardHead('basics', 'Your monthly expenses', 'About how much do you spend in a month on everything but debt payments? Rent, bills, groceries, gas, eating out, shopping. A rough number is fine.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Each month, about', 'basics', { ph: '2000', min: 0 }) +
         '<div class="chips">' + picks.map(function (v) { var on = num(P.basics) === v; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="basicpick" data-v="' + v + '">' + money(v) + '</button>'; }).join('') + '</div>' +
         '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' +
@@ -1154,9 +1160,12 @@
         (monthPay ? '<small style="color:var(--faint)" data-totalpct>' + Math.round(total / monthPay * 100) + '% of your ' + money(monthPay) + ' monthly take-home</small>' : '') + '</div>' + wizNext('basics');
     },
     debts: function () {
+      // someone who mentioned debt gets one empty line to type into (no amounts filled in)
+      if (!P.debts.length && P.quick && num(P.quick.debt) > 0) P.debts.push({ id: uid(), name: '', bal: '', orig: '', min: '', apr: '' });
       var hasQuick = P.debts.some(function (d) { return d.quick; });
       return (hasQuick ? '' : '') + wizardHead('debts', 'What do you owe?', 'List everything except your home: credit cards, car loan, student loans, buy-now-pay-later, medical bills. Married? Include the debts you share or pay together. We line them up smallest to largest and knock them out one at a time. Your card and loan apps show each balance and minimum. Interest is optional.') +
         (hasQuick ? '<div class="note">' + ICON.info + '<span>We started with your total. <b>Split it into each card and loan</b> (rename this one, then + Add a debt) so the snowball can knock out the smallest first.</span></div>' : '') +
+        (!hasQuick && P.quick && num(P.quick.debt) > 0 && !P.debts.some(function (d) { return num(d.bal) > 0; }) ? '<div class="note">' + ICON.info + '<span>On the quick screen you said about <b>' + money(P.quick.debt) + '</b> in debt, with ' + money(P.quick.min) + ' a month in payments. Add each card and loan below.</span></div>' : '') +
         (P.debts.length ? P.debts.map(function (d, i) {
           var at = function (k, label, ph, type) { return '<label class="field" style="font-size:13px">' + label + '<input type="' + (type || 'number') + '"' + (type ? '' : ' inputmode="decimal"') + ' data-f="x" data-list="debts" data-i="' + i + '" data-k="' + k + '" value="' + esc(d[k]) + '" placeholder="' + ph + '"></label>'; };
           return '<div class="card stack" style="padding:14px 18px;gap:10px">' + at('name', 'Name', 'Credit card', 'text') +
@@ -1237,12 +1246,14 @@
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, rows = [];
       var head, sub;
       var short = pl.extra <= 0 && o.step <= 3 ? Math.ceil(-pl.extra) : -1;
-      if (short >= 0) { head = short > 0 ? 'Let\u2019s find ' + money(short) : 'Let\u2019s find a little extra'; sub = short > 0 ? 'Your plan is ' + money(short) + ' short each paycheck. Find it and your countdown starts. We\u2019ll show you where to look.' : 'Every dollar has a job, with nothing left for your step yet. A little extra starts your countdown.'; }
+      var nojob = short < 0 && o.step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
+      if (nojob > 0) { head = money(nojob) + ' a paycheck has no job yet'; sub = 'Give it a job and your countdown starts. You decide.'; }
+      else if (short >= 0) { head = short > 0 ? 'Let\u2019s find ' + money(short) : 'Let\u2019s find a little extra'; sub = short > 0 ? 'Your plan is ' + money(short) + ' short each paycheck. Find it and your countdown starts. We\u2019ll show you where to look.' : 'Every dollar has a job, with nothing left for your step yet. A little extra starts your countdown.'; }
       else if (o.target) {
         var gap = o.debtFree && o.debtFreeMins ? F.daysBetween(o.debtFree, o.debtFreeMins) : 0;
         head = o.debtFree ? 'Debt-free by ' + shortDate(o.debtFree) : 'Let\u2019s find more room';
         sub = o.debtFree ? (o.debtFreeMins ? (gap > 0 ? span(gap) + ' sooner than paying minimums.' : 'Every dollar has a job.') : 'Minimum payments alone would never get you there.') : 'Right now your paycheck doesn\u2019t cover everything. We\u2019ll find the money together.';
-        if (o.step === 1 && o.cushion && short < 0) rows.push(['First: your $1,000 cushion', shortDate(o.cushion)]);
+        if (o.step === 1 && o.cushion && short < 0 && !nojob) rows.push(['First: your $1,000 cushion', shortDate(o.cushion)]);
         if (o.targetDone) rows.push([o.state.debts.length > 1 ? 'Then ' + esc(o.target.name) + ' is paid off' : 'Then you\u2019re debt-free', longDate(o.targetDone)]);
       } else {
         head = 'No debt to pay off'; sub = 'Nice. Your plan starts with savings.';
@@ -1254,7 +1265,8 @@
         '<div class="card stack" style="padding:18px 18px 16px;gap:12px"><div class="eyebrow">Where you are on the path</div>' + journey(o.step, { key: 'reveal', from: 0, progress: stepProgress(o) }) +
         '<div><b>Step ' + Math.min(o.step, 7) + ': ' + F.STEPS[Math.min(o.step, 7) - 1][0] + '</b><small style="display:block;color:var(--muted);font-size:14px;margin-top:2px">' + STEP_WHY[Math.min(o.step, 7) - 1] + '</small></div>' +
         '<div class="glance">' + pathGlance(o, p).map(function (r, i) { return '<div class="row' + (i + 1 === o.step ? ' here' : '') + '"><span><span class="gn">' + (i + 1) + '</span>' + F.STEPS[i][0] + '</span><span class="gs' + (r[1] ? ' ok' : '') + '">' + r[0] + '</span></div>'; }).join('') + '</div></div>' +
-        (rows.length && short < 0 ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
+        (nojob ? '<button type="button" class="sunbtn" data-a="stepall" style="min-height:52px">Put ' + money(nojob) + ' toward ' + F.STEPS[Math.min(o.step, 7) - 1][0] + '</button><p style="font-size:14px;text-align:center;color:var(--muted)">Or leave it for now and choose in your budget.</p>' : '') +
+        (rows.length && short < 0 && !nojob ? '<div class="card">' + rows.map(function (r) { return '<div class="row"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
         '<div class="note">' + ICON.info + '<span>An estimate from your answers. It gets sharper as you go.</span></div>' +
         '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button><button type="button" class="textbtn" data-a="go" data-v="savings">Change my answers</button></div>';
     },
@@ -1376,7 +1388,7 @@
       var last = step === 1 ? 'Starter Cushion' : step === 2 ? 'Snowball → ' + esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'Future You (investing)';
       var mo = !!U.planMonth, k = mo ? pl.ppm : 1;
       var rows = budgetRows(pl, mo), found = foundNow();
-      var hero = { label: last, amount: Math.max(0, pl.extra) * k, sub: found && pl.extra > 0 ? 'Includes the ' + money(found / (mo ? 1 : pl.ppm)) + (mo ? ' a month' : ' a paycheck') + ' you found' : '' };
+      var hero = { label: last, amount: pl.toStep * k, sub: found && pl.toStep > 0 ? 'Includes the ' + money(found / (mo ? 1 : pl.ppm)) + (mo ? ' a month' : ' a paycheck') + ' you found' : '' };
       return (P.setupDone ? '' : back('import')) + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>' + (mo ? 'Every month: ' + money(p.paycheck * k) : 'Every paycheck: ' + money(p.paycheck)) + '. Every dollar has a job.</h2>' +
         '<p style="font-size:14px">' + (step === 1 ? 'First, $1,000 for emergencies, so a flat tire doesn’t go on a credit card. Then every spare dollar attacks debt.' : step === 2 ? 'Your cushion is in place. Every spare dollar goes to your smallest debt first.' : step === 3 ? 'No debt to attack. Every spare dollar builds ' + efMonths() + ' months of expenses.' : 'Debt-free with a full safety net. Time to invest 15% and give generously.') + '</p>' +
         '<div class="seg" role="group" aria-label="Show the plan" style="align-self:flex-start">' + [['check', 'Per paycheck'], ['month', 'Per month']].map(function (o) {
@@ -1384,13 +1396,14 @@
         (mo ? '<p style="font-size:13px;margin-top:-6px">' + (pl.ppm === 1 ? 'You’re paid monthly, so this matches your paycheck.' : 'We do the math for you. A few months a year bring an extra paycheck, a nice bonus for your plan.') + '</p>' : '') +
         (P.setupDone ? spendSummary() : '') +
         '<p style="font-size:13px;margin-top:-4px">Tap any amount to change it.</p>' +
-        '<div class="card budget">' + BUDGET_SECTIONS.map(function (sec) {
+        '<div class="card budget">' + incomeSection(mo, pl.ppm) + BUDGET_SECTIONS.map(function (sec) {
           var mine = rows.filter(function (r) { return r.cat === sec[0]; }); if (!mine.length && sec[0] === 'give') return '';
           var tot = mine.reduce(function (t, r) { return t + r.amount; }, 0);
           return '<div class="bhead"><span><span class="key c-' + sec[0] + '"></span>' + sec[1] + '</span><span>' + money(tot) + '</span></div>' + mine.map(function (r) { return budgetLine(r, mo); }).join('') +
             (sec[0] === 'want' ? wantsNote(mo, pl.ppm) : '') + budgetAddRow(sec[0], mo);
-        }).join('') + (hero.amount > 0 ? '<div class="row hero-row" style="padding-block:10px"><span style="min-width:0;font-weight:600">' + hero.label + (hero.sub ? '<small>' + hero.sub + '</small>' : '') + '</span><b>' + money(hero.amount) + '</b></div>' : '') + '</div>' +
-        '<div class="left' + (pl.tight ? ' tight' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '–' + money(-pl.extra * k) : '$0 ✓') + '</span></div>' +
+        }).join('') + (step <= 3 ? '<div class="bhead"><span><span class="key c-save"></span>Your step</span><span>' + money(hero.amount) + '</span></div>' + budgetLine({ cat: 'save', label: hero.label, sub: hero.sub, amount: hero.amount, strong: true, edit: 'step', raw: round2(pl.toStep * (mo ? pl.ppm : 1)) }, mo) : '') + '</div>' +
+        '<div class="left' + (pl.tight ? ' tight' : pl.unassigned >= 0.5 ? ' open' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '\u2013' + money(-pl.extra * k) : pl.unassigned >= 0.5 ? money(pl.unassigned * k) : '$0 \u2713') + '</span></div>' +
+        (!pl.tight && pl.unassigned >= 0.5 && step <= 3 ? '<button type="button" class="outline" data-a="stepall" style="min-height:46px;font-size:15px">Give it a job: put ' + money(pl.unassigned * k) + ' toward ' + last + '</button>' : '') +
         (P.setupDone ? whatIfHtml(o, true) : '') +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or look for money in your bank file.</p>' : '') +
         (P.setupDone ? nwCard() + snow0(o, step) : '') + (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="settings" style="align-self:center">Debts, savings and other details</button>'
@@ -1435,9 +1448,15 @@
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
       var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
-        '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(Math.max(0, pl.extra)) + ' to ' + where + '</div>' +
+        '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(pl.toStep) + ' to ' + where + '</div>' +
         '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
+      var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
+      if (nojob > 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
+        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + money(nojob) + ' a paycheck has no job yet.</div>' +
+        '<div style="font-size:15px;color:rgba(255,255,255,.88)">Give it a job and your countdown starts.</div>' +
+        '<div class="stack" style="gap:8px"><button type="button" class="sunbtn" data-a="stepall">Put ' + money(nojob) + ' toward ' + where + '</button><button type="button" class="ghostbtn" data-a="go" data-v="plan">Choose in my budget</button></div>' + paydayStrip + '</div>' +
+        homeRest(o, step, snow0(o, step));
       if (short >= 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
         '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + (short > 0 ? 'You\u2019re ' + money(short) + ' short each paycheck.' : 'Every dollar has a job. None is left for your step yet.') + '</div>' +
         '<div style="font-size:15px;color:rgba(255,255,255,.88)">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</div>' +
@@ -1461,13 +1480,13 @@
         '<p>Already filled in with last time\u2019s numbers. Check your bank and card apps and change only what\u2019s different. We\u2019ll count your wins.</p></div>' +
         (P.debts.length ? '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Debts</b>' + P.debts.map(function (d, i) {
           var ppm = o.plan.ppm, bal = num(d.bal), isT = o.target && o.target.id === d.id && o.step === 2;
-          var quick = bal > 0 ? '<div class="chips">' + (isT ? '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm - Math.max(0, o.plan.extra))) + '">Paid the plan</button>' : '') +
+          var quick = bal > 0 ? '<div class="chips">' + (isT ? '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm - o.plan.toStep)) + '">Paid the plan</button>' : '') +
             '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="' + Math.max(0, Math.round(bal - num(d.min) / ppm)) + '">Paid the minimum</button>' +
             '<button type="button" class="chip" data-a="quick" data-l="debts" data-k="bal" data-i="' + i + '" data-v="0">Paid it off!</button></div>' : '';
           return '<label class="field">' + esc(d.name) + ' balance<input type="number" inputmode="decimal" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>' + quick; }).join('') + '</div>' : '') +
         (P.payVaries ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>This paycheck</b><label class="field">What landed in your account?<input type="number" inputmode="decimal" data-thispay value="' + esc(U.thisPay || '') + '" placeholder="' + esc(P.paycheck) + '"></label><span data-live="thispay" style="font-size:14px;color:var(--muted)">Your plan uses ' + money(num(P.paycheck)) + '.</span></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Savings</b>' + field('Emergency savings', 'savings') +
-        ((o.step === 1 || o.step === 3) && o.plan.extra > 0 ? '<div class="chips"><button type="button" class="chip" data-a="quick" data-k="savings" data-v="' + Math.round(num(P.savings) + o.plan.extra) + '">Added the plan amount (' + money(o.plan.extra) + ')</button></div>' : '') +
+        ((o.step === 1 || o.step === 3) && o.plan.toStep > 0 ? '<div class="chips"><button type="button" class="chip" data-a="quick" data-k="savings" data-v="' + Math.round(num(P.savings) + o.plan.toStep) + '">Added the plan amount (' + money(o.plan.extra) + ')</button></div>' : '') +
         P.goals.map(function (g, i) { return '<label class="field">Saved for ' + esc(g.name) + '<input type="number" inputmode="decimal" data-f="x" data-list="goals" data-i="' + i + '" data-k="saved" value="' + esc(g.saved || 0) + '"></label>'; }).join('') + '</div>' +
         '<p style="font-size:13px">Paycheck different this time, or a bill changed? <button type="button" class="textbtn" style="min-height:0;padding:0;font-size:13px;text-decoration:underline" data-a="go" data-v="settings">Edit your numbers</button></p>' +
         '<div class="push"><button type="button" class="primary" data-a="checkdone">Update my countdown</button></div>' + (o ? '' : '');
@@ -2285,6 +2304,7 @@
       case 'payvary': P.payVaries = !!v; if (P.payVaries && !(P.payHist || []).length) P.payHist = [{ id: uid(), amount: P.paycheck || '' }, { id: uid(), amount: '' }]; payFromHist(); save(); render(); break;
       case 'payhistadd': P.payHist = P.payHist || []; P.payHist.push({ id: uid(), amount: '' }); save(); render(); (function () { var el = app.querySelectorAll('[data-list=payHist]'); if (el.length) el[el.length - 1].focus(); })(); break;
       case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
+      case 'stepall': (function () { var pl = F.plan(profile()); P.stepAmt = String(Math.floor(pl.toStep + pl.unassigned)); save(); track('step-assign'); U.toast = ['Every dollar has a job.', 'Your countdown is running.', true]; render(); })(); break;
       case 'chtab': U.chTab = v; U.chAllSug = false; render(); break;
       case 'challsug': U.chAllSug = true; render(); break;
       case 'mstab': U.msTab = v; U.msAll = false; render(); break;

@@ -212,9 +212,11 @@
     });
     var used = sum(rows, function (r) { return r.amount; });
     var extra = p.paycheck - used;
+    // money for the current step is only what the person assigned (stepAmt, per paycheck); the rest waits for a job
+    var toStep = p.stepAmt == null ? Math.max(0, extra) : Math.max(0, Math.min(Math.max(0, extra), +p.stepAmt || 0));
     var monthlyLiving = sum(p.bills, function (b) { return b.amount; }) + (+p.fun || 0);
     var months = Math.max(3, Math.min(6, +p.efMonths || 3));
-    return { rows: rows, extra: extra, tight: extra < -0.5, ppm: ppm, monthlyLiving: monthlyLiving, safetyNet: Math.max(1000, Math.round(monthlyLiving * months / 100) * 100) };
+    return { rows: rows, extra: extra, toStep: toStep, unassigned: Math.max(0, extra) - toStep, tight: extra < -0.5, ppm: ppm, monthlyLiving: monthlyLiving, safetyNet: Math.max(1000, Math.round(monthlyLiving * months / 100) * 100) };
   }
   function stepOf(s) {
     var open = s.debts.some(function (d) { return d.bal > 0; });
@@ -298,7 +300,7 @@
 
   // everything the home screen needs, computed fresh from the person's current numbers
   function outlook(p, today) {
-    var pl = plan(p), s = stateFrom(p), ppm = pl.ppm, ext = pl.extra + sum(pl.rows.filter(function (r) { return r.kind === 'goal'; }), function (r) { return r.amount; });
+    var pl = plan(p), s = stateFrom(p), ppm = pl.ppm, ext = pl.toStep + sum(pl.rows.filter(function (r) { return r.kind === 'goal'; }), function (r) { return r.amount; });
     // extra excludes goal money; the simulation takes goals out itself, so hand it the pre-goal amount
     var at = function (cond, opts) { var n = paychecksUntil(s, ext, ppm, cond, opts); return n === 0 ? fromIso(isoDay(today)) : dateAfter(p.nextPay, p.freq, n); };
     var o = { plan: pl, state: s, step: s.step, target: smallest(s) };
