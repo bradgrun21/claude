@@ -218,7 +218,7 @@
     if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
     return cloudPull(true).then(function () {
       if (U.afterSave && U.screen !== 'cloudpick' && !standalone()) { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; }
-      if (U.afterSave && U.screen !== 'cloudpick') { U.afterSave = false; U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('home'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
+      if (U.afterSave && U.screen !== 'cloudpick') { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home' && !P.setupDone) { U.joinOpen = true; go('account'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
   }
   // A sign-in link opened in this browser lands here with the session in the address
   function cloudStart() {
@@ -239,7 +239,7 @@
   }
   function shareBlock() {
     if (!S || S.shareReady === false) return '';
-    var top = '<div class="stack" style="gap:8px;border-top:1px solid var(--line, rgba(0,0,0,.08));padding-top:12px;margin-top:2px"><b>Budget together</b>';
+    var top = '<div class="stack" style="gap:8px' + (U.screen === 'saveinstall' ? '' : ';border-top:1px solid var(--line, rgba(0,0,0,.08));padding-top:12px;margin-top:2px') + '"><b>Budget together</b>';
     if (S.role === 'member') return top + '<span style="font-size:14px;color:var(--muted)">You and <b>' + esc(S.partner || 'your spouse') + '</b> share this budget. Changes either of you make show up for both.</span>' +
       (U.cleave ? '<span style="font-size:14px">Leave? You keep a copy of the budget as your own; it stops updating with theirs.</span><div class="grid2"><button type="button" class="outline" data-a="cleaveno">Stay</button><button type="button" class="primary danger" data-a="cleaveyes">Leave</button></div>' : '<button type="button" class="linkbtn" data-a="cleave" style="align-self:flex-start">Leave the shared budget</button>') + '</div>';
     if (S.partner) return top + '<span style="font-size:14px;color:var(--muted)">Shared with <b>' + esc(S.partner) + '</b>. Changes either of you make show up for both.</span>' +
@@ -1048,19 +1048,15 @@
 
   var V = {
     welcome: function () {
-      var promises = ['Your budget, built for you. You just say yes.', 'A 7-step plan, from $1,000 saved to debt-free to generous', 'Private: your numbers stay on your phone unless you save them to your account'];
       return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
-        '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn’t know you had.</h1>' +
-        '<p style="font-size:17px">Tell us what comes in and what goes out. We build your budget, count down to debt-free, and give your goals a real date.</p></div>' +
-        '<div class="stack" style="gap:12px">' + promises.map(function (t) { return '<div class="check"><div class="dot">' + ICON.check('#FFFFFF') + '</div>' + t + '</div>'; }).join('') + '</div>' +
+        '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn\u2019t know you had.</h1>' +
+        '<p style="font-size:17px">Three quick numbers. We build your budget and count down to debt-free.</p></div>' +
         (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
-        (cloudOn() && !S ? '<button type="button" class="choice" data-a="cjoinstart" style="text-align:left"><div class="ic">' + ICON.people + '</div><div><b>Joining your spouse\u2019s budget?</b><span class="d">Sign in and enter the invite code they sent you.</span></div></button>' : '') +
-        (cloudOn() && !S ? '<button type="button" class="choice" data-a="go" data-v="account" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Already have an account?</b><span class="d">Sign in and your plan comes right back.</span></div></button>' : '') +
-        (standalone() ? '<button type="button" class="choice" data-a="go" data-v="restore" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Started in Safari?</b><span class="d">Bring your plan over in two taps.</span></div></button>' : '') +
-        (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</span></div>') +
+        (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won\u2019t be kept. Open it in a regular tab.</span></div>') +
         '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
-        '<button type="button" class="textbtn" data-a="go" data-v="restore">I have a backup file</button>' +
-        '<div class="fine">Beta · an educational budgeting tool, not financial advice</div></div>';
+        (cloudOn() && !S ? '<button type="button" class="textbtn" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
+        (standalone() ? '<button type="button" class="textbtn" data-a="go" data-v="restore" style="min-height:36px;font-size:14px">Started in Safari? Bring your plan over</button>' : '') +
+        '<div class="fine">Free \u00b7 private \u00b7 an educational budgeting tool, not financial advice</div></div>';
     },
 
     path: function () {
@@ -1074,15 +1070,14 @@
     },
     quick: function () {
       return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">30 seconds \u00b7 rough numbers are fine</div><h2>Let\u2019s find your money</h2>' +
-        '<p>Three quick numbers. We\u2019ll show you how much is slipping away each month.</p></div>' +
+        '<p>We\u2019ll show you how much is slipping away.</p></div>' +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1000', min: 0 }) +
         '<div class="field" style="margin-top:-4px">How often?<div class="seg wrap" role="group" aria-label="How often you\u2019re paid">' + Object.keys(F.FREQS).map(function (k) {
           return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
-        (P.incomes && P.incomes.length ? incomeCards(true) : '<button type="button" class="linkbtn" data-a="incadd" style="align-self:flex-start;font-size:14px">+ Add a second paycheck (spouse or second job)</button>') +
-        '<small class="qhint" data-live="qmonth">' + quickMonthNote() + '</small>' +
-        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Everything you spend in a month: rent, bills, groceries, gas, eating out, shopping. Leave out debt payments.</small>' +
+        (P.incomes && P.incomes.length ? incomeCards(true) : '') +
+        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Everything except debt payments.</small>' +
         '<div class="grid2">' + field('Total debt', 'qDebt', { ph: '0', min: 0 }) + field('Debt payments / mo', 'qMin', { ph: '0', min: 0 }) + '</div>' +
-        '<small class="qhint">Credit cards, car, student loans, buy-now-pay-later. Not your home.</small></div>' +
+        '<small class="qhint">Everything except your home.</small></div>' +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="quickgo">Show me</button></div>';
     },
@@ -1592,7 +1587,7 @@
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
         (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + goalsCard() + calendarCard() + moneyDateCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
+        celebration(2, ['plan', 'unlock']) + goalsCard() + moneyDateCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
@@ -1737,10 +1732,15 @@
     },
     saveinstall: function () {
       var ios = isIOS();
+      if (standalone()) return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
+        '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">\u2713 Saved</div><h2>Budgeting with a spouse?</h2><p>Invite them and you\u2019ll both see one budget.</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:8px">' + shareBlock() + '</div>' +
+        '<div class="push"><button type="button" class="primary" data-a="installok">Go to my plan</button></div>';
       return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
         '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">' + (S ? '\u2713 Saved \u00b7 one more thing' : 'One more thing') + '</div><h2>Put it on your Home Screen</h2>' +
         '<p>It opens like an app, one tap away on payday.' + (S ? ' When you open it from there, sign in with the same email and your plan will be waiting.' : '') + '</p></div>' +
         guideBox(ios ? 'ios' : 'android') +
+        (S ? '<div class="card stack" style="padding:16px 18px;gap:8px">' + shareBlock() + '</div>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="installok">Done, go to my plan</button><button type="button" class="textbtn" data-a="installlater">I\u2019ll do it later</button></div>';
     },
     savesetup: function () {
@@ -1748,11 +1748,15 @@
         '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">Last step</div><h2>Save your progress</h2>' +
         '<p>Your plan is built. Save it with your email so it\u2019s safe if you lose your phone or get a new one. Free, and no password.' + (!standalone() ? ' Next, we\u2019ll show you how to put it on your Home Screen.' : '') + '</p></div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px">' + signInForm() + '</div>' +
-        '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>';
+        '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>' +
+        '<p style="font-size:14px;text-align:center;color:var(--muted)">Budgeting with a spouse? Save first, then you can invite them on the next screen.</p>';
     },
     account: function () {
+      if (S && !P.setupDone) return back('welcome') + '<div class="stack" style="gap:8px"><div class="eyebrow">\u2713 Signed in as ' + esc(S.email || '') + '</div><h2>Let\u2019s get your plan going</h2><p>Joining your spouse\u2019s budget? Enter the code they sent you. Starting your own? It takes 30 seconds.</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:10px">' + joinBlock() + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') + '</div>' +
+        '<div class="push"><button type="button" class="outline" data-a="go" data-v="quick">Start my own plan</button></div>';
       return back(P.setupDone ? U.wizReturn || 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
-        (S ? '' : U.joinMode ? '<p>First sign in with your own email. Then enter the invite code your spouse sent you.</p>' : '<p>Already saved a plan to your account? Sign in and it comes right back.</p>') + accountCard();
+        (S ? '' : U.joinMode ? '<p>First sign in with your own email. Then enter the invite code your spouse sent you.</p>' : '<p>Your plan comes right back. Joining your spouse\u2019s budget? Sign in with your own email, then enter their code.</p>') + accountCard() + (!S ? '<button type="button" class="textbtn" data-a="go" data-v="restore" style="align-self:center;font-size:14px">Have a backup file instead?</button>' : '');
     },
     cloudpick: function () {
       var pk = U.cloudPick; if (!pk) return V.home();
@@ -2004,7 +2008,7 @@
       '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? journey(step, { small: true, progress: stepProgress(o) }) + ladderHtml(step) : '') + '</div>';
   }
   function homeRest(o, step, snow, nw) {
-    return nextThing() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+    return nextThing() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
   }
   function snow0(o, step) {
     return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
