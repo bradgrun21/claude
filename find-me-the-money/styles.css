@@ -568,3 +568,4 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 /* money that still needs a job */
 .left.open { background: rgba(255,176,124,.22); color: var(--ink); border-color: rgba(232,135,95,.45); }
 .key.c-inc { background: #E8875F; }
+.ytbtn { display: grid; place-items: center; text-decoration: none; }

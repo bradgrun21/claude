@@ -392,7 +392,7 @@
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Community & Wins', 'people']];
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Wins', 'medal']];
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'community' : screen; }
   function render() {
     ensureIds();
@@ -1666,32 +1666,9 @@
         }).join('') : '<p style="padding:8px 0">Nothing yet this month.</p>');
     },
     community: function () {
-      var url = CONFIG.communityUrl, joined = P.communityJoined, latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? -1 : 1; }).pop();
-      var free = [
-        ['Payday check-ins, together', 'Every payday, a thread where everyone shares how it went. Streaks are easier with company.'],
-        ['Live challenges', 'Run the Cushion Sprint or a No-Spend Weekend with a group, and cheer each other on.'],
-        ['Ask anything', 'Stuck on a bill, a debt or a tough month? Ask people walking the same path.']
-      ];
-      var coach = [
-        ['2 live coaching calls a month', 'Bring your questions and leave with a clear next step.'],
-        ['An accountability group', 'A small group that checks in with you, so you keep going on the hard months.'],
-        ['Feedback on your budget', 'Post your plan and get real feedback from a coach on what to change.']
-      ];
-      var list = function (l) { return '<div class="card stack" style="padding:6px 18px">' + l.map(function (x) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + x[0] + '</b><small style="color:var(--muted);font-size:14px;margin-top:3px;display:block">' + x[1] + '</small></div></div>'; }).join('') + '</div>'; };
-      var curl = CONFIG.coachingUrl || url;
-      return '<div style="margin-top:8px"><div class="eyebrow">The Find Me the Money community</div><h2>You don’t have to do this alone</h2>' +
-        '<p style="margin-top:6px">People who stick with a plan usually have someone in their corner.</p></div>' +
-        '<div class="stack" style="gap:10px"><div class="eyebrow">Free community</div><h3>Walk the 7 steps with others</h3>' + list(free) +
-        (url ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (joined ? 'Open the community' : 'Join the FREE community') + '</a>'
-          : '<button type="button" class="primary" disabled>Community opening soon</button>') + '</div>' +
-        '<div class="stack coachsec" style="gap:10px;margin-top:10px"><div class="eyebrow">Coaching</div><h3>Get a coach in your corner</h3><p style="font-size:15px">For when you want a plan built with you, not just for you.</p>' + list(coach) +
-        '<div class="card stack" style="padding:16px 18px;gap:6px"><b>Who\u2019s Brad?</b><span style="font-size:14px;color:var(--muted)">I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</span></div>' +
-        (curl ? '<a class="outline" style="text-decoration:none;display:grid;place-items:center;color:var(--ink)" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><p style="font-size:13px;text-align:center;color:var(--muted)">\ud83c\udf05 Founding Members: price locked for life, first 25 only</p>' : '') + '</div>' +
-        (latest && url ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win</button>' : '') +
-        (CONFIG.youtubeUrl ? '<a class="card ytcard" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube"><span class="yt-ic" aria-hidden="true">\u25B6</span><span><b>Watch on YouTube</b><small>Short videos: find your money, payday wins, debt-free date reveals</small></span><span aria-hidden="true">\u203a</span></a>' : '') +
-        '<div class="note">' + ICON.info + '<span>The community lives on Skool. Your budget stays private. Only what you choose to post is shared.</span></div>' +
-        // your wins, right under the community: challenges and milestones
-        '<div id="wins" class="stack" style="gap:10px;margin-top:14px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div>' + (P.setupDone ? streakCard() : '') +
+      var latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
+      return '<div id="wins" class="stack" style="gap:10px;margin-top:8px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div><h2>Wins</h2>' + (P.setupDone ? streakCard() : '') +
+        (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') +
         '<div class="seg wins-seg" role="group" aria-label="Wins" style="align-self:flex-start">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
           var on = (U.winsView || 'challenges') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="winsview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
         (U.winsView === 'milestones' ? V.milestones() : V.challenges());
@@ -2014,7 +1991,8 @@
   }
   function homeTop(toast) {
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-      '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></div>' + toast + celebration(1);
+      '<span style="display:flex;gap:8px">' + (CONFIG.youtubeUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube" aria-label="Watch on YouTube"><svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect width="22" height="16" rx="4" fill="#FF0033"/><path d="M9 4.5v7l6-3.5z" fill="#fff"/></svg></a>' : '') +
+      '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></span></div>' + toast + celebration(1);
   }
   // Home stays simple: the countdown, then one thing to do next
   function nextThing() {
@@ -2026,8 +2004,23 @@
     return '<div class="card" style="padding:14px 18px"><div class="row" style="border:0;padding:0"><div style="min-width:0"><b>Step ' + Math.min(step, 7) + ' of 7: ' + F.STEPS[Math.min(step, 7) - 1][0] + '</b><small>' + F.STEPS[Math.min(step, 7) - 1][1] + '</small></div>' +
       '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px;white-space:nowrap" data-a="ladder" aria-expanded="' + !!U.showLadder + '">' + (U.showLadder ? 'Hide' : 'All 7 steps') + '</button></div>' + (U.showLadder ? journey(step, { small: true, progress: stepProgress(o) }) + ladderHtml(step) : '') + '</div>';
   }
+  // the community lives on Skool; Home always shows it, switching between the free community and coaching
+  function communityCard() {
+    var url = CONFIG.communityUrl, curl = CONFIG.coachingUrl || url; if (!url) return '';
+    var ct = U.commTab || 'free', coach = ct === 'coach';
+    var items = coach
+      ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.']]
+      : [['Payday check-ins, together', 'Share how payday went. Streaks are easier with company.'], ['Live challenges', 'Run a No-Spend Weekend or Cushion Sprint with a group.'], ['Ask anything', 'Stuck on a bill or a tough month? Ask people on the same path.']];
+    return '<div class="card stack commcard" style="padding:16px 18px;gap:10px"><div class="eyebrow">The Find Me the Money community</div><b style="font-size:18px">You don\u2019t have to do this alone</b>' +
+      tabChips('commtab', ct, [['free', 'Free community'], ['coach', 'Coaching']]) +
+      '<div class="stack" style="gap:8px">' + items.map(function (x) { return '<div><b style="font-size:15px">' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:14px">' + x[1] + '</small></div>'; }).join('') + '</div>' +
+      (coach ? '<small style="color:var(--muted);font-size:13px"><b>Who\u2019s Brad?</b> I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</small>' +
+          '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">\ud83c\udf05 Founding Members: price locked for life, first 25 only</small>'
+        : '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (P.communityJoined ? 'Open the community' : 'Join the FREE community') + '</a>') +
+      '</div>';
+  }
   function homeRest(o, step, snow, nw) {
-    return nextThing() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+    return nextThing() + communityCard() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
   }
   function snow0(o, step) {
     return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
@@ -2047,7 +2040,6 @@
     ];
     if (!standalone()) items.push(['install', 'Add to your Home Screen', isIOS() ? 'Keeps your plan safe on iPhone' : 'One tap away on payday', !!P.installSeen]);
     if (cloudOn()) items.push(['account', 'Save your plan with your email', 'So it\u2019s safe on any phone. No password', !!S]);
-    if (CONFIG.communityUrl) items.push(['community', 'Join the FREE community', 'Share wins and get your questions answered', !!P.communityJoined]);
     var done = items.filter(function (x) { return x[3]; }).length;
     if (done === items.length) return '';
     var left = items.filter(function (x) { return !x[3]; }), total = items.length;
@@ -2305,6 +2297,7 @@
       case 'payhistadd': P.payHist = P.payHist || []; P.payHist.push({ id: uid(), amount: '' }); save(); render(); (function () { var el = app.querySelectorAll('[data-list=payHist]'); if (el.length) el[el.length - 1].focus(); })(); break;
       case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
       case 'stepall': (function () { var pl = F.plan(profile()); P.stepAmt = String(Math.floor(pl.toStep + pl.unassigned)); save(); track('step-assign'); U.toast = ['Every dollar has a job.', 'Your countdown is running.', true]; render(); })(); break;
+      case 'commtab': U.commTab = v; render(); break;
       case 'chtab': U.chTab = v; U.chAllSug = false; render(); break;
       case 'challsug': U.chAllSug = true; render(); break;
       case 'mstab': U.msTab = v; U.msAll = false; render(); break;
