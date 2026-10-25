@@ -569,3 +569,5 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .left.open { background: rgba(255,176,124,.22); color: var(--ink); border-color: rgba(232,135,95,.45); }
 .key.c-inc { background: #E8875F; }
 .ytbtn { display: grid; place-items: center; text-decoration: none; }
+.hdricons { display: flex; gap: 6px; flex: none; }
+.hdricons .back { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }

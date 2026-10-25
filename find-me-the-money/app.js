@@ -1450,6 +1450,7 @@
       var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
         '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(pl.toStep) + ' to ' + where + '</div>' +
         '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
+      var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
       var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
       if (nojob > 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
@@ -1468,7 +1469,6 @@
           : '<div style="font-family:var(--display);font-size:26px;color:var(--sun-soft)">Your plan needs a little more room. Check your Payday Plan.</div>') +
         (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
         (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + paydayStrip + '</div>';
-      var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var snow = snow0(o, step);
       var nw = nwCard();
       return homeTop(toast) + hero + homeRest(o, step, snow, nw);
@@ -1990,8 +1990,9 @@
     return '<div class="tabchips" role="tablist">' + opts.map(function (o) { var on = cur === o[0]; return '<button type="button" role="tab" class="chip' + (on ? ' on' : '') + '" aria-selected="' + on + '" data-a="' + action + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
   }
   function homeTop(toast) {
+    toast = toast || '';
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
-      '<span style="display:flex;gap:8px">' + (CONFIG.youtubeUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube" aria-label="Watch on YouTube"><svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect width="22" height="16" rx="4" fill="#FF0033"/><path d="M9 4.5v7l6-3.5z" fill="#fff"/></svg></a>' : '') +
+      '<span class="hdricons">' + (CONFIG.communityUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity" aria-label="Open the community on Skool"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect width="22" height="22" rx="6" fill="#1F2A44"/><text x="11" y="15.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#fff">S</text></svg></a>' : '') + (CONFIG.youtubeUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube" aria-label="Watch on YouTube"><svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect width="22" height="16" rx="4" fill="#FF0033"/><path d="M9 4.5v7l6-3.5z" fill="#fff"/></svg></a>' : '') +
       '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></span></div>' + toast + celebration(1);
   }
   // Home stays simple: the countdown, then one thing to do next
