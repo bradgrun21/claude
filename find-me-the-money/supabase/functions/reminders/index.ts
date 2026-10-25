@@ -77,6 +77,17 @@ Deno.serve(async (req) => {
   const mode = url.searchParams.get('dry') ? 'dry' : (env('REMINDERS_MODE') || 'dry');
   if (mode === 'off') return Response.json({ mode, sent: 0 });
   const testIds = env('TEST_USER_IDS').split(',').map((x) => x.trim()).filter(Boolean);
+  // ?ping=1 sends one test notification to the test users only, to check the key and the phone link
+  if (url.searchParams.get('ping')) {
+    if (!testIds.length) return Response.json({ ping: 'no TEST_USER_IDS set' }, { status: 400 });
+    const res = await fetch('https://api.onesignal.com/notifications?c=push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Key ' + env('ONESIGNAL_REST_KEY') },
+      body: JSON.stringify({ app_id: env('ONESIGNAL_APP_ID'), target_channel: 'push', include_aliases: { external_id: testIds }, headings: { en: 'Test from Find Me the Money' }, contents: { en: 'Reminders are working. See you on payday.' }, url: 'https://findmethemoney.netlify.app/' }),
+    });
+    const out = await res.text(); console.log('ping', res.status, out);
+    return Response.json({ ping: res.ok ? 'sent' : 'failed', status: res.status, onesignal: out });
+  }
   const now = new Date(), anyHour = !!url.searchParams.get('anyhour');
 
   const plans = (await db('plans?select=user_id,data')) || [];
