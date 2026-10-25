@@ -72,45 +72,27 @@
       return { text: g.parts.map(function (p) { return p.text; }).join(' '), confidence: Math.min.apply(null, g.parts.map(function (p) { return p.confidence == null ? 100 : p.confidence; })), top: g.top };
     });
   }
-  function tidy(t) { return String(t || '').replace(/\s+/g, ' ').replace(/(\s*[>›»])+\s*$/, '').trim(); }
+  // "$49 41" (the point read as a space) -> "$49.41"
+  function tidy(t) { return String(t || '').replace(/\s+/g, ' ').replace(/(\$\s?\d[\d,]*) (\d{2})(?![\d.])/g, '$1.$2').replace(/(\s*[>›»])+\s*$/, '').trim(); }
+  // purchase amounts carry a sign or a ">" to open them; running balances have neither
+  function marks(raw, a) { return a.minus || a.plus || /[>›]\s*$/.test(String(raw).trim()); }
   function nameOnly(text) { var r = text; findAmounts(text).forEach(function (x) { r = r.replace(x.raw, ' '); }); return r; }
   function letters(s) { return (String(s).match(/[A-Za-z]/g) || []).length; }
 
   // lines: [{ text, confidence }] in reading order, from one screenshot
   function parseLines(lines, opts) {
     opts = opts || {};
-    var today = opts.today || new Date(), rows = [], curDate = null, pending = null, pendingConf = 0;
+    var today = opts.today || new Date(), rows = [], curDate = null, pending = null, pendingConf = 0, held = null;
     lines = joinRows(lines);
     // apps that show the name and amount on one line put other things on the lines under it
     // (a running balance, transaction numbers): count the layout before reading rows
-    var inline = 0, alone = 0;
-    lines.forEach(function (ln) { var t = tidy(ln.text); if (!findAmounts(t).length) return; if (letters(stripLogo(nameOnly(t).trim())) >= 3) inline++; else alone++; });
-    var oneLine = inline >= 2 && inline >= alone * 0.6;
+    var inline = 0, alone = 0, bare = 0;
     lines.forEach(function (ln) {
-      var text = tidy(ln.text), conf = ln.confidence == null ? 100 : ln.confidence;
-      if (!text) return;
-      var amts = findAmounts(text), dt = findDate(text, today);
-      // a line that is only a date is a section header for the rows under it
-      if (!amts.length && dt && letters(text.replace(dt.raw, '').replace(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|,/gi, '')) < 3) { curDate = dt.iso; pending = null; return; }
-      if (!amts.length) {
-        if (STATUS.test(text) || SKIP.test(text) || letters(text) < 3) return;
-        var last = rows[rows.length - 1];
-        if (last && last.wraps) { last.raw = last.raw + ' ' + text; last.merchant = cleanName(last.raw.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ')); last.wraps = false; return; }
-        if (oneLine) return;
-        pending = text; pendingConf = conf; return;
-      }
-      if (SKIP.test(text) && !pending) return;
-      var a = amts[amts.length - 1], rest = text;
-      amts.forEach(function (x) { rest = rest.replace(x.raw, ' '); });
-      if (dt) rest = rest.replace(dt.raw, ' ');
-      rest = stripLogo(rest.replace(/\s+/g, ' ').trim());
-      // a lone amount under a one-line row is its running balance
-      if (oneLine && letters(rest) < 3) return;
-      var nameSrc = rest, c = conf;
-      // merchant on one line, amount on the next
-      if (letters(rest) < 3 && pending) { nameSrc = pending + (rest ? ' ' + rest : ''); c = Math.min(conf, pendingConf); }
-      else if (letters(rest) < 3) return;
-      if (SKIP.test(nameSrc)) { pending = null; return; }
+      var t = tidy(ln.text), am = findAmounts(t); if (!am.length) return;
+      if (letters(stripLogo(nameOnly(t).trim())) >= 3) inline++; else { alone++; if (!marks(ln.text, am[am.length - 1])) bare++; }
+    });
+    var oneLine = inline >= 2 && (inline >= alone * 0.6 || bare >= alone * 0.5), balances = oneLine && bare >= 2;
+    function addRow(nameSrc, a, dt, c, text) {
       var notPurchase = a.plus || NOT_PURCHASE.test(nameSrc), transfer = TRANSFER.test(nameSrc);
       var isPending = /\bpending\b/i.test(nameSrc + ' ' + text);
       rows.push({
@@ -119,7 +101,42 @@
         flag: notPurchase ? 'Not a purchase?' : transfer ? 'Transfer?' : isPending ? 'Pending' : '',
         skip: notPurchase || transfer
       });
-      pending = null;
+      pending = null; held = null;
+    }
+    lines.forEach(function (ln) {
+      var text = tidy(ln.text), conf = ln.confidence == null ? 100 : ln.confidence;
+      if (!text) return;
+      var amts = findAmounts(text), dt = findDate(text, today);
+      // a line that is only a date is a section header for the rows under it
+      if (!amts.length && dt && letters(text.replace(dt.raw, '').replace(/\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|,/gi, '')) < 3) { curDate = dt.iso; pending = null; held = null; return; }
+      if (!amts.length) {
+        if (STATUS.test(text) || SKIP.test(text)) return;
+        var nm = stripLogo(text);
+        if (letters(nm) < 3) return;
+        var last = rows[rows.length - 1];
+        if (last && last.wraps) { last.raw = last.raw + ' ' + text; last.merchant = cleanName(last.raw.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ')); last.wraps = false; return; }
+        // the amount came just above its name
+        if (held) { addRow(nm, held.a, held.dt, Math.min(conf, held.conf), text); return; }
+        pending = nm; pendingConf = conf; return;
+      }
+      if (SKIP.test(text) && !pending) return;
+      var a = amts[amts.length - 1], rest = text;
+      amts.forEach(function (x) { rest = rest.replace(x.raw, ' '); });
+      if (dt) rest = rest.replace(dt.raw, ' ');
+      rest = stripLogo(rest.replace(/\s+/g, ' ').trim());
+      var marked = marks(ln.text, a);
+      if (oneLine && letters(rest) < 3) {
+        if (!marked) { pending = null; held = null; return; }
+        if (!pending) { held = { a: a, dt: dt, conf: conf }; return; }
+      }
+      // a balance with a scrap of logo text in front ("CED $345.59")
+      if (balances && !marked && /^\S{1,3}$/.test(rest)) { pending = null; held = null; return; }
+      var nameSrc = rest, c = conf;
+      // merchant on one line, amount on the next
+      if (letters(rest) < 3 && pending) { nameSrc = pending + (rest ? ' ' + rest : ''); c = Math.min(conf, pendingConf); }
+      else if (letters(rest) < 3) return;
+      if (SKIP.test(nameSrc)) { pending = null; return; }
+      addRow(nameSrc, a, dt, c, text);
     });
     return rows;
   }

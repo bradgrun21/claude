@@ -65,6 +65,13 @@ test('name and amount on one line, running balance and extra lines under it', ()
   assert.strictEqual(rows[2].skip, true);
 });
 
+test('phone quirks: name split from its amount, logo scraps on balances, a point read as a space', () => {
+  const rows = S.parseLines(L(['Oct 19, 2026', 'CIRCLE K -$58.45 >', 'Q $171.14', 'Split into 4 payments', 'CITY CHURCH -$116.00 >', 'CITY ST-', 'Is] Q7Y4J0000000 WEB ID:', '1800000000', '$229.59',
+    '-$63.65 >', 'H-E-B', 'CED $345.59', 'Split into 4 payments', '7 BREW COFFEE -$5.09 >', '$409.24', '@ CHIPOTLE MEXICAN GRILL -$21.54 >', '$414.33',
+    '»Zw STARBUCKS', '-$3.19 >', 'gr $435.87', '0% CHICK-FIL-A', '-$11.42 >', '¢) $439.06', 'H-E-B GAS STATION -$49 41', '$571.96']), { today });
+  assert.deepStrictEqual(rows.map((r) => r.merchant + ' ' + r.amount), ['Circle K 58.45', 'City Church 116', 'H-E-B 63.65', '7 Brew Coffee 5.09', 'Chipotle Mexican Grill 21.54', 'Starbucks 3.19', 'Chick-fil-A 11.42', 'H-E-B Gas Station 49.41']);
+});
+
 test('pieces of one row read separately are joined left to right', () => {
   const at = (text, top, left) => ({ text, confidence: 91, top, left, height: 40 });
   const rows = S.parseLines([at('Oct 21, 2026', 700, 30), at('-$14.26', 916, 640), at('TARGET', 918, 160), at('$82.69', 1010, 160), at('-$29.00', 1240, 640), at('CORNER MARKET', 1242, 160), at('$96.95', 1288, 160)], { today });
