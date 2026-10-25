@@ -1504,9 +1504,10 @@
             (sec[0] === 'want' ? wantsNote(mo, pl.ppm) : '') + budgetAddRow(sec[0], mo);
         }).join('') + (step <= 3 ? '<div class="bhead"><span><span class="key c-save"></span>Your step</span><span>' + money(hero.amount) + '</span></div>' + budgetLine({ cat: 'save', label: hero.label, sub: hero.sub, amount: hero.amount, strong: true, edit: 'step', raw: round2(pl.toStep * (mo ? pl.ppm : 1)) }, mo) : '') + '</div>' +
         '<div class="left' + (pl.tight ? ' tight' : pl.unassigned >= 0.5 ? ' open' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '\u2013' + money(-pl.extra * k) : pl.unassigned >= 0.5 ? money(pl.unassigned * k) : '$0 \u2713') + '</span></div>' +
+        (!pl.tight && pl.unassigned >= 0.5 ? '<p style="font-size:13px;color:var(--muted);margin-top:-4px">' + (mo ? 'Each month, ' : 'Each paycheck, ') + money(pl.unassigned * k) + ' is left after bills, spending, debt minimums and your step. It doesn\u2019t have a job yet, and money without a job usually slips away.</p>' : '') +
         (!pl.tight && pl.unassigned >= 0.5 && step <= 3 ? '<button type="button" class="outline" data-a="stepall" style="min-height:46px;font-size:15px">Give it a job: put ' + money(pl.unassigned * k) + ' toward ' + last + '</button>' : '') +
         (P.setupDone ? whatIfHtml(o, true) : '') +
-        (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or look for money in your bank file.</p>' : '') +
+        (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or add this week\u2019s purchases to see where your money goes.</p>' : '') +
         (P.setupDone ? nwCard() + snow0(o, step) : '') + (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="settings" style="align-self:center">Debts, savings and other details</button>'
           : '<div class="push"><button type="button" class="primary" data-a="finish">Start my plan</button></div>');
     },
@@ -1537,7 +1538,7 @@
       var cd = cdDays != null ? parts(cdDays) : null;
       var prog = '';
       if (step === 1) prog = [p.savings / F.CUSHION, money(p.savings) + ' saved', money(F.CUSHION) + ' goal'];
-      else if (step === 2) { var t = o.target, d0 = P.debts.filter(function (d) { return d.id === t.id; })[0], orig = Math.max(num(d0.orig), t.bal); prog = [(orig - t.bal) / orig, money(orig - t.bal) + ' paid', money(t.bal) + ' left']; }
+      else if (step === 2) { var t = o.target, d0 = P.debts.filter(function (d) { return d.id === t.id; })[0], orig = Math.max(num(d0.orig), t.bal); prog = [(orig - t.bal) / orig, money(orig - t.bal) + ' paid', money(t.bal) + ' left to pay']; }
       else if (step === 3) prog = [Math.min(1, p.savings / pl.safetyNet), money(p.savings) + ' saved', money(pl.safetyNet) + ' goal (' + efMonths() + ' months)'];
       var vs = '';
       if (o.debtFree && o.debtFreeMins && step <= 2) {
@@ -1549,7 +1550,7 @@
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
       var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
-        '<div class="ps-sub">' + money(p.paycheck) + ' in \u00b7 ' + money(pl.toStep) + ' to ' + where + '</div>' +
+        '<div class="ps-sub">' + (pl.toStep >= 0.5 ? money(p.paycheck) + ' comes in. After bills, spending and minimums, <b>' + money(pl.toStep) + '</b> of it goes to ' + where + '.' : money(p.paycheck) + ' comes in. None of it has a job for ' + where + ' yet.') + '</div>' +
         '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;

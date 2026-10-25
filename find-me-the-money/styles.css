@@ -672,3 +672,4 @@ label.primary { display: flex; align-items: center; justify-content: center; }
 .qnote { font-size: 15px; background: var(--warn-bg); color: var(--warn); border-radius: 16px; padding: 12px 14px; }
 .qnote.ok { background: rgba(211,240,230,.85); color: #1B2E2D; }
 .qburst { position: relative; width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #FF9F7A, #FFC27E); box-shadow: 0 10px 30px rgba(255,159,122,.45); }
+.pstrip .ps-sub b { font-size: inherit; }
