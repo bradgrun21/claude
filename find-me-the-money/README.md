@@ -122,6 +122,9 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 
 *An educational budgeting tool, not financial, tax or investment advice.*
 
+## Measuring return visits
+Each phone sends one cookie-free GoatCounter event per payday check-in number: `checkin-1`, `checkin-2`, `checkin-3`... (sent once each, no amounts, names or budget data). In the GoatCounter dashboard, the beta's key number is visitors on `event-checkin-2` divided by visitors on `event-checkin-1`.
+
 ## Still to set up
 - [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
 - [x] Supabase SMTP: sender name "Find Me the Money"

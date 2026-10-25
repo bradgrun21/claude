@@ -1843,7 +1843,16 @@
     snapshot(); save(); track(sr && !sr.repeat ? 'checkin-payday' : 'checkin-update');
     // the beta's key number: people who come back for a second payday
     if (sr && !sr.repeat && P.history.filter(function (h) { return h.payday; }).length === 2) track('second-payday');
+    // and the full picture: each phone sends "check-in 1", "check-in 2"... once (no amounts, names or budget data)
+    if (sr && !sr.repeat) countCheckin(P.history.filter(function (h) { return h.payday; }).length);
     U.toast = null; go('wins');
+  }
+  function countCheckin(n) {
+    try {
+      var k = 'fmtm.ci', sent = JSON.parse(localStorage.getItem(k) || '[]');
+      if (n < 1 || n > 52 || sent.indexOf(n) >= 0) return;
+      track('checkin-' + n); sent.push(n); localStorage.setItem(k, JSON.stringify(sent));
+    } catch (e) {}
   }
   // remembers where things stood, so the next check-in can count what changed
   function snapshot() {
