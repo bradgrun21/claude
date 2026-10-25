@@ -133,6 +133,11 @@ The Journey tab replaces Plans & Goals and Wins (old links land on the matching 
 
 Lesson text lives in `lessons.json` (id, step, order, chapter, title, card1-card3, skoolUrl, action, actionLabel). Edit it there; a lesson's last card links to its `skoolUrl` when one is set. The last tab spot is now Settings.
 
+## Screenshot reader (slice 3, step 1: test page)
+`scan.js` reads purchases from bank-app screenshots on the device: the image is cleaned up on a canvas (grayscale, dark mode inverted, small images scaled 2x, contrast stretched), read by Tesseract.js in its own Web Worker, then turned into rows (amount, date from the line or the section header above, merchant name cleaned up, split lines paired, long names that wrap joined, deposits and refunds tagged "Not a purchase?", transfers tagged "Transfer?", low-confidence rows flagged, duplicates dropped). Tesseract.js 6.0.1, its core and the English data are hosted with the app in `vendor/tesseract/` and load only on the first scan. Nothing is uploaded or stored.
+
+Test page (not linked in the app): `/dev/scan.html`. Pick screenshots, mark each row Right, enter missed purchases, and it shows accuracy per bank app. Parser tests: `node tests/scan.test.js`.
+
 ## Payday reminders
 Optional, from Settings (or offered after a payday check-in). The phone subscribes with OneSignal and links to the person's account; an hourly Supabase job (`supabase/functions/reminders`) sends at most one reminder a day at the person's chosen local time: payday check-in, money date, or a bill due tomorrow. Messages never include amounts or names. Modes: off, dry (log only), test (TEST_USER_IDS only), live.
 

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Screenshot reader test</title>
+<style>
+  :root { --bg: #E9EFEE; --card: #fff; --ink: #1B2E2D; --muted: #566866; --line: rgba(27,46,45,.14); --teal: #2A6B66; --warn: #A8432C; --soft: #FBE6D3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0E1918; --card: #152321; --ink: #E6EFEC; --muted: #9DB0AC; --line: rgba(230,239,236,.14); --teal: #5FB2A9; --warn: #F09A84; --soft: #3A2A20; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, Manrope, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 14px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0; }
+  p { margin: 0; color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+  .pick { display: grid; place-items: center; border: 2px dashed var(--teal); border-radius: 16px; padding: 22px; text-align: center; cursor: pointer; color: var(--teal); font-weight: 600; }
+  .pick input { display: none; }
+  .row { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .low { background: var(--soft); }
+  .tag { font-size: 11px; border-radius: 99px; padding: 1px 7px; background: var(--soft); white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+  pre { white-space: pre-wrap; font-size: 12px; background: var(--bg); border-radius: 10px; padding: 10px; margin: 0; max-height: 260px; overflow: auto; }
+  select, input[type=number] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+  input[type=number] { width: 64px; }
+  .big { font-size: 34px; font-weight: 300; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 99px; padding: 8px 16px; cursor: pointer; }
+  button.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+  canvas { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+  .status { color: var(--teal); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <div><h1>Screenshot reader test</h1>
+  <p>For Brad only, not part of the app. Pick screenshots of a bank app's transaction list. Everything is read on this device; nothing is uploaded or saved.</p></div>
+  <label class="pick">Pick screenshots<span style="font-weight:400;font-size:13px;color:var(--muted)">One or more, from Chase, Bank of America or Wells Fargo</span><input type="file" accept="image/*" multiple id="files"></label>
+  <div class="card" id="summary" hidden></div>
+  <div id="out" style="display:grid;gap:14px"></div>
+  <p style="font-size:13px">How to score: for each row, tick <b>Right</b> when the amount is exactly right and you'd recognize the store. Under each screenshot, enter how many purchases it <b>missed</b>. Accuracy = rows marked right &divide; (purchases found + missed). Rows tagged "Not a purchase?" or "Transfer?" don't count either way. Goal: 80% or better.</p>
+</main>
+<script src="../core.js"></script>
+<script src="../scan.js"></script>
+<script>
+(function () {
+  var shots = [], out = document.getElementById('out'), sum = document.getElementById('summary');
+  function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function money(n) { return '$' + n.toFixed(2); }
+  function score() {
+    var by = {}, tot = { right: 0, found: 0, missed: 0 };
+    shots.forEach(function (s) {
+      if (!s.rows) return;
+      var b = by[s.bank] = by[s.bank] || { right: 0, found: 0, missed: 0, shots: 0, ms: 0 };
+      var purch = s.rows.filter(function (r) { return !r.skip; });
+      var right = purch.filter(function (r) { return r.ok; }).length;
+      b.right += right; b.found += purch.length; b.missed += s.missed || 0; b.shots++; b.ms += s.ms;
+      tot.right += right; tot.found += purch.length; tot.missed += s.missed || 0;
+    });
+    var pct = function (x) { var d = x.found + x.missed; return d ? Math.round(x.right / d * 100) + '%' : '–'; };
+    sum.hidden = !shots.length;
+    sum.innerHTML = '<div class="row"><b>Accuracy so far</b><span class="big">' + pct(tot) + '</span></div>' +
+      '<table><tr><th>Bank app</th><th>Screens</th><th class="n">Right</th><th class="n">Found</th><th class="n">Missed</th><th class="n">Accuracy</th><th class="n">Avg time</th></tr>' +
+      Object.keys(by).map(function (k) { var b = by[k]; return '<tr><td>' + esc(k) + '</td><td>' + b.shots + '</td><td class="n">' + b.right + '</td><td class="n">' + b.found + '</td><td class="n">' + b.missed + '</td><td class="n">' + pct(b) + '</td><td class="n">' + (b.ms / b.shots / 1000).toFixed(1) + 's</td></tr>'; }).join('') + '</table>' +
+      '<div class="row"><button class="primary" id="copy">Copy the numbers</button><span style="font-size:13px;color:var(--muted)">Copies counts only, no store names or amounts.</span></div>';
+    document.getElementById('copy').onclick = function () {
+      var t = 'Screenshot reader test\n' + Object.keys(by).map(function (k) { var b = by[k]; return k + ': ' + pct(b) + ' (' + b.right + ' right of ' + (b.found + b.missed) + ' purchases, ' + b.shots + ' screenshots, ' + (b.ms / b.shots / 1000).toFixed(1) + 's each)'; }).join('\n') + '\nOverall: ' + pct(tot);
+      navigator.clipboard.writeText(t).then(function () { document.getElementById('copy').textContent = 'Copied'; });
+    };
+  }
+  function draw(s, i) {
+    var el = document.getElementById('shot' + i);
+    if (!s.rows) { el.innerHTML = '<b>' + esc(s.name) + '</b><p class="status">' + (s.err ? 'Could not read: ' + esc(s.err) : 'Reading…') + '</p>'; return; }
+    el.innerHTML = '<div class="row"><b>' + esc(s.name) + '</b><span style="font-size:13px;color:var(--muted)">' + (s.ms / 1000).toFixed(1) + 's · ' + (s.dark ? 'dark mode (inverted)' : 'light mode') + ' · ' + s.rows.length + ' rows</span></div>' +
+      '<div class="row"><label>Bank app <select data-bank="' + i + '">' + ['Chase', 'Bank of America', 'Wells Fargo', 'Other'].map(function (b) { return '<option' + (b === s.bank ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></label>' +
+      '<label>Purchases it missed <input type="number" min="0" value="' + (s.missed || 0) + '" data-missed="' + i + '"></label></div>' +
+      '<div class="scroll"><table><tr><th>Right</th><th>Store</th><th class="n">Amount</th><th>Date</th><th class="n">Confidence</th><th></th></tr>' +
+      s.rows.map(function (r, j) { return '<tr class="' + (r.low ? 'low' : '') + '"><td><input type="checkbox" data-ok="' + i + ':' + j + '"' + (r.ok ? ' checked' : '') + (r.skip ? ' disabled' : '') + ' aria-label="Right"></td><td>' + esc(r.merchant) + '<div style="font-size:11px;color:var(--muted)">' + esc(r.raw) + '</div></td><td class="n">' + money(r.amount) + '</td><td>' + esc(r.date || '') + '</td><td class="n">' + r.confidence + (r.low ? ' ⚠' : '') + '</td><td>' + (r.flag ? '<span class="tag">' + esc(r.flag) + '</span>' : '') + '</td></tr>'; }).join('') + '</table></div>' +
+      '<details><summary>Raw text it read</summary><pre>' + esc(s.lines.map(function (l) { return Math.round(l.confidence) + '  ' + l.text; }).join('\n')) + '</pre></details>' +
+      '<details><summary>Cleaned-up image it read</summary><div data-cv="' + i + '"></div></details>';
+    if (s.canvas) el.querySelector('[data-cv]').appendChild(s.canvas);
+  }
+  document.getElementById('files').addEventListener('change', function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []); e.target.value = '';
+    var chain = Promise.resolve();
+    files.forEach(function (f) {
+      var i = shots.length, s = { name: f.name, bank: shots.length ? shots[shots.length - 1].bank : 'Chase', missed: 0 };
+      shots.push(s); var div = document.createElement('div'); div.className = 'card'; div.id = 'shot' + i; out.appendChild(div); draw(s, i);
+      chain = chain.then(function () {
+        return FMTMScan.readImage(f).then(function (r) { s.rows = r.rows; s.lines = r.lines; s.ms = r.ms; s.dark = r.dark; s.canvas = r.canvas; }, function (er) { s.err = er && er.message || 'error'; s.rows = null; })
+          .then(function () { draw(s, i); score(); });
+      });
+    });
+  });
+  out.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.dataset.ok) { var p = t.dataset.ok.split(':'); shots[+p[0]].rows[+p[1]].ok = t.checked; }
+    if (t.dataset.missed) shots[+t.dataset.missed].missed = Math.max(0, +t.value || 0);
+    if (t.dataset.bank) shots[+t.dataset.bank].bank = t.value;
+    score();
+  });
+})();
+</script>
+</body>
+</html>
