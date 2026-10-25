@@ -3,12 +3,12 @@
 A payday plan, a debt snowball countdown and goals with real dates, built on a 7-step plan
 (starter cushion → debt snowball → full safety net → invest → kids' college → home → build & give).
 
-**Privacy by design:** everything is stored in the person's own browser. Bank CSV files are read on
+**Privacy by design:** everything is stored in the person's own browser. Bank app screenshots are read on
 the phone and never uploaded. There is no server, no account and no database.
 
 ## What's in the beta
 - Setup in 5 short steps: paycheck and schedule, monthly bills, debts, savings and giving, fun money
-- Optional bank CSV import (Chase-, Capital One-, Apple Card- and credit-union-style exports)
+- Weekly purchases from bank app screenshots (see Screenshot reader below), or added by hand
 - Find my money in 30 seconds: pay per paycheck and how often, expenses, debt and payments, then "We found $X a month" (debt payments you keep once debt-free, plus money with no job), "Want it back?" and Reclaim my money. The answers fill in the detailed setup
 - The path: a 7-step roadmap before setup, the journey filling to your step (with confetti) on the reveal, and a level-up card each time you reach a new step
 - Setup walks the path: savings (with what an emergency fund is), debts, paycheck and expenses, safety-net size (3 to 6 months slider), retirement (one card per account: whose, 401(k)/403(b)/IRA/Roth/pension, % or $ per month, balance, and whether it comes out before payday; take-home accounts become their own budget lines), kids and college, home and mortgage, giving. The reveal shows every step at a glance
@@ -20,10 +20,8 @@ the phone and never uploaded. There is no server, no account and no database.
 - Edit the budget in place: tap any amount to change it, tap a group to see and edit its bills, and add a need or a want right under its section
 - Home: payday sits inside the countdown card, plus an activity calendar (paydays, check-ins, milestones, challenges, finished plans); goals live on the Plans & Goals tab
 - Plans: every day is open right away; a day's action shows a Back to your plan bar with a Done check. Daily challenges can be checked off on any day
-- Import screen: an animated, five-step how-to for downloading a CSV, plus tips for common banks
-- Track spending by hand: + Add spending (amount, where, which budget line, date). Every budget line shows spent and left this month; over-budget lines turn orange. Quick add on Home, a monthly summary and list on the Budget tab, and a no-file option on the import screen
-- After a bank file: Put it in your budget. Drag each store onto a budget line (or tap it); it's remembered for next time, and imported purchases count against the lines. Month arrows on the spending summary
-- Tab bar: Home, Budget, a raised + in the middle (add spending, update balances, import a bank file, add a goal), Plans & Goals, Community. Your wins (Challenges and Milestones) sit under the community section
+- Track spending by hand: + Add spending (amount, where, which budget line, date). Every budget line shows spent and left this month; over-budget lines turn orange. Quick add on Home, a monthly summary and list on the Budget tab
+- Tab bar: Home, Budget, a raised + in the middle (add spending, update balances, add this week's purchases, add a goal), Plans & Goals, Community. Your wins (Challenges and Milestones) sit under the community section
 - Goals can have an exact date: the app shows what each paycheck needs to set aside and budgets it
 - iPhone: the welcome screen says to Add to Home Screen first (the Home Screen app has its own storage). Already set up in Safari? Settings > Copy my plan, then in the Home Screen app: Started in Safari? > paste
 - Bill due dates: each bill on the Budget tab can have a due date that repeats (monthly, every 2 weeks, weekly, yearly or one time). Due days show on the Home calendar, with a Coming up list for the next two weeks
@@ -108,14 +106,16 @@ Of the people who finish setup, how many come back and **check in on their next 
 ## Tests
 ```
 node tests/core.test.js
+node tests/scan.test.js
 ```
-Covers CSV reading for several bank formats, store-name cleanup, the Payday Plan, the snowball,
+Covers store-name cleanup, the screenshot reader's parsing, the Payday Plan, the snowball,
 Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 
 ## Files
 - `index.html`: page shell
 - `styles.css`: the calm "dawn glass" look with sunrise accents for wins
-- `core.js`: all the math and CSV reading (no screen code, tested)
+- `core.js`: all the math (no screen code, tested)
+- `scan.js`: reads purchases from bank app screenshots (tested)
 - `app.js`: screens and interactions
 - `share.js`: draws the shareable win cards (canvas, on the phone)
 - `privacy.html`, `manifest.webmanifest`, `sw.js` (offline), `icons/`
@@ -133,10 +133,12 @@ The Journey tab replaces Plans & Goals and Wins (old links land on the matching 
 
 Lesson text lives in `lessons.json` (id, step, order, chapter, title, card1-card3, skoolUrl, action, actionLabel). Edit it there; a lesson's last card links to its `skoolUrl` when one is set. The last tab spot is now Settings.
 
-## Screenshot reader (slice 3, step 1: test page)
+## Weekly purchases and the screenshot reader (slice 3)
 `scan.js` reads purchases from bank-app screenshots on the device: the image is cleaned up on a canvas (grayscale, dark mode inverted, small images scaled 2x, contrast stretched), read by Tesseract.js in its own Web Worker, then turned into rows (amount, date from the line or the section header above, merchant name cleaned up, split lines paired, long names that wrap joined, deposits and refunds tagged "Not a purchase?", transfers tagged "Transfer?", low-confidence rows flagged, duplicates dropped). Tesseract.js 6.0.1, its core and the English data are hosted with the app in `vendor/tesseract/` and load only on the first scan. Nothing is uploaded or stored.
 
-Test page (not linked in the app): `/dev/scan.html`. Pick screenshots, mark each row Right, enter missed purchases, and it shows accuracy per bank app. Parser tests: `node tests/scan.test.js`.
+Test page (not linked in the app): `/dev/scan.html`. Pick screenshots, mark each row Right, enter missed purchases, and it shows accuracy per bank app. Parser tests: `node tests/scan.test.js`. First real test: 18 of 18 purchases right across 3 screenshots from one bank app (dark mode, running balances under each row).
+
+**In the app:** each payday period has one "Add this week's purchases" node per week on the Journey map (two for every-two-weeks pay). It opens a screen to scan one or more screenshots, add one by hand, or tap "No purchases this week". Found rows start unchecked, with a category picker filled in from the person's own budget lines: a remembered store first, then store-name rules (groceries, gas, eating out, subscriptions, household), else blank. Confirm all checks every purchase; Save keeps only checked rows as spending (`P.spends`, `src: 'scan'`), remembers each store's category (`P.merchantMem`) and marks the week done (`P.weeks`). Rows already saved are skipped. An empty photo (iPhone with Optimize Storage) gets a plain fix: save it to Files first. CSV import is gone; older imported data still shows.
 
 ## Payday reminders
 Optional, from Settings (or offered after a payday check-in). The phone subscribes with OneSignal and links to the person's account; an hourly Supabase job (`supabase/functions/reminders`) sends at most one reminder a day at the person's chosen local time: payday check-in, money date, or a bill due tomorrow. Messages never include amounts or names. Modes: off, dry (log only), test (TEST_USER_IDS only), live.

@@ -34,92 +34,6 @@
     return isoDay(d);
   }
 
-  // ---------- CSV ----------
-  function parseCSV(text) {
-    var rows = [], row = [], cell = '', q = false, i, ch;
-    text = String(text).replace(/^﻿/, '');
-    for (i = 0; i < text.length; i++) {
-      ch = text[i];
-      if (q) {
-        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-        else cell += ch;
-      } else if (ch === '"') q = true;
-      else if (ch === ',') { row.push(cell); cell = ''; }
-      else if (ch === '\n' || ch === '\r') {
-        if (ch === '\r' && text[i + 1] === '\n') i++;
-        row.push(cell); cell = '';
-        if (row.some(function (c) { return c.trim() !== ''; })) rows.push(row);
-        row = [];
-      } else cell += ch;
-    }
-    row.push(cell);
-    if (row.some(function (c) { return c.trim() !== ''; })) rows.push(row);
-    return rows;
-  }
-  function toNumber(s) {
-    s = String(s == null ? '' : s).trim();
-    if (!s) return NaN;
-    var neg = /^\(.*\)$/.test(s) || /-$/.test(s) || /^-/.test(s.replace(/[$\s]/g, ''));
-    var n = parseFloat(s.replace(/[()$,\s+-]/g, ''));
-    return isNaN(n) ? NaN : (neg ? -n : n);
-  }
-  function parseDate(s) {
-    s = String(s || '').trim();
-    var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return m[1] + '-' + pad(+m[2]) + '-' + pad(+m[3]);
-    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
-    if (m) { var y = +m[3]; if (y < 100) y += 2000; return y + '-' + pad(+m[1]) + '-' + pad(+m[2]); }
-    return null;
-  }
-  function findCol(head, patterns) {
-    for (var p = 0; p < patterns.length; p++) {
-      for (var i = 0; i < head.length; i++) if (patterns[p].test(head[i])) return i;
-    }
-    return -1;
-  }
-  var NOT_SPENDING = /payment thank you|autopay|auto pay|online payment|mobile payment|transfer (to|from)|online transfer|internal transfer|credit card payment|payment - thank|epay/i;
-
-  // Reads a bank or card export. Returns spending only (money out), as positive amounts.
-  function readTransactions(text) {
-    var rows = parseCSV(text), h = -1, head, i;
-    for (i = 0; i < Math.min(rows.length, 12); i++) {
-      head = rows[i].map(function (c) { return c.trim().toLowerCase(); });
-      if (head.some(function (c) { return /date/.test(c); }) && head.some(function (c) { return /amount|debit|withdrawal|credit|deposit/.test(c); })) { h = i; break; }
-    }
-    if (h < 0) return { error: 'We couldn’t find the date and amount columns in that file. Try your bank’s “CSV” or “spreadsheet” export.' };
-    var dateCol = findCol(head, [/^transaction date$/, /^date$/, /^posted date$/, /^post(ing)? date$/, /date/]);
-    var descCol = findCol(head, [/^description$/, /^payee$/, /^merchant/, /^name$/, /description/, /payee|merchant|details|memo/]);
-    var merchCol = findCol(head, [/^merchant$/, /^merchant name$/]);
-    var amountCol = findCol(head, [/^amount$/, /amount/]);
-    var debitCol = findCol(head, [/^debit/, /withdrawal|outflow|money out/]);
-    var creditCol = findCol(head, [/^credit$/, /^credit amount/, /deposit|inflow|money in/]);
-    if (descCol < 0) return { error: 'We found dates and amounts but no description column, so we can’t tell the stores apart.' };
-    var raw = [];
-    for (i = h + 1; i < rows.length; i++) {
-      var r = rows[i], date = parseDate(r[dateCol]), desc = String(r[descCol] || '').trim(), v;
-      if (!date || !desc) continue;
-      if (debitCol >= 0 || (amountCol < 0 && creditCol >= 0)) {
-        var d = toNumber(r[debitCol]), c = toNumber(r[creditCol]);
-        v = !isNaN(d) && d !== 0 ? -Math.abs(d) : !isNaN(c) && c !== 0 ? Math.abs(c) : NaN;
-      } else v = toNumber(r[amountCol]);
-      if (isNaN(v) || v === 0) continue;
-      raw.push({ date: date, desc: desc, name: merchCol >= 0 && merchCol !== descCol ? String(r[merchCol] || '').trim() : '', v: v });
-    }
-    if (!raw.length) return { error: 'That file didn’t have any transactions we could read.' };
-    // most rows are purchases, so the most common sign is "money out"
-    var negs = raw.filter(function (x) { return x.v < 0; }).length;
-    var outSign = amountCol >= 0 && debitCol < 0 && negs < raw.length - negs ? 1 : -1;
-    var tx = [], skipped = 0;
-    raw.forEach(function (x) {
-      if (Math.sign(x.v) !== outSign) return;
-      if (NOT_SPENDING.test(x.desc)) { skipped++; return; }
-      tx.push({ date: x.date, desc: x.desc, merchant: cleanMerchant(x.name || x.desc), amount: Math.round(Math.abs(x.v) * 100) / 100 });
-    });
-    tx.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-    var first = tx.length ? tx[0].date : null, last = tx.length ? tx[tx.length - 1].date : null;
-    return { tx: tx, skipped: skipped, from: first, to: last, flipped: outSign === 1 };
-  }
-
   // "SQ *BLUE BOTTLE COFFEE 1234 OAKLAND CA" -> "Blue Bottle Coffee"
   var PROCESSORS = /^(SQ|TST|SP|PP|PAYPAL|IC|PY|BT|WPY|GOOGLE|APPLE PAY|CKO|FS|SPI|LS|PAR)$/;
   var KNOWN = [[/AMZN|AMAZON/, 'Amazon'], [/APPLE\.COM|ITUNES/, 'Apple'], [/NETFLIX/, 'Netflix'], [/SPOTIFY/, 'Spotify'], [/HULU/, 'Hulu'], [/DOORDASH/, 'DoorDash'],
@@ -501,7 +415,7 @@
   var api = { CUSHION: CUSHION, PLANS: PLANS, planDef: planDef, planStatus: planStatus, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
     CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
     nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
-    parseCSV: parseCSV, toNumber: toNumber, parseDate: parseDate, readTransactions: readTransactions, cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
+    cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
     BUDGET: BUDGET, groupFor: groupFor, billMonthly: billMonthly, billGroups: billGroups,
     plan: plan, perCheck: perCheck, stateFrom: stateFrom, smallest: smallest, paycheck: paycheck, paychecksUntil: paychecksUntil, outlook: outlook };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FMTM = api;

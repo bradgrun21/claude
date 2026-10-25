@@ -60,7 +60,7 @@
       debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', payVaries: false, payHist: [], payBasis: 'low', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, weeks: {}, merchantMem: {}, payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -480,19 +480,7 @@
     csvAutoplay();
     document.body.classList.toggle('has-tabs', tabbed);
   }
-  // ---------- the CSV how-to: five short animated scenes on a drawn phone ----------
-  var CSV_SCENES = [
-    ['Log in to your bank\u2019s website', 'Use Safari or a computer. Most bank apps can\u2019t export a file.',
-      '<div class="ph-url">\uD83D\uDD12 yourbank.com</div><div class="ph-title">Accounts</div><div class="ph-item tapme">Everyday Checking<span>$1,284.50</span></div><div class="ph-item">Savings<span>$300.00</span></div><div class="ph-item">Credit card<span>$412.08</span></div>', [50, 47]],
-    ['Open Activity, then tap Download', 'It might be a \u2913 icon, or say Export.',
-      '<div class="ph-url">\uD83D\uDD12 yourbank.com</div><div class="ph-title">Activity<span class="ph-dl tapme">\u2913</span></div><div class="ph-item">Kroger<span>\u2212$71.30</span></div><div class="ph-item">DoorDash<span>\u2212$24.10</span></div><div class="ph-item">Shell<span>\u2212$41.00</span></div><div class="ph-item">Paycheck<span>+$970.00</span></div>', [84, 30]],
-    ['Pick CSV and the last 30 days', 'It might be called Spreadsheet or Excel instead.',
-      '<div class="ph-sheet"><div class="ph-title">Download activity</div><div class="ph-opt">PDF</div><div class="ph-opt on tapme">CSV (spreadsheet)</div><div class="ph-opt">Quicken</div><div class="ph-range">Last 30 days \u25BE</div><div class="ph-btn">Download</div></div>', [50, 50]],
-    ['It saves to Files \u2192 Downloads', 'On a computer? AirDrop or email it to yourself.',
-      '<div class="ph-title">Downloads</div><div class="ph-file new"><span class="ph-ic">CSV</span>activity.csv<small>Just now</small></div><div class="ph-file"><span class="ph-ic pdf">PDF</span>statement.pdf<small>Sep 30</small></div>', [50, 34]],
-    ['Come back here and choose it', 'Tap Choose a CSV file, then Browse \u2192 Downloads.',
-      '<div class="ph-card tapme"><b>Choose a CSV file</b><small>Read on this phone, never uploaded</small></div><div class="ph-file new later"><span class="ph-ic">CSV</span>activity.csv<small>Tap to import</small></div>', [50, 28]]
-  ];
+  // ---------- Add to Home Screen how-to: short animated scenes on a drawn phone ----------
   var HS_ICON = '<img class="ph-icon" src="icons/icon-192.png" alt="">';
   var HS_GRID = function (n) { var t = ''; for (var k = 0; k < 12; k++) t += k === n ? '<span class="ph-appwrap">' + HS_ICON.replace('ph-icon', 'ph-icon new tapme') + '<small>Find Money</small></span>' : '<span class="ph-appwrap"><i class="ph-blank"></i></span>'; return '<div class="ph-grid">' + t + '</div>'; };
   var IOS_SCENES = [
@@ -513,7 +501,7 @@
       '<div class="ph-dialog"><b>Install app?</b><div class="ph-addrow">' + HS_ICON + '<div><b>Find Money</b><small>findmethemoney.netlify.app</small></div></div><div class="ph-dlgbtns"><span>Cancel</span><span class="ph-add tapme">Install</span></div></div>', [78, 62]],
     ['Open it from your Home Screen', 'Use the app from here from now on. Your plan stays put.', HS_GRID(5), [38, 27]]
   ];
-  var GUIDES = { csv: CSV_SCENES, ios: IOS_SCENES, android: ANDROID_SCENES };
+  var GUIDES = { ios: IOS_SCENES, android: ANDROID_SCENES };
   function guideScene(key, i) {
     var list = GUIDES[key], sc = list[i], n = list.length;
     return '<div class="csv-stage" key="' + i + '"><div class="phone"><div class="ph-screen">' + sc[2].replace('{SHARE}', ICON.share) + '<i class="ph-finger" style="left:' + sc[3][0] + '%;top:' + sc[3][1] + '%"></i></div></div>' +
@@ -552,7 +540,7 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['spendnew', '', 'Add spending', 'Five seconds per purchase'], ['checkin', '', 'Update my balances', 'Check in on payday, or anytime'], ['edit', 'import', 'Import a bank file', 'Sort it into your budget'], ['goalnew', '', 'Add a goal', 'A trip, a car, a gift']];
+    var items = [['spendnew', '', 'Add spending', 'Five seconds per purchase'], ['checkin', '', 'Update my balances', 'Check in on payday, or anytime'], ['scan', '', 'Add this week\u2019s purchases', 'Scan a screenshot of your bank app'], ['goalnew', '', 'Add a goal', 'A trip, a car, a gift']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
       return '<button type="button" role="menuitem" data-a="' + x[0] + '"' + (x[1] ? ' data-v="' + x[1] + '"' : '') + '><b>' + x[2] + '</b><small>' + x[3] + '</small></button>'; }).join('') + '</div>';
   }
@@ -791,6 +779,70 @@
     out.push({ key: 'other', label: 'Something else', cat: 'other', mon: 0 });
     return out;
   }
+  // ---------- weekly purchases: scan a bank app screenshot, or add by hand ----------
+  // the weeks of the current payday period (two for every-two-weeks pay, one for weekly)
+  function payWeeks() {
+    var t = today(), np = F.rollPayday(P.nextPay, P.freq, t), len = F.FREQS[P.freq].days;
+    if (F.daysBetween(t, F.fromIso(np)) === 0) np = F.nextAfter(np, P.freq);
+    var start = F.addDays(F.fromIso(np), -len), n = Math.max(1, Math.round(len / 7)), out = [];
+    for (var k = 0; k < n; k++) {
+      var ws = F.addDays(start, k * 7), we = k === n - 1 ? F.addDays(F.fromIso(np), -1) : F.addDays(ws, 6);
+      out.push({ start: F.isoDay(ws), end: F.isoDay(we), open: F.daysBetween(ws, t) >= 0, now: F.daysBetween(ws, t) >= 0 && F.daysBetween(t, we) >= 0, done: !!(P.weeks || {})[F.isoDay(ws)] });
+    }
+    return out;
+  }
+  function weekNow() { var w = payWeeks(); return w.filter(function (x) { return x.now; })[0] || w[w.length - 1]; }
+  function weekLabel(w) { var a = F.fromIso(w.start), b = F.fromIso(w.end), m = function (d) { return d.toLocaleDateString('en-US', { month: 'short' }); }; return m(a) + ' ' + a.getDate() + '–' + (m(a) === m(b) ? '' : m(b) + ' ') + b.getDate(); }
+  function merchKey(m) { return String(m || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  // store words -> the budget line they usually belong to: [store pattern, line name pattern, need or want]
+  var STORE_RULES = [
+    [/\b(h-?e-?b|kroger|aldi|safeway|publix|costco|sam'?s club|whole foods|trader joe'?s|food lion|winco|grocery|market|wegmans|meijer|albertsons|sprouts|walmart|heb)\b/i, /grocer|food|basics/i, 'need'],
+    [/\b(shell|chevron|exxon|mobil|circle k|quiktrip|qt|valero|bp|racetrac|speedway|7-eleven|wawa|sunoco|marathon|gas|fuel|buc-?ee'?s)\b/i, /gas|fuel|car|auto|transport/i, 'need'],
+    [/\b(chick-fil-a|mcdonald|starbucks|sonic|chipotle|taco|pizza|coffee|brew|restaurant|grill|cafe|wendy|burger|subway|dunkin|panera|whataburger|doordash|uber eats|grubhub|kfc|popeyes|dutch bros|raising cane)/i, /eat|dining|restaurant|takeout|coffee|food out|fun/i, 'want'],
+    [/\b(netflix|spotify|hulu|disney|youtube|apple|skool|prime video|hbo|max|paramount|peacock|audible)\b/i, /subscri|stream|apps?\b|fun/i, 'want'],
+    [/\b(target|amazon|amzn|dollar general|dollar tree|walgreens|cvs|home depot|lowe'?s)\b/i, /household|home|shopping|supplies|basics/i, 'need']
+  ];
+  function suggestKey(merchant, lines) {
+    var mem = (P.merchantMem || {})[merchKey(merchant)];
+    if (mem && lines.some(function (l) { return l.key === mem; })) return { key: mem, tag: 'Remembered' };
+    for (var i = 0; i < STORE_RULES.length; i++) {
+      var r = STORE_RULES[i]; if (!r[0].test(merchant)) continue;
+      var hit = lines.filter(function (l) { return l.cat !== 'other' && r[1].test(l.label); })[0];
+      if (!hit && r[2] === 'need' && !itemized()) hit = lines.filter(function (l) { return l.key === 'basics'; })[0];
+      if (!hit && r[2] === 'want') hit = lines.filter(function (l) { return l.key === 'fun'; })[0];
+      if (hit) return { key: hit.key, tag: 'Suggested' };
+    }
+    return { key: '', tag: '' };
+  }
+  function openScan(week) { U.scan = { week: week || weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.screen === 'scan' ? U.scanBack : U.screen; go('scan'); }
+  // read picked screenshots on this phone, one at a time; nothing is uploaded or kept
+  function scanFiles(input) {
+    var picked = Array.prototype.slice.call(input.files || []), sc = U.scan; if (!picked.length || !sc) return;
+    if (!window.FMTMScan) { sc.err = 'The screenshot reader didn’t load. Check your connection and try again.'; render(); return; }
+    // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
+    Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (files) {
+      input.value = ''; sc.total = files.length; sc.reading = 1; sc.err = ''; render();
+      var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMScan.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); }), empty = 0, failed = 0, found = 0;
+      return files.reduce(function (chain, f, i) {
+        return chain.then(function () {
+          sc.reading = i + 1; render();
+          if (!f.size) { empty++; return; }
+          return FMTMScan.readImage(f).then(function (r) {
+            found += r.rows.length; var fresh = FMTMScan.dedupe(sc.rows.concat(r.rows), seen).slice(sc.rows.length);
+            fresh.forEach(function (row) { var g = row.skip ? { key: '', tag: '' } : suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = false; sc.rows.push(row); });
+          }, function () { failed++; });
+        });
+      }, Promise.resolve()).then(function () {
+        sc.reading = 0;
+        if (empty) sc.err = (empty === files.length ? 'That photo came through empty. ' : 'One photo came through empty. ') + 'On iPhone this happens when the photo is stored in iCloud. In Photos, tap Share → Save to Files, then tap Scan a screenshot → Choose File.';
+        else if (failed) sc.err = 'We couldn’t read ' + (failed === files.length ? 'that screenshot' : failed + ' of them') + '. Try a screenshot of your bank app’s transaction list, or add purchases by hand.';
+        else if (!sc.rows.length && found) sc.err = 'Everything in ' + (files.length > 1 ? 'those screenshots' : 'that screenshot') + ' is already saved.';
+        else if (!sc.rows.length) sc.err = 'We didn’t find any purchases in that screenshot. Try one that shows your bank app’s list of transactions.';
+        track('scan-read'); render();
+      });
+    });
+  }
+  function weekDone(ws, how) { P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
   function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
   function tracking() { return P.spends.length > 0 || Object.keys(P.storeLine || {}).length > 0; }
@@ -884,7 +936,7 @@
       '<input type="range" min="0" max="' + max + '" step="25" value="' + v + '" data-whatif="1" aria-label="Extra dollars a month">' +
       '<div class="row" style="border:0;padding:0;font-size:13px;color:var(--faint)"><span>+$0</span><span>+' + money(max) + ' a month</span></div>' +
       '<p style="font-size:13px">Right now about <b>' + money(perMonth) + ' a month</b> goes to this step. Every extra dollar here goes straight at it.</p>' +
-      (inBudget || P.setupDone ? '<div class="chips">' + [['import', 'Find it in my bank file'], ['challenges', 'Try an earn challenge'], ['fun', 'Lower my fun money']].filter(function (x) { return x[0] !== 'challenges' || (P.unlocked && P.unlocked.challenges); }).map(function (x) {
+      (inBudget || P.setupDone ? '<div class="chips">' + [['challenges', 'Try an earn challenge'], ['fun', 'Lower my fun money']].filter(function (x) { return x[0] !== 'challenges' || (P.unlocked && P.unlocked.challenges); }).map(function (x) {
         return '<button type="button" class="chip" data-a="' + (x[0] === 'challenges' ? 'go' : 'edit') + '" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' : '') + '</div>';
   }
   // one line per step for the reveal: [status, done?]
@@ -1354,28 +1406,10 @@
         '<div class="push"><button type="button" class="outline" data-a="go" data-v="planday">Back to day 7</button></div>';
     },
 
-    import: function () {
-      return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><div class="eyebrow">Optional · about a minute</div><h2>See where your money went</h2>' +
-        '<p>Download last month’s transactions from your bank or card as a CSV file, then pick it here. The file is read on this phone and never uploaded.</p></div>' +
-        '<label class="choice best" style="cursor:pointer"><div class="ic">' + ICON.file + '</div><div><b>Choose a CSV file</b><span class="d">From your bank’s website or app: Activity → Download → CSV.</span></div>' +
-        '<input type="file" accept=".csv,text/csv,text/comma-separated-values,application/vnd.ms-excel" data-file="csv" class="sr"></label>' +
-        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
-        '<div class="eyebrow" style="margin-top:6px">How to get the file \u00b7 30 seconds</div>' +
-        guideBox('csv') +
-        '<button type="button" class="textbtn" data-a="help" style="align-self:flex-start">' + (U.showHelp ? 'Hide tips' : 'Still stuck? Tips for common banks') + '</button>' +
-        (U.showHelp ? '<div class="card stack" style="padding:14px 18px;font-size:14px;color:var(--muted);gap:10px">' +
-          '<span><b>No download button in your bank\u2019s app?</b> Most banks only offer it on their <b>website</b>. In Safari, log in to your bank, tap <b>aA</b> in the address bar, then <b>Request Desktop Website</b>.</span>' +
-          '<span><b>Look for</b> Download, Export, or a \u2913 icon on your account activity. The format might be called CSV, Spreadsheet or Excel. Pick the last 30 days.</span>' +
-          '<span><b>On a computer?</b> Download it there, then AirDrop or email it to yourself and save it to Files. Import it here on your phone, where your plan lives.</span>' +
-          '<span><b>Apple Card:</b> Wallet \u2192 Apple Card \u2192 Card Balance \u2192 a monthly statement \u2192 Export Transactions \u2192 CSV.</span>' +
-          '<span><b>Still can\u2019t find it?</b> Search your bank\u2019s help for \u201cexport transactions CSV.\u201d Use the account you spend from most. You can add another file later.</span></div>' : '') +
-        (P.setupDone ? '<button type="button" class="outline" data-a="spendnew">No file? Add your spending by hand</button>' : '') +
-        '<div class="push"><button type="button" class="textbtn" data-a="go" data-v="' + (U.wizReturn || 'home') + '">Skip for now</button></div>';
-    },
     sort: function () {
       var q = spending().unsorted, done = U.sortHist.length, total = q.length + done, cur = q[0];
       if (!cur) return V.found();
-      return back(P.setupDone ? 'home' : 'import') + '<div class="stack" style="gap:6px"><div class="eyebrow">Sort your spending · ' + (done + 1) + ' of ' + total + '</div><h2>Need or want?</h2>' +
+      return back('home') + '<div class="stack" style="gap:6px"><div class="eyebrow">Sort your spending · ' + (done + 1) + ' of ' + total + '</div><h2>Need or want?</h2>' +
         '<p>You decide. Swipe right for a need, left for a want. Every purchase at this store gets sorted the same way' + (cur.count > 1 ? ', unless you sort them one by one below' : '') + '.</p></div>' +
         '<div class="bar" style="flex:none"><i style="width:' + (done / total * 100) + '%"></i></div>' +
         '<div class="swipe-wrap">' + (q[1] ? '<div class="swipe-next" aria-hidden="true"></div>' : '') +
@@ -1446,7 +1480,7 @@
             return '<div class="row txrow"><div>' + dayMonth(F.fromIso(tx.date)) + '<small>' + money2(tx.amount) + '</small></div>' + seg(esc(x.m) + ', ' + dayMonth(F.fromIso(tx.date)), k, 'data-a="ttog" data-i="' + i + '"') + '</div>';
           }).join('') + '</div>';
         }).join('') : '<p style="padding:12px 0">Nothing here yet.</p>') + '</div>' +
-        '<button type="button" class="outline" data-a="go" data-v="import">Import another file</button>';
+        '<button type="button" class="outline" data-a="scan">Add this week\u2019s purchases</button>';
     },
 
     plan: function () {
@@ -1455,7 +1489,7 @@
       var mo = !!U.planMonth, k = mo ? pl.ppm : 1;
       var rows = budgetRows(pl, mo), found = foundNow();
       var hero = { label: last, amount: pl.toStep * k, sub: found && pl.toStep > 0 ? 'Includes the ' + money(found / (mo ? 1 : pl.ppm)) + (mo ? ' a month' : ' a paycheck') + ' you found' : '' };
-      return (P.setupDone ? '' : back('import')) + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>' + (mo ? 'Every month: ' + money(p.paycheck * k) : 'Every paycheck: ' + money(p.paycheck)) + '. Every dollar has a job.</h2>' +
+      return (P.setupDone ? '' : back('reveal')) + '<div class="eyebrow" style="margin-top:8px">Your Payday Plan · Step ' + step + ' of 7</div><h2>' + (mo ? 'Every month: ' + money(p.paycheck * k) : 'Every paycheck: ' + money(p.paycheck)) + '. Every dollar has a job.</h2>' +
         '<p style="font-size:14px">' + (step === 1 ? 'First, $1,000 for emergencies, so a flat tire doesn’t go on a credit card. Then every spare dollar attacks debt.' : step === 2 ? 'Your cushion is in place. Every spare dollar goes to your smallest debt first.' : step === 3 ? 'No debt to attack. Every spare dollar builds ' + efMonths() + ' months of expenses.' : 'Debt-free with a full safety net. Time to invest 15% and give generously.') + '</p>' +
         '<div class="seg" role="group" aria-label="Show the plan" style="align-self:flex-start">' + [['check', 'Per paycheck'], ['month', 'Per month']].map(function (o) {
           var on = (o[0] === 'month') === mo; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="plview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
@@ -1527,7 +1561,7 @@
       if (short >= 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
         '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + (short > 0 ? 'You\u2019re ' + money(short) + ' short each paycheck.' : 'Every dollar has a job. None is left for your step yet.') + '</div>' +
         '<div style="font-size:15px;color:rgba(255,255,255,.88)">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</div>' +
-        '<div class="stack" style="gap:8px">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['go', 'import', 'Find it in my bank file']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
+        '<div class="stack" style="gap:8px">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['scan', '', 'See where my money goes']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
         homeRest(o, step, snow0(o, step));
       var hero = '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">' + h.label + '</div>' +
         (cd ? '<div class="cd" style="grid-template-columns:repeat(' + cd.length + ',minmax(0,1fr))">' + cd.map(function (x) { return '<div><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div><div style="font-size:15px">on ' + longDate(h.date) + '</div>'
@@ -1707,6 +1741,33 @@
           : '<button type="button" class="primary" data-a="planmark">Mark day ' + (i + 1) + ' complete</button>') + '</div>';
     },
 
+    scan: function () {
+      var sc = U.scan; if (!sc) { U.scan = sc = { week: weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
+      var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow(), lines = spendLines();
+      var pick = function (label, cls) { return '<label class="' + cls + '" style="cursor:pointer;text-align:center">' + label + '<input type="file" accept="image/*" multiple data-file="scan" class="sr"></label>'; };
+      var groups = [['need', 'Needs'], ['want', 'Wants'], ['other', 'Not in my budget']];
+      var select = function (r, i) {
+        return '<select data-scan-key="' + i + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
+          var m = lines.filter(function (l) { return l.cat === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
+        }).join('') + '</select>';
+      };
+      var n = sc.rows.filter(function (r) { return r.ok; }).length, open = sc.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
+      var rows = sc.rows.map(function (r, i) {
+        var sub = [r.date ? dayMonth(F.fromIso(r.date)) : 'No date found'].concat(r.flag ? ['<span class="sctag warn">' + esc(r.flag) + '</span>'] : []).concat(r.tag ? ['<span class="sctag">' + r.tag + '</span>'] : []).concat(r.low ? ['<span class="sctag warn">Double-check</span>'] : []);
+        return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
+          '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, i) + '</div></div>';
+      }).join('');
+      return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add this week’s purchases</h2>' +
+        '<p>Scan screenshots of your bank app’s transaction list. They’re read on this phone, never uploaded or saved.</p></div>' +
+        (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'screenshot ' + sc.reading + ' of ' + sc.total : 'your screenshot') + '…</b><small>A few seconds each. The first one takes longer.</small></div>' : '') +
+        (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
+        (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
+          '<small style="color:var(--muted)">Check each purchase that’s right and pick its category. Unchecked rows are skipped, so leave pending charges, transfers and repeats unchecked.</small></div>' +
+          '<div class="card scl">' + rows + '</div>' +
+          '<div class="push"><button type="button" class="primary" data-a="scansave"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') : 'Check the purchases to save') + '</button>' + pick('Scan another screenshot', 'outline') + '<button type="button" class="textbtn" data-a="weekhand">Add one by hand</button></div>'
+          : sc.reading ? '' : '<div class="stack" style="gap:10px">' + pick('Scan a screenshot', 'primary') + '<button type="button" class="outline" data-a="weekhand">Add one by hand</button><button type="button" class="textbtn" data-a="weeknone">No purchases this week</button></div>' +
+            '<p style="font-size:13px;color:var(--muted)">Tip: scroll your bank app to this week’s purchases and take a screenshot or two. On iPhone, if a photo won’t open, save it to Files first and choose it from there.</p>');
+    },
     spendadd: function () {
       var f = U.form || {}, lines = spendLines(), last = f.key;
       var chips = function (cat, title) {
@@ -1802,7 +1863,7 @@
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
       return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
-        '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['import', 'Import a bank file'], ['install', 'Add to Home Screen']].map(function (x) {
+        '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
@@ -2201,8 +2262,8 @@
   function jStars() { return (P.history || []).reduce(function (t, h) { return t + (h.stars || 0); }, 0); }
   function jNode(o) {
     var cls = 'mnode' + (o.done ? ' done' : o.locked ? ' locked' : ' open') + (o.kind ? ' ' + o.kind : '');
-    var tag = o.locked || o.done || !o.a ? 'div' : 'button type="button"';
-    return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (o.a && !o.locked && !o.done ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
+    var live = o.a && !o.locked && (!o.done || o.again), tag = live ? 'button type="button"' : 'div';
+    return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (live ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
       '<span class="orb">' + (o.done ? ICON.check('currentColor', 20) : o.icon) + '</span><span class="jt"><b>' + o.t + '</b><small>' + o.s + '</small></span></' + tag.split(' ')[0] + '>';
   }
   function journeyMap() {
@@ -2234,6 +2295,11 @@
     } else {
       html += '<div class="jchap"><div class="eyebrow">Step ' + Math.min(j.step, 7) + ' \u00b7 ' + F.STEPS[Math.min(j.step, 7) - 1][0] + '</div><small>The map for this step is on the way. Keep checking in: your stars still count.</small></div>';
     }
+    // this payday period's weekly "Add this week's purchases" nodes
+    var cart = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
+    payWeeks().forEach(function (w) {
+      add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added \u00b7 tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
+    });
     // the 7-Day Money Reset is the lesson set for Step 1; one opens after another
     var firstOpen = true;
     for (var i = 0; i < 7; i++) {
@@ -2319,7 +2385,7 @@
     var items = [
       ['savings', 'Add your emergency savings', 'Sharpens your $1,000 cushion date', savingsSet()],
       ['fun', 'Set your fun money', 'Optional: give eating out and shopping a limit', funSet()],
-      ['import', 'See where your money goes', 'Import a bank file and sort it', P.tx.length > 0],
+      ['scan', 'See where your money goes', 'Scan this week\u2019s purchases from your bank app', Object.keys(P.weeks || {}).length > 0],
       ['bills', 'List your bills one by one', 'Optional: more exact than one number', itemized()]
     ];
     if (!standalone()) items.push(['install', 'Add to your Home Screen', isIOS() ? 'Keeps your plan safe on iPhone' : 'One tap away on payday', !!P.installSeen]);
@@ -2429,13 +2495,32 @@
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
       case 'guidestep': (function () { var k = b.getAttribute('data-k'); U.gStep = U.gStep || {}; U.gPaused = U.gPaused || {}; U.gStep[k] = +v; U.gPaused[k] = true; clearInterval(csvTimer); csvTimer = null; var el = app.querySelector('[data-guide="' + k + '"]'); if (el) el.innerHTML = guideScene(k, U.gStep[k]); })(); break;
+      case 'scan': openScan(); break;
+      case 'weekadd': openScan(v); break;
+      case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
+      case 'scansave': (function () {
+        var sc = U.scan, keep = sc.rows.filter(function (r) { return r.ok; }), miss = keep.filter(function (r) { return !r.key; })[0];
+        if (!keep.length) return;
+        if (miss) { sc.err = 'Choose a category for ' + miss.merchant + ' (' + money2(miss.amount) + ').'; render(); return; }
+        var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0], fallback = F.isoDay(today());
+        if (w && w.end < fallback) fallback = w.end;
+        P.merchantMem = P.merchantMem || {};
+        keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: 'scan' }); P.merchantMem[merchKey(r.merchant)] = r.key; });
+        weekDone(sc.week, 'saved'); track('scan-save');
+        // the screenshot and what was read from it are dropped here
+        U.scan = null; U.planToast = plural(keep.length, 'purchase') + ' saved to your budget.'; U.jTab = 'map'; save(); go(U.scanBack === 'journey' || !U.scanBack ? 'journey' : U.scanBack);
+      })(); break;
+      case 'weeknone': weekDone(U.scan.week, 'none'); track('scan-none'); U.planToast = 'Got it: no purchases this week.'; U.scan = null; U.jTab = 'map'; save(); go('journey'); break;
+      case 'weekhand': U.spendBack = 'scan'; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendcat': U.form.key = v; U.formErr = ''; render(); break;
       case 'spendsave':
         if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
         if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
         P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
-        U.lastSpendKey = U.form.key; save(); track('spend-add');
+        U.lastSpendKey = U.form.key;
+        if (U.spendBack === 'scan' && U.scan) { weekDone(U.scan.week, 'saved'); if (String(U.form.note || '').trim()) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(U.form.note)] = U.form.key; } }
+        save(); track('spend-add');
         if (v === 'again') {
           var sl = spendLines().filter(function (l) { return l.key === U.form.key; })[0];
           U.spendSaved = money2(num(U.form.amount)) + ' added to ' + (sl ? sl.label : 'your budget') + '.';
@@ -2735,7 +2820,7 @@
         U.wizReturn = 'lesson';
         if (v === 'plan') { go('plan'); return; }
         if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6, when: 'date' }; U.formErr = ''; U.back = 'lesson'; U.next = 'lesson'; go('goal'); return; }
-        if (v === 'spend') { if (!P.tx.length) { go('import'); return; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); return; } go('spend'); return; }
+        if (v === 'spend') { openScan(); return; }
         go(v);
       })(); break;
       case 'jfun': U.wizReturn = 'journey'; go('fun'); break;
@@ -2756,7 +2841,7 @@
         U.planCtx = { uid: U.planUid, day: U.planDay };
         if (v === 'ics') { download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break; }
         if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6 }; U.formErr = ''; U.back = 'planday'; U.next = 'planday'; go('goal'); break; }
-        if (v === 'spend') { U.wizReturn = 'planday'; if (!P.tx.length) { go('import'); break; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); break; } }
+        if (v === 'spend') { U.wizReturn = 'planday'; openScan(); break; }
         if (v === 'savings' || v === 'fun' || v === 'debts' || v === 'install') U.wizReturn = 'planday';
         go(v); break;
       case 'shareplan':
@@ -2895,13 +2980,9 @@
   app.addEventListener('change', function (e) {
     var t = e.target;
     if (t.hasAttribute('data-slide')) { save(); render(); return; }
-    if (t.getAttribute('data-file') === 'csv') readFile(t, function (text) {
-      var r = F.readTransactions(text);
-      if (r.error) { U.err = r.error; render(); return; }
-      if (!r.tx.length) { U.err = 'We found the file, but no spending in it. Try the account you spend from.'; render(); return; }
-      P.tx = r.tx.map(function (x) { return { date: x.date, desc: x.desc, merchant: x.merchant, amount: x.amount }; }); P.txFrom = r.from; P.txTo = r.to;
-      save(); track('import'); U.sortHist = []; U.limit = null; go('sort');
-    });
+    if (t.getAttribute('data-file') === 'scan') { scanFiles(t); return; }
+    if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }
+    if (t.hasAttribute('data-scan-key')) { var sk = U.scan.rows[+t.getAttribute('data-scan-key')]; sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; U.scan.err = ''; render(); return; }
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {
       try { var d = JSON.parse(text); if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad'); if (P.setupDone) keepCopy(); P = Object.assign(blank(), d); save(); U.toast = ['Backup restored.', 'Welcome back.', false]; go(P.setupDone ? 'home' : 'welcome'); }
       catch (err) { U.err = 'That doesn’t look like a Find Me the Money backup file.'; render(); }

@@ -629,3 +629,29 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .btotal small { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .btotal b { font-size: 17px; }
 .bkids .brow > span:first-child { color: var(--ink); }
+/* weekly purchases: rows read from a bank app screenshot */
+label.primary { display: flex; align-items: center; justify-content: center; }
+.primary:disabled { opacity: .5; box-shadow: none; }
+.scl { padding: 2px 14px; }
+.scrow { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.scrow:last-child { border-bottom: 0; }
+.scrow.skip { opacity: .62; }
+.scrow.low .scmid > b, .scrow.low .sctop b:first-child { text-decoration: underline wavy rgba(168,67,44,.45); text-underline-offset: 4px; }
+.scchk { display: grid; place-items: center; min-width: 32px; min-height: 32px; padding-top: 2px; cursor: pointer; }
+.scchk input { width: 22px; height: 22px; accent-color: #2A6B66; margin: 0; }
+.scmid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.sctop { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.sctop b:first-child { min-width: 0; overflow-wrap: anywhere; }
+.scamt { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.scmid small { font-size: 13px; color: var(--muted); }
+.sctag { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--green-soft); color: #2A6B66; white-space: nowrap; }
+.sctag.warn { background: var(--warn-bg); color: var(--warn); }
+.scmid select { min-height: 40px; border-radius: 12px; border: 1px solid rgba(27,46,45,.14); background: rgba(255,255,255,.8); padding: 0 10px; font: inherit; font-size: 15px; color: var(--ink); width: 100%; max-width: 100%; }
+.scmid select.unset { color: var(--muted); border-color: rgba(42,107,102,.35); }
+.scrow.on { background: linear-gradient(90deg, rgba(42,107,102,.06), transparent); }
+.scread { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: center; padding: 14px 18px; }
+.scread small { grid-column: 2; color: var(--muted); font-size: 13px; }
+.spin { grid-row: span 2; width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--green-soft); border-top-color: #2A6B66; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+.scerr { color: var(--warn); font-size: 14px; background: var(--warn-bg); border-radius: 16px; padding: 10px 14px; }
