@@ -455,7 +455,7 @@
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
   var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['settings', 'Settings', 'gear']];
-  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' ? 'journey' : screen; }
+  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
   function render() {
     ensureIds();
     if (P.setupDone && P.journey && !P.journey.makeRoomDone) jCheckRoom();
@@ -1701,6 +1701,24 @@
           : t === 'challenges' ? V.challenges()
           : (P.setupDone ? streakCard() : '') + V.milestones() + (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') + goalsCard());
     },
+    quiz: function () {
+      var z = U.quiz; if (!z) { U.jTab = 'map'; return V.journey(); }
+      var head = back('journey');
+      if (z.i >= z.qs.length) {
+        return head + '<div class="stack quizdone" style="gap:10px;margin-top:12px;text-align:center;align-items:center"><span class="qburst">' + ICON.check('#fff', 30) + confetti(22, 0) + '</span>' +
+          '<div class="eyebrow">' + (z.retry ? 'Review done' : 'Step ' + z.step + ' checkpoint') + '</div><h2>' + (z.retry ? 'Got them all' : z.firstTry ? 'Passed on the first try' : 'Checkpoint passed') + '</h2>' +
+          '<p>' + (z.retry ? 'Those answers are yours now.' : z.newStars ? '+3 stars. ' + (z.firstTry ? 'You know this step.' : 'Every miss was a chance to learn it.') : 'You passed this one before. Nice refresher.') + '</p></div>' +
+          '<div class="push"><button type="button" class="primary" data-a="quizend">Back to my map</button></div>';
+      }
+      var q = z.qs[z.i], st = z.state || {};
+      return head + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (z.retry ? 'Quick review' : 'Step ' + z.step + ' checkpoint') + ' · Question ' + (z.i + 1) + ' of ' + z.qs.length + '</div><h2 class="qtext">' + q.q + '</h2></div>' +
+        '<div class="ldots">' + z.qs.map(function (_, n) { return '<i class="' + (n <= z.i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
+        '<div class="stack" style="gap:10px">' + q.choices.map(function (c, n) {
+          var cls = st.right && n === q.answer ? ' right' : (st.wrong || []).indexOf(n) >= 0 ? ' wrong' : '';
+          return '<button type="button" class="opt qopt' + cls + '" data-a="quizpick" data-v="' + n + '"' + (st.right || (st.wrong || []).indexOf(n) >= 0 ? ' disabled' : '') + '>' + c + '</button>'; }).join('') + '</div>' +
+        (st.right ? '<p class="qnote ok" role="status"><b>' + ((st.wrong || []).length ? 'There it is.' : 'Right.') + '</b> ' + q.why + '</p>' : (st.wrong || []).length ? '<p class="qnote" role="status"><b>Not quite.</b> ' + q.why + ' Try again.</p>' : '') +
+        (st.right ? '<div class="push"><button type="button" class="primary" data-a="quiznext">' + (z.i === z.qs.length - 1 ? 'Finish' : 'Next question') + '</button></div>' : '');
+    },
     lesson: function () {
       var L = U.lesson || {}, l = lessonFor(L.id) || { title: 'Lesson', card1: '', card2: '', card3: '' }, cards = [l.card1, l.card2, l.card3].filter(Boolean), i = Math.min(U.lessonCard || 0, cards.length - 1), last = i === cards.length - 1, done = lessonDone(L.id);
       return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Lesson \u00b7 1 minute</div><h2>' + esc(l.title) + '</h2></div>' +
@@ -2264,13 +2282,57 @@
     P.journey = P.journey || { done: [] };
     if (!P.journey.makeRoomDone && lessonDone('M1') && funSet() && P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; })) { P.journey.makeRoomDone = true; save(); track('make-room-done'); }
   }
-  function jStars() { return (P.history || []).reduce(function (t, h) { return t + (h.stars || 0); }, 0); }
+  function jStars() { return (P.history || []).reduce(function (t, h) { return t + (h.stars || 0); }, 0) + quizStars(); }
   function jNode(o) {
     var cls = 'mnode' + (o.done ? ' done' : o.locked ? ' locked' : ' open') + (o.kind ? ' ' + o.kind : '');
     var live = o.a && !o.locked && (!o.done || o.again), tag = live ? 'button type="button"' : 'div';
     return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (live ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
       '<span class="orb">' + (o.done ? ICON.check('currentColor', 20) : o.icon) + '</span><span class="jt"><b>' + o.t + '</b><small>' + o.s + '</small></span></' + tag.split(' ')[0] + '>';
   }
+  // ---------- checkpoint quizzes: 3 questions per step, with the person's own numbers where possible ----------
+  // question text lives in lessons.json (chapter "quiz"); numbers questions are filled in and answered here
+  function quizRows(step) { return LESSONS ? Object.keys(LESSONS).map(function (k) { return LESSONS[k]; }).filter(function (x) { return x.chapter === 'quiz' && x.step === step; }).sort(function (a, b) { return a.order - b.order; }) : []; }
+  function quizPassed(step) { return !!((P.journey || {}).quizzes || {})['S' + step]; }
+  function fill(t, v) { return String(t || '').replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }); }
+  // a few wrong answers near the right one, in a steady order
+  function numChoices(ans, alts, fmt) {
+    var out = [ans]; alts.forEach(function (a) { if (a > 0 && out.indexOf(a) < 0 && out.length < 3) out.push(a); });
+    for (var d = 1; out.length < 3; d++) if (out.indexOf(ans + d) < 0) out.push(ans + d);
+    out.sort(function (a, b) { return a - b; }); return { choices: out.map(fmt), answer: out.indexOf(ans) };
+  }
+  // word answers in a different order each day, so the right one isn't always in the same spot
+  function mix(q, id) {
+    var seed = 0, key = id + F.isoDay(today()); for (var i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) % 9973;
+    var order = q.choices.map(function (_, n) { return n; }).sort(function (a, b) { return ((a + 1) * seed) % 7 - ((b + 1) * seed) % 7 || a - b; });
+    q.choices = order.map(function (n) { return q.choices[n]; }); q.answer = order.indexOf(q.answer);
+  }
+  function buildQuestion(row) {
+    var j = jState(), pm = j.pm > 0.5 ? Math.round(j.pm) : 200, v = { planPerPayday: money(pm) }, q = { id: row.id, why: row.why };
+    if (row.compute === 'cushionLeft' || row.compute === 'cushionPaydays') {
+      var sv = j.sv > 0 && j.sv < F.CUSHION ? Math.round(j.sv) : 350, left = F.CUSHION - sv;
+      v.savings = money(sv); v.left = money(left);
+      if (row.compute === 'cushionLeft') { var c1 = numChoices(left, [left + 250, F.CUSHION, Math.max(50, left - 150)], money); q.choices = c1.choices; q.answer = c1.answer; v.answer = money(left); }
+      else { var n = Math.ceil(left / pm); v.exact = (left / pm).toFixed(1); var c2 = numChoices(n, [Math.floor(left / pm), n * 2], function (x) { return plural(x, 'payday'); }); q.choices = c2.choices; q.answer = c2.answer; }
+    } else if (row.compute === 'firstDebt') {
+      var ds = P.debts.filter(function (d) { return num(d.bal) > 0; }).map(function (d) { return { name: d.name || 'Debt', bal: num(d.bal), apr: num(d.apr) }; });
+      if (ds.length < 2) ds = [{ name: 'Medical bill', bal: 350, apr: 0 }, { name: 'Credit card', bal: 2400, apr: 24 }, { name: 'Car loan', bal: 9000, apr: 7 }];
+      ds.sort(function (a, b) { return a.bal - b.bal; });
+      var pickd = [ds[0]].concat(ds.slice(1).sort(function (a, b) { return b.apr - a.apr || b.bal - a.bal; }).slice(0, 2));
+      q.choices = pickd.map(function (d) { return esc(d.name) + ' (' + money(d.bal) + (d.apr ? ', ' + d.apr + '%' : '') + ')'; }); q.answer = 0; mix(q, row.id);
+    } else if (row.compute === 'smallestPaydays') {
+      var t = j.o.target, bal = t ? Math.round(t.bal) : 600, n2 = Math.ceil(bal / pm);
+      v.smallestBalance = money(bal); v.exact = (bal / pm).toFixed(1);
+      var c3 = numChoices(n2, [Math.floor(bal / pm), n2 * 2], function (x) { return plural(x, 'payday'); }); q.choices = c3.choices; q.answer = c3.answer;
+    } else { q.choices = [row.choice1, row.choice2, row.choice3].filter(Boolean).map(esc); q.answer = (+row.answer || 1) - 1; mix(q, row.id); }
+    q.q = esc(fill(row.title, v)); q.why = esc(fill(row.why, v));
+    return q;
+  }
+  // questions answered wrong come back after the next payday
+  function quizRetries() {
+    var r = ((P.journey || {}).retry || []), hist = (P.history || []).filter(function (h) { return h.payday; }), last = hist.length ? hist[hist.length - 1].date : null;
+    return r.filter(function (x) { return last && x.on < last && LESSONS && LESSONS[x.id]; });
+  }
+  function quizStars() { return Object.keys(((P.journey || {}).quizzes) || {}).length * 3; }
   // "Nov 13" within the next year, "Apr 2028" after that
   function whenShort(d) { return F.daysBetween(today(), d) < 330 ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : shortDate(d); }
   // which step a past payday belonged to, from the balances saved with it
@@ -2282,6 +2344,10 @@
     var sun = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="15" r="4"/><path d="M3 19h18M12 5v3M5.5 8.5l2 2M18.5 8.5l-2 2"/></svg>';
     var mark = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>';
     var cart = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
+    var quizNode = function (step) {
+      var ok = quizPassed(step);
+      return { icon: '<span style="font-size:19px;font-weight:700">?</span>', kind: ok ? '' : 'quiz', t: 'Step ' + step + ' checkpoint', s: ok ? 'Passed \u00b7 3 stars \u00b7 take it again' : '3 questions \u00b7 earn 3 stars', a: 'quizopen', v: String(step), done: ok, again: true };
+    };
     var lessonNodes = function (set, lock) {
       // all lessons stay open (go at your own pace) and can be read again; the next one is highlighted
       var firstOpen = view === cur;
@@ -2308,11 +2374,13 @@
         html += '<div class="jworld done"><b>✓ Step 1 · Starter Cushion</b><small>Done' + badgeDate('cushion') + '. Your $1,000 is in place.</small></div>';
         if ((P.journey || {}).makeRoomDone) add({ icon: room, t: 'Make room', s: 'Done', done: true });
         lessonNodes(CUSHION_LESSONS, false);
+        add(quizNode(1));
         add({ icon: ICON.medal, kind: 'gold', t: 'Starter Cushion', s: 'Milestone' + badgeDate('cushion'), done: false, a: P.badges.cushion ? 'sharebadge' : '', v: 'cushion' });
       } else if (view === 2) {
         html += '<div class="jworld done"><b>✓ Step 2 · Debt Snowball</b><small>Done' + badgeDate('debt-free') + '. Every debt but the house is paid off.</small></div>';
         P.debts.filter(function (d) { return num(d.orig) > 0; }).forEach(function (d) { add({ icon: mark, t: esc(d.name || 'Debt') + ' paid off', s: money(num(d.orig)) + ' gone', done: true }); });
         lessonNodes(SNOWBALL_LESSONS, false);
+        add(quizNode(2));
       } else html += '<div class="jworld done"><b>✓ Step ' + view + ' · ' + F.STEPS[view - 1][0] + '</b><small>Done.</small></div>';
       return html + (nodes.length ? '<div class="mpath">' + nodes.map(jNode).join('') + '</div>' : '') + '<button type="button" class="outline" data-a="jstep" data-v="' + cur + '">Back to Step ' + cur + '</button>';
     }
@@ -2366,9 +2434,11 @@
     payWeeks().forEach(function (w) {
       add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added · tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
     });
-    if (cur === 1) lessonNodes(CUSHION_LESSONS, j.makeRoom);
+    if (quizRetries().length) add({ icon: '<span style="font-size:20px">?</span>', kind: 'side', t: 'Quick review', s: plural(quizRetries().length, 'question') + ' from your last checkpoint', a: 'quizopen', v: 'retry' });
+    if (cur === 1) { lessonNodes(CUSHION_LESSONS, j.makeRoom); add(quizNode(1)); }
     if (cur === 2) {
       lessonNodes(SNOWBALL_LESSONS, false);
+      add(quizNode(2));
       checkpoints.forEach(add);
       var po2 = j.o.payoffs || [];
       if (po2[0]) add({ icon: ICON.medal, kind: 'gold', t: esc(po2[0].name || 'Debt') + ' paid off', s: po2[0].date ? 'Around ' + whenShort(po2[0].date) : 'Your next big win', done: false });
@@ -2874,6 +2944,35 @@
       case 'planopen': U.lesson = { id: 'reset7-' + i }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonopen': U.lesson = { id: v }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonnext': U.lessonCard = (U.lessonCard || 0) + 1; render(); break;
+      case 'quizopen': (function () {
+        if (!LESSONS) { U.planToast = 'One moment: the questions are still loading.'; render(); return; }
+        var retry = v === 'retry', rows = retry ? quizRetries().map(function (x) { return LESSONS[x.id]; }) : quizRows(+v);
+        if (!rows.length) return;
+        U.quiz = { step: retry ? 0 : +v, retry: retry, qs: rows.map(buildQuestion), i: 0, state: {}, misses: 0 }; track(retry ? 'quiz-review' : 'quiz-open-' + v); go('quiz');
+      })(); break;
+      case 'quizpick': (function () {
+        var z = U.quiz, q = z.qs[z.i], n = +v; z.state = z.state || {};
+        if (n === q.answer) z.state.right = true;
+        else {
+          (z.state.wrong = z.state.wrong || []).push(n); z.misses++;
+          // a missed question comes back after the next payday
+          P.journey = P.journey || { done: [] }; P.journey.retry = (P.journey.retry || []).filter(function (x) { return x.id !== q.id; }); P.journey.retry.push({ id: q.id, on: F.isoDay(today()) }); save();
+        }
+        render();
+      })(); break;
+      case 'quiznext': (function () {
+        var z = U.quiz, q = z.qs[z.i];
+        // answered right on review: it's done coming back
+        if (z.retry && !(z.state.wrong || []).length) P.journey.retry = (P.journey.retry || []).filter(function (x) { return x.id !== q.id; });
+        z.i++; z.state = {};
+        if (z.i >= z.qs.length) {
+          P.journey = P.journey || { done: [] };
+          if (!z.retry) { P.journey.quizzes = P.journey.quizzes || {}; z.newStars = !P.journey.quizzes['S' + z.step]; if (z.newStars) P.journey.quizzes['S' + z.step] = F.isoDay(today()); z.firstTry = !z.misses; track('quiz-pass-' + z.step + (z.misses ? '' : '-first')); }
+          save();
+        }
+        render(); window.scrollTo(0, 0);
+      })(); break;
+      case 'quizend': U.quiz = null; U.jTab = 'map'; go('journey'); break;
       case 'jstep': U.jStep = +v; U.jAllPast = false; U.jTab = 'map'; render(); break;
       case 'jallpast': U.jAllPast = true; render(); break;
       case 'jtab': U.jTab = v; if (v === 'challenges' || v === 'milestones') U.winsView = v; render(); break;

@@ -662,3 +662,13 @@ label.primary { display: flex; align-items: center; justify-content: center; }
 .jnext .row:last-child { border-bottom: 0; }
 .jnext small { display: block; color: var(--muted); font-size: 13px; }
 .jmore { font-size: 12px; border: 1px dashed rgba(42,107,102,.45); background: transparent; color: #2A6B66; font-weight: 600; border-radius: 10px; padding: 4px 8px; }
+/* checkpoint quizzes */
+.mnode.quiz .orb { border-style: solid; border-color: rgba(154,139,211,.7); color: #6E5FB0; background: rgba(221,216,238,.8); }
+.qtext { font-size: 24px; line-height: 1.25; }
+.qopt { text-align: left; font-size: 16px; line-height: 1.35; min-height: 56px; }
+.qopt.right { border-color: rgba(42,107,102,.6); background: rgba(211,240,230,.85); color: #1B2E2D; opacity: 1; }
+.qopt.wrong { border-color: rgba(168,67,44,.35); background: rgba(255,214,196,.5); color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(168,67,44,.5); }
+.qopt:disabled { cursor: default; }
+.qnote { font-size: 15px; background: var(--warn-bg); color: var(--warn); border-radius: 16px; padding: 12px 14px; }
+.qnote.ok { background: rgba(211,240,230,.85); color: #1B2E2D; }
+.qburst { position: relative; width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(135deg, #FF9F7A, #FFC27E); box-shadow: 0 10px 30px rgba(255,159,122,.45); }
