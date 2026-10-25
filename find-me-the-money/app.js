@@ -2219,15 +2219,14 @@
     var len = [(d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + '-day challenge')];
     return { eyebrow: 'Challenge complete', title: d.title, sub: d.share, chips: len.concat(extra, streakChips()).slice(0, 3), chipsNoAmt: len.concat(streakChips()).slice(0, 3), caption: 'Challenge complete: ' + d.title + '!' };
   }
-  // the next Money Reset day, as the home screen's daily nudge
+  // the next cushion lesson, as the home screen's nudge (Step 1 only)
   function todayStep() {
-    var run = (P.plans || []).filter(function (p) { return p.id === 'reset7' && !p.ended; })[0];
-    if (!run) return '';
-    var st = F.planStatus(run, today());
-    if (st.next < 0 || !st.days[st.next].open) return '';
-    return '<button type="button" class="card" data-a="planopen" data-v="' + run.uid + '" data-i="' + st.next + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;gap:14px;align-items:center">' +
-      '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Today \u00b7 Day ' + (st.next + 1) + ' of 7</span>' +
-      '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + st.def.days[st.next].title + '</span><span style="font-size:13px;color:var(--muted)">2 minutes \u00b7 one small step</span></span><span aria-hidden="true">\u203a</span></button>';
+    var j = jState(); if (j.step !== 1 || j.makeRoom) return '';
+    var n = CUSHION_LESSONS.filter(function (x) { return !lessonDone(x[0]); })[0]; if (!n) return '';
+    var k = CUSHION_LESSONS.indexOf(n);
+    return '<button type="button" class="card" data-a="lessonopen" data-v="' + n[0] + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;gap:14px;align-items:center">' +
+      '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Cushion lesson ' + (k + 1) + ' of ' + CUSHION_LESSONS.length + '</span>' +
+      '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + esc(lessonFor(n[0]).title) + '</span><span style="font-size:13px;color:var(--muted)">1 minute</span></span><span aria-hidden="true">›</span></button>';
   }
   function nwCard() {
       var sp = P.tx.length ? spending() : null;
@@ -2239,8 +2238,11 @@
   // ---------- Journey: lessons ----------
   var LESSONS = null;
   try { fetch('lessons.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) { LESSONS = {}; l.forEach(function (x) { LESSONS[x.id] = x; }); if (U.screen === 'lesson' || U.screen === 'journey') render(); }).catch(function () {}); } catch (e) {}
+  // Step 1's lessons: all about the $1,000 cushion (text in lessons.json; titles here until it loads)
+  var CUSHION_LESSONS = [['C1', 'Why $1,000 comes first'], ['C2', 'Where to keep it'], ['C3', 'What counts as an emergency'], ['C4', 'Make it a payday habit']];
   function lessonFor(id) {
     if (LESSONS && LESSONS[id]) return LESSONS[id];
+    var c = CUSHION_LESSONS.filter(function (x) { return x[0] === id; })[0]; if (c) return { id: id, title: c[1], card1: '', card2: '', card3: '', action: '', actionLabel: '', skoolUrl: '' };
     var m = /^reset7-(\d)$/.exec(id); if (!m) return null;
     var d = F.planDef('reset7').days[+m[1]], r = d.read.concat(['']);
     return { id: id, title: d.title, card1: r[0], card2: r[1], card3: r[2] || '', action: d.action[1], actionLabel: d.action[0], skoolUrl: '' };
@@ -2287,10 +2289,10 @@
       add({ icon: '<span style="font-size:20px">\u26a1</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
     }
     if (j.step === 1) {
-      var ld = 0; for (var q = 0; q < 7; q++) if (lessonDone('reset7-' + q)) ld++;
+      var ld = CUSHION_LESSONS.filter(function (x) { return lessonDone(x[0]); }).length, nl = CUSHION_LESSONS.length;
       html += '<div class="jchap"><div class="eyebrow">Step 1 \u00b7 Starter Cushion</div>' +
         '<div class="jtrack"><span><b>Your cushion</b><small>' + money(j.sv) + ' of $1,000. It grows when you check in on payday.</small></span><span class="jpct">' + Math.min(100, Math.round(j.sv / 10)) + '%</span></div>' +
-        '<div class="jtrack"><span><b>Money basics lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of 7 done. Short reads that help you get there.') + '</small></span><span class="jpct">' + ld + '/7</span></div></div>';
+        '<div class="jtrack"><span><b>Cushion lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of ' + nl + ' done. One minute each.') + '</small></span><span class="jpct">' + ld + '/' + nl + '</span></div></div>';
     } else if (j.step === 2) {
       html += '<div class="jchap"><div class="eyebrow">Step 2 \u00b7 Debt Snowball</div><small>Your Step 2 map is on the way. Keep checking in: your countdown and stars still count.</small></div>';
     } else {
@@ -2301,11 +2303,10 @@
     payWeeks().forEach(function (w) {
       add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added \u00b7 tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
     });
-    // the 7-Day Money Reset is the lesson set for Step 1; one opens after another
+    // Step 1's cushion lessons; all stay open (go at your own pace), the next one is highlighted
     var firstOpen = true;
-    for (var i = 0; i < 7; i++) {
-      // all lessons stay open (go at your own pace); the next one is highlighted
-      var id = 'reset7-' + i, l = lessonFor(id), dn = lessonDone(id), lock = j.makeRoom, next = !dn && !lock && firstOpen;
+    for (var i = 0; j.step === 1 && i < CUSHION_LESSONS.length; i++) {
+      var id = CUSHION_LESSONS[i][0], l = lessonFor(id), dn = lessonDone(id), lock = j.makeRoom, next = !dn && !lock && firstOpen;
       if (next) firstOpen = false;
       add({ icon: bk, t: l.title, s: dn ? 'Lesson done' : lock ? 'Opens after Make room' : next ? 'Up next \u00b7 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
     }
