@@ -1366,7 +1366,7 @@
       var head, sub;
       var short = pl.extra <= 0 && o.step <= 3 ? Math.ceil(-pl.extra) : -1;
       var nojob = short < 0 && o.step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
-      if (nojob > 0) { head = money(nojob) + ' a paycheck has no job yet'; sub = 'Give it a job and your countdown starts. You decide.'; }
+      if (nojob > 0) { head = money(nojob) + ' of extra a paycheck has no job yet'; sub = 'Give it a job and your countdown starts. You decide.'; }
       else if (short >= 0) { head = short > 0 ? 'Let\u2019s find ' + money(short) : 'Let\u2019s find a little extra'; sub = short > 0 ? 'Your plan is ' + money(short) + ' short each paycheck. Find it and your countdown starts. We\u2019ll show you where to look.' : 'Every dollar has a job, with nothing left for your step yet. A little extra starts your countdown.'; }
       else if (o.target) {
         var gap = o.debtFree && o.debtFreeMins ? F.daysBetween(o.debtFree, o.debtFreeMins) : 0;
@@ -1503,8 +1503,8 @@
           return '<div class="bhead"><span><span class="key c-' + sec[0] + '"></span>' + sec[1] + '</span><span>' + money(tot) + '</span></div>' + mine.map(function (r) { return budgetLine(r, mo); }).join('') +
             (sec[0] === 'want' ? wantsNote(mo, pl.ppm) : '') + budgetAddRow(sec[0], mo);
         }).join('') + (step <= 3 ? '<div class="bhead"><span><span class="key c-save"></span>Your step</span><span>' + money(hero.amount) + '</span></div>' + budgetLine({ cat: 'save', label: hero.label, sub: hero.sub, amount: hero.amount, strong: true, edit: 'step', raw: round2(pl.toStep * (mo ? pl.ppm : 1)) }, mo) : '') + '</div>' +
-        '<div class="left' + (pl.tight ? ' tight' : pl.unassigned >= 0.5 ? ' open' : '') + '"><span>Left to assign</span><span>' + (pl.tight ? '\u2013' + money(-pl.extra * k) : pl.unassigned >= 0.5 ? money(pl.unassigned * k) : '$0 \u2713') + '</span></div>' +
-        (!pl.tight && pl.unassigned >= 0.5 ? '<p style="font-size:13px;color:var(--muted);margin-top:-4px">' + (mo ? 'Each month, ' : 'Each paycheck, ') + money(pl.unassigned * k) + ' is left after bills, spending, debt minimums and your step. It doesn\u2019t have a job yet, and money without a job usually slips away.</p>' : '') +
+        '<div class="left' + (pl.tight ? ' tight' : pl.unassigned >= 0.5 ? ' open' : '') + '"><span>Extra with no job yet</span><span>' + (pl.tight ? '\u2013' + money(-pl.extra * k) : pl.unassigned >= 0.5 ? money(pl.unassigned * k) : '$0 \u2713') + '</span></div>' +
+        (!pl.tight && pl.unassigned >= 0.5 ? '<p style="font-size:13px;color:var(--muted);margin-top:-4px">' + (mo ? 'Each month, ' : 'Each paycheck, ') + money(pl.unassigned * k) + ' of your extra is left after bills, spending, minimums and your step. Money without a job usually slips away, so give it one.</p>' : '') +
         (!pl.tight && pl.unassigned >= 0.5 && step <= 3 ? '<button type="button" class="outline" data-a="stepall" style="min-height:46px;font-size:15px">Give it a job: put ' + money(pl.unassigned * k) + ' toward ' + last + '</button>' : '') +
         (P.setupDone ? whatIfHtml(o, true) : '') +
         (pl.tight ? '<p style="font-size:14px;color:var(--warn)">This paycheck doesn’t cover everything yet. Lower your fun money or a flexible bill, or add this week\u2019s purchases to see where your money goes.</p>' : '') +
@@ -1550,13 +1550,13 @@
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
       var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
-        '<div class="ps-sub">' + (pl.toStep >= 0.5 ? money(p.paycheck) + ' comes in. After bills, spending and minimums, <b>' + money(pl.toStep) + '</b> of it goes to ' + where + '.' : money(p.paycheck) + ' comes in. None of it has a job for ' + where + ' yet.') + '</div>' +
+        '<div class="ps-sub">' + (pl.toStep >= 0.5 ? '<b>' + money(pl.toStep) + '</b> of your extra goes to ' + where + '.' : 'None of your extra goes to ' + where + ' yet.') + (pl.unassigned >= 0.5 ? ' ' + money(pl.unassigned) + (pl.toStep >= 0.5 ? ' more' : '') + ' has no job yet.' : '') + ' Extra is what\u2019s left of your ' + money(p.paycheck) + ' paycheck after bills, spending and minimums.' + '</div>' +
         '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
       var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
       if (nojob > 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
-        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + money(nojob) + ' a paycheck has no job yet.</div>' +
+        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + money(nojob) + ' of extra each paycheck has no job yet.</div>' +
         '<div style="font-size:15px;color:rgba(255,255,255,.88)">Give it a job and your countdown starts.</div>' +
         '<div class="stack" style="gap:8px"><button type="button" class="sunbtn" data-a="stepall">Put ' + money(nojob) + ' toward ' + where + '</button><button type="button" class="ghostbtn" data-a="go" data-v="plan">Choose in my budget</button></div>' + paydayStrip + '</div>' +
         homeRest(o, step, snow0(o, step));
@@ -2067,13 +2067,13 @@
       var spentOut = num(profile().paycheck) - pl.extra;
       return head(1, 'It\u2019s payday!', 'Here\u2019s this paycheck at a glance.') +
         '<div class="card"><div class="row"><span>Paycheck</span><b>' + money(profile().paycheck) + '</b></div><div class="row"><span>Bills and spending</span><b>\u2212' + money(spentOut) + '</b></div>' +
-        '<div class="row"><span style="font-weight:600">Left to give a job</span><b style="color:#2A6B66">' + money(c.plan) + '</b></div></div>' +
+        '<div class="row"><span style="font-weight:600">Your extra<small style="display:block;font-weight:400;color:var(--muted);font-size:13px">What\u2019s left after bills, spending and minimums</small></span><b style="color:#2A6B66">' + money(c.plan) + '</b></div></div>' +
         (c.plan <= 0.5 ? '<div class="note">' + ICON.info + '<span>' + (c.short ? 'This paycheck comes up ' + money(c.short) + ' short. ' : 'Nothing is left over this time. ') + 'That\u2019s OK. Your check-in still counts. When you can, make room in your budget and your countdown starts moving.</span></div>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="cistep" data-v="' + (c.plan > 0.5 ? 2 : 3) + '">Next</button></div>';
     }
     if (st === 2) {
       var al = ciAlloc(c.plan);
-      return head(2, 'Give every dollar a job', 'Here\u2019s where ' + money(c.plan) + ' goes on your path.') +
+      return head(2, 'Give every dollar a job', 'Here\u2019s where your ' + money(c.plan) + ' extra goes on your path.') +
         '<div class="card">' + al.lines.map(function (x) { return '<div class="row"><span>' + esc(x[0]) + '</span><b>' + money(x[1]) + '</b></div>'; }).join('') + '</div>' +
         (U.ciPart ? '<div class="card stack" style="padding:16px 18px;gap:10px"><label class="field">How much gets a job this payday?<input type="number" inputmode="decimal" min="0" max="' + Math.floor(c.plan) + '" data-ciamt value="' + Math.floor(c.plan) + '"></label><span style="font-size:13px;color:var(--muted)">The rest waits without a job. That costs this payday\u2019s second star.</span><button type="button" class="outline" data-a="cipart">Use this amount</button></div>' : '') +
         (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
@@ -2409,14 +2409,14 @@
       html += '<div class="jchap"><div class="eyebrow">Step 1 · Starter Cushion</div>' +
         '<div class="jtrack"><span><b>Your cushion</b><small>' + money(j.sv) + ' of $1,000. It grows when you check in on payday.</small></span><span class="jpct">' + Math.min(100, Math.round(j.sv / 10)) + '%</span></div>' +
         '<div class="jtrack"><span><b>Cushion lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of ' + nl + ' done. One minute each.') + '</small></span><span class="jpct">' + ld + '/' + nl + '</span></div></div>';
-      ahead = j.makeRoom ? 'Finish Make room to start your cushion.' : j.pm > 0.5 ? 'About ' + plural(j.paydays, 'payday') + ' to your Starter Cushion.' : 'Give your plan money a job to see your pace.';
+      ahead = j.makeRoom ? 'Finish Make room to start your cushion.' : j.pm > 0.5 ? 'About ' + plural(j.paydays, 'payday') + ' to your Starter Cushion.' : 'Give your extra a job to see your pace.';
     } else if (cur === 2) {
       // each debt is a chapter, smallest balance first
       var po = j.o.payoffs || [], now = po[0], d0 = now && P.debts.filter(function (d) { return d.id === now.id; })[0], orig = d0 ? Math.max(num(d0.orig), num(d0.bal)) : 0;
       var gone = P.debts.filter(function (d) { return num(d.bal) <= 0 && num(d.orig) > 0; });
       html += '<div class="jchap"><div class="eyebrow">Step 2 · Debt Snowball</div><small>Smallest balance first. When one is paid off, its payment rolls into the next.</small>' +
         (gone.length ? '<div class="jgone">' + gone.map(function (d) { return '<span>✓ ' + esc(d.name || 'Debt') + '</span>'; }).join('') + '</div>' : '') +
-        (now ? '<div class="jtrack"><span><b>Chapter ' + (gone.length + 1) + ' · ' + esc(now.name || 'Debt') + '</b><small>' + money(now.bal) + ' left' + (orig > now.bal ? ' of ' + money(orig) : '') + '. ' + (now.n === Infinity ? 'Give plan money a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' to go.') + '</small></span><span class="jpct">' + (orig ? Math.round((1 - now.bal / orig) * 100) : 0) + '%</span></div>' : '') + '</div>';
+        (now ? '<div class="jtrack"><span><b>Chapter ' + (gone.length + 1) + ' · ' + esc(now.name || 'Debt') + '</b><small>' + money(now.bal) + ' left' + (orig > now.bal ? ' of ' + money(orig) : '') + '. ' + (now.n === Infinity ? 'Give your extra a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' to go.') + '</small></span><span class="jpct">' + (orig ? Math.round((1 - now.bal / orig) * 100) : 0) + '%</span></div>' : '') + '</div>';
       if (now) {
         // a long chapter gets checkpoints so it never feels endless
         if (now.n !== Infinity && now.n > 8 && orig > 0) {
@@ -2426,7 +2426,7 @@
             checkpoints.push({ icon: mark, t: esc(now.name || 'Debt') + ' under ' + money(line), s: reached ? 'Checkpoint reached' : 'Checkpoint', done: reached });
           }
         }
-        ahead = now.n === Infinity ? 'Give your plan money a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' until ' + esc(now.name) + ' is gone' + (now.date ? ', around ' + whenShort(now.date) : '') + '.';
+        ahead = now.n === Infinity ? 'Give your extra a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' until ' + esc(now.name) + ' is gone' + (now.date ? ', around ' + whenShort(now.date) : '') + '.';
       }
     } else {
       html += '<div class="jchap"><div class="eyebrow">Step ' + cur + ' · ' + F.STEPS[cur - 1][0] + '</div><small>The map for this step is on the way. Keep checking in: your stars still count.</small></div>';
