@@ -767,7 +767,9 @@
     var open = r.open && !(U.bOpen && U.bOpen[r.open] === false);
     var name = r.open ? '<button type="button" class="bname" data-a="btoggle" data-v="' + r.open + '" aria-expanded="' + !!open + '"><span class="chev' + (open ? ' open' : '') + '" aria-hidden="true">\u203a</span>' + r.label + '</button>' : r.label;
     if (r.billIdx != null) name = '<span class="bname-row">' + name + duePill(P.bills[r.billIdx], r.billIdx) + '</span>';
-    return '<div class="row brow"><span style="min-width:0;flex:1;' + (r.strong ? 'font-weight:600' : 'color:var(--muted)') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + spentBar(r) + '</span>' +
+    // a group header (Utilities, Food & household) is a total, not something to type into
+    if (r.open) amt = '<span class="btotal"><small>total</small><b>' + money(r.amount) + '</b></span>';
+    return '<div class="row brow' + (r.open ? ' bgroup' : '') + '"><span style="min-width:0;flex:1;' + (r.strong || r.open ? 'font-weight:600' : '') + '">' + name + (r.sub ? '<small>' + r.sub + '</small>' : '') + spentBar(r) + '</span>' +
       '<span class="bright">' + amt + (r.rm ? '<button type="button" class="x" data-a="rm" data-v="' + r.rm[0] + '" data-i="' + r.rm[1] + '" aria-label="Remove ' + r.label + '">\u00d7</button>' : '') + '</span></div>' +
       (r.billIdx != null && U.dueEdit === r.billIdx ? dueForm(r.billIdx) : '') +
       (open ? '<div class="bkids">' + (r.kids.length ? r.kids.map(function (c) { return budgetLine(c, mo); }).join('') : '<p style="font-size:13px;padding:6px 0">Nothing here yet.</p>') + '</div>' : '');
@@ -805,7 +807,7 @@
     if (!spent && !bud) return '';
     var over = spent > bud + 0.5, left = bud - spent;
     return '<span class="spbar' + (over ? ' over' : '') + '"><i style="width:' + Math.min(100, bud ? spent / bud * 100 : 100) + '%"></i></span>' +
-      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' spent \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + '</small>';
+      '<small class="spnote' + (over ? ' over' : '') + '">' + money(spent) + ' spent \u00b7 ' + (over ? money(-left) + ' over' : money(left) + ' left') + (U.planMonth ? '' : ' this month') + '</small>';
   }
   function spendTotals() {
     var m = spentMap(), lines = spendLines(), spent = 0, bud = 0;
@@ -975,7 +977,7 @@
   // the pill next to a bill's name: "Date" until set, then the short due day
   function dueShort(b) {
     var d = F.fromIso(b.due), rp = b.rep || 'monthly';
-    return rp === 'monthly' ? ordinal(d.getDate()) : rp === 'yearly' ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : rp === 'weekly' ? d.toLocaleDateString('en-US', { weekday: 'short' }) + 's' : rp === 'biweekly' ? 'Every 2 wks' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return rp === 'monthly' ? ordinal(d.getDate()) : rp === 'yearly' ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : rp === 'weekly' ? 'Every ' + d.toLocaleDateString('en-US', { weekday: 'short' }) : rp === 'biweekly' ? 'Every 2 wks' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
   function duePill(b, i) {
     return '<button type="button" class="duepill' + (b.due ? ' set' : '') + '" data-a="duedit" data-i="' + i + '" aria-label="' + (b.due ? esc(dueText(b)) + '. Change due date' : 'Add a due date') + '">' + (b.due ? dueShort(b) : 'Date') + '</button>';
