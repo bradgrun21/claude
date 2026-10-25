@@ -55,6 +55,22 @@ test('a long name that wraps onto the next line', () => {
   assert.deepStrictEqual(rows.map((r) => r.merchant), ['Walmart', 'Dollar General']);
 });
 
+test('name and amount on one line, running balance and extra lines under it', () => {
+  const rows = S.parseLines(L(['Checking (...1234)', 'Oct 21, 2026', 'TARGET -$14.26 >', '$82.69', 'soc SONIC DRIVE-IN -$3.86 >', 'A $156.81',
+    'ONLINE TRANSFER FROM $80.00', '(3) SAV ...1111 TRANSACTION#:', '31299700000', '$160.67', 'Oct 20, 2026', 'VENMO PAYMENT -$82.00 >', '5] 1053800000000 WEB ID:', '3264600000', '$80.67',
+    '»2ew STARBUCKS $3.19 >', 'A $435.87', '7 BREW COFFEE $5.09 >', '$409.24', 'H-E-B -$63.65 >', '$345.59', 'Split into 4 payments']), { today });
+  assert.deepStrictEqual(rows.map((r) => [r.merchant, r.amount, r.date].join(' | ')), [
+    'Target | 14.26 | 2026-10-21', 'Sonic Drive-in | 3.86 | 2026-10-21', 'Online Transfer From | 80 | 2026-10-21', 'Venmo | 82 | 2026-10-20',
+    'Starbucks | 3.19 | 2026-10-20', '7 Brew Coffee | 5.09 | 2026-10-20', 'H-E-B | 63.65 | 2026-10-20']);
+  assert.strictEqual(rows[2].skip, true);
+});
+
+test('pieces of one row read separately are joined left to right', () => {
+  const at = (text, top, left) => ({ text, confidence: 91, top, left, height: 40 });
+  const rows = S.parseLines([at('Oct 21, 2026', 700, 30), at('-$14.26', 916, 640), at('TARGET', 918, 160), at('$82.69', 1010, 160), at('-$29.00', 1240, 640), at('CORNER MARKET', 1242, 160), at('$96.95', 1288, 160)], { today });
+  assert.deepStrictEqual(rows.map((r) => r.merchant + ' ' + r.amount), ['Target 14.26', 'Corner Market 29']);
+});
+
 test('low-confidence rows are flagged', () => {
   const rows = S.parseLines([{ text: 'Coffee Bar -$6.25', confidence: 48 }], { today });
   assert.strictEqual(rows[0].low, true);

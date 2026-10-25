@@ -45,16 +45,49 @@
     if (words.length >= 4 && /^[A-Z]{2}$/.test(words[words.length - 1]) && /^[A-Z.]{2,}$/.test(words[words.length - 2])) up = words.slice(0, -2).join(' ');
     var looksClean = /[a-z]/.test(s) && !/[*#]/.test(s) && !/\b[A-Z]{2}$/.test(s);
     if (looksClean) return s.replace(/\s+\d{3,}\b.*$/, '').replace(/\b(pending|posted)\b/ig, '').replace(/\s+/g, ' ').trim().slice(0, 40);
-    return F ? F.cleanMerchant(up) : up;
+    var num = /^(\d{1,2}) [A-Z]{2,}/.exec(up), name = F ? F.cleanMerchant(up) : up;
+    if (num && name.indexOf(num[1]) !== 0) name = num[1] + ' ' + name; // "7 BREW COFFEE"
+    return name.replace(/\b(?:[a-z]-)+[a-z]\b/gi, function (w) { return w.toUpperCase(); });
   }
+  // logo text read in front of the name: "8% CHICK-FIL-A", "»2ew STARBUCKS", "soc SONIC DRIVE-IN"
+  function stripLogo(s) {
+    var w = String(s).split(' ');
+    while (w.length > 1) {
+      var t = w[0], rest = w.slice(1).join(' ');
+      if (!/[A-Za-z0-9]/.test(t) || /[%¢©®«»()\[\]{}|=~^<>]/.test(t) || (/[a-z]/.test(t) && /[A-Z]{2}/.test(rest) && rest === rest.toUpperCase())) w.shift(); else break;
+    }
+    return w.join(' ');
+  }
+  // pieces of one row that the reader returned separately (same height on screen), joined left to right
+  function joinRows(lines) {
+    if (!lines.length || !lines.every(function (l) { return l.top != null && l.left != null; })) return lines;
+    var out = [];
+    lines.forEach(function (l) {
+      var g = out[out.length - 1];
+      // only pieces sitting on the same line: a balance just under a name stays its own line
+      if (g && Math.abs(l.top - g.top) < Math.min(l.height || 30, g.height || 30) * 0.3) g.parts.push(l); else out.push({ top: l.top, height: l.height, parts: [l] });
+    });
+    return out.map(function (g) {
+      g.parts.sort(function (a, b) { return a.left - b.left; });
+      return { text: g.parts.map(function (p) { return p.text; }).join(' '), confidence: Math.min.apply(null, g.parts.map(function (p) { return p.confidence == null ? 100 : p.confidence; })), top: g.top };
+    });
+  }
+  function tidy(t) { return String(t || '').replace(/\s+/g, ' ').replace(/(\s*[>›»])+\s*$/, '').trim(); }
+  function nameOnly(text) { var r = text; findAmounts(text).forEach(function (x) { r = r.replace(x.raw, ' '); }); return r; }
   function letters(s) { return (String(s).match(/[A-Za-z]/g) || []).length; }
 
   // lines: [{ text, confidence }] in reading order, from one screenshot
   function parseLines(lines, opts) {
     opts = opts || {};
     var today = opts.today || new Date(), rows = [], curDate = null, pending = null, pendingConf = 0;
+    lines = joinRows(lines);
+    // apps that show the name and amount on one line put other things on the lines under it
+    // (a running balance, transaction numbers): count the layout before reading rows
+    var inline = 0, alone = 0;
+    lines.forEach(function (ln) { var t = tidy(ln.text); if (!findAmounts(t).length) return; if (letters(stripLogo(nameOnly(t).trim())) >= 3) inline++; else alone++; });
+    var oneLine = inline >= 2 && inline >= alone * 0.6;
     lines.forEach(function (ln) {
-      var text = String(ln.text || '').replace(/\s+/g, ' ').trim(), conf = ln.confidence == null ? 100 : ln.confidence;
+      var text = tidy(ln.text), conf = ln.confidence == null ? 100 : ln.confidence;
       if (!text) return;
       var amts = findAmounts(text), dt = findDate(text, today);
       // a line that is only a date is a section header for the rows under it
@@ -63,13 +96,16 @@
         if (STATUS.test(text) || SKIP.test(text) || letters(text) < 3) return;
         var last = rows[rows.length - 1];
         if (last && last.wraps) { last.raw = last.raw + ' ' + text; last.merchant = cleanName(last.raw.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ')); last.wraps = false; return; }
+        if (oneLine) return;
         pending = text; pendingConf = conf; return;
       }
       if (SKIP.test(text) && !pending) return;
       var a = amts[amts.length - 1], rest = text;
       amts.forEach(function (x) { rest = rest.replace(x.raw, ' '); });
       if (dt) rest = rest.replace(dt.raw, ' ');
-      rest = rest.replace(/\s+/g, ' ').trim();
+      rest = stripLogo(rest.replace(/\s+/g, ' ').trim());
+      // a lone amount under a one-line row is its running balance
+      if (oneLine && letters(rest) < 3) return;
       var nameSrc = rest, c = conf;
       // merchant on one line, amount on the next
       if (letters(rest) < 3 && pending) { nameSrc = pending + (rest ? ' ' + rest : ''); c = Math.min(conf, pendingConf); }
@@ -153,7 +189,7 @@
       return step('reading the text', Promise.resolve(w.recognize(prep.canvas, {}, { text: true, blocks: true })));
     }).then(function (out) {
         var lines = [];
-        (out.data.blocks || []).forEach(function (b) { (b.paragraphs || []).forEach(function (p) { (p.lines || []).forEach(function (l) { lines.push({ text: l.text.trim(), confidence: l.confidence, top: l.bbox && l.bbox.y0 }); }); }); });
+        (out.data.blocks || []).forEach(function (b) { (b.paragraphs || []).forEach(function (p) { (p.lines || []).forEach(function (l) { lines.push({ text: l.text.trim(), confidence: l.confidence, top: l.bbox && l.bbox.y0, left: l.bbox && l.bbox.x0, height: l.bbox && l.bbox.y1 - l.bbox.y0 }); }); }); });
         lines.sort(function (a, b) { return (a.top || 0) - (b.top || 0); });
         return { rows: parseLines(lines, opts), lines: lines, text: out.data.text, ms: Date.now() - t0, dark: prep.dark, canvas: prep.canvas };
     });
