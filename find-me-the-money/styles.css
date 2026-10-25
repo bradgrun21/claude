@@ -578,3 +578,41 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .star.on { color: #FFB45E; text-shadow: 0 1px 0 rgba(0,0,0,.08); }
 .sdot { flex: none; width: 22px; height: 22px; border-radius: 11px; border: 1.5px solid rgba(42,107,102,.35); display: grid; place-items: center; font-size: 13px; color: #fff; }
 .sdot.on { background: #2A6B66; border-color: #2A6B66; }
+
+/* Journey */
+.jhead { margin: 8px -16px 0; padding: 18px 20px 14px; border-radius: 0 0 24px 24px; background: linear-gradient(160deg, rgba(255,159,122,.28), rgba(255,194,126,.14) 60%, transparent); }
+.jmeta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; }
+.jhead h2 { margin: 2px 0 8px; }
+.jbar { height: 10px; }
+.jsub { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; color: var(--muted); }
+.jpast { display: flex; gap: 6px; flex-wrap: wrap; }
+.jpast span { font-size: 12px; background: rgba(255,255,255,.6); border: 1px solid var(--edge); border-radius: 10px; padding: 4px 8px; color: var(--muted); }
+.jst { color: #E8913F; letter-spacing: 1px; font-weight: 400; }
+.jst i { color: rgba(27,46,45,.2); font-style: normal; }
+.jchap { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
+.jchap small { color: var(--muted); font-size: 14px; }
+.jworld { padding: 12px 16px; border-radius: 16px; background: rgba(42,107,102,.1); display: flex; flex-direction: column; gap: 2px; }
+.jworld small { color: var(--muted); }
+.mpath { display: flex; flex-direction: column; gap: 12px; align-items: center; padding: 6px 0; }
+.mnode { display: flex; align-items: center; gap: 12px; width: 236px; background: none; border: 0; padding: 4px; text-align: left; font: inherit; color: var(--ink); transform: translateX(calc(var(--o, 0) * 18px)); }
+.mnode .orb { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(27,46,45,.14); background: rgba(255,255,255,.7); color: var(--muted); }
+.mnode.open .orb { border: 2px dashed #2A6B66; color: #2A6B66; background: #fff; }
+.mnode.done .orb { background: #CFE4DC; border-color: #2A6B66; color: #1F5450; }
+.mnode.locked { opacity: .55; }
+.mnode.locked .orb { border-style: dotted; }
+.mnode.side .orb { border-color: #FF9F7A; background: #FBE6D3; color: #8A3F1E; }
+.mnode.gold .orb { border: 0; background: linear-gradient(150deg, #FFD08A, #E8913F); color: #5A2A12; }
+.mnode.pay .orb { width: 66px; height: 66px; border: 0; background: linear-gradient(150deg, #FF9F7A, #FFC27E); color: #5A2A12; box-shadow: 0 0 0 6px rgba(255,194,126,.35); }
+@media (prefers-reduced-motion: no-preference) { .mnode.pay.open .orb { animation: jglow 2.6s ease-in-out infinite; } }
+@keyframes jglow { 50% { box-shadow: 0 0 0 11px rgba(255,194,126,.35); } }
+.mnode.future .orb { width: 52px; height: 52px; box-shadow: none; background: rgba(255,255,255,.5); border: 2px dotted rgba(27,46,45,.2); color: var(--muted); }
+.jt b { display: block; font-size: 15px; }
+.jt small { font-size: 13px; color: var(--muted); }
+.jahead { text-align: center; font-size: 14px; color: var(--muted); }
+.jflags { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.jflag { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; background: #FBE6D3; color: #8A3F1E; border-radius: 99px; padding: 4px 10px; }
+.lessoncard { padding: 24px 20px; font-size: 20px; line-height: 1.45; min-height: 170px; display: flex; align-items: center; }
+.ldots { display: flex; gap: 6px; justify-content: center; }
+.ldots i { width: 8px; height: 8px; border-radius: 4px; background: rgba(27,46,45,.18); }
+.ldots i.on { background: #2A6B66; }
+.mnode.later .orb { border-style: solid; border-color: rgba(42,107,102,.35); }

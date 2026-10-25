@@ -454,15 +454,16 @@
   var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['plans', 'Plans & Goals', 'book'], ['community', 'Wins', 'medal']];
-  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' ? 'community' : screen; }
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['settings', 'Settings', 'gear']];
+  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' ? 'journey' : screen; }
   function render() {
     ensureIds();
+    if (P.setupDone && P.journey && !P.journey.makeRoomDone) jCheckRoom();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
     var tabs = TABS;
     var tabbed = P.setupDone && U.screen !== 'wins' && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
-    if (U.screen === 'plans' || U.screen === 'planday') U.planCtx = null;
+    if (U.screen === 'plans' || U.screen === 'planday' || U.screen === 'journey' || U.screen === 'lesson') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
     if (U.planCtx) html = planBar() + html;
     // beta: a small Feedback tab on every screen
@@ -537,16 +538,17 @@
   function planBar() {
     var run = P.plans.filter(function (p) { return p.uid === U.planCtx.uid; })[0]; if (!run) { U.planCtx = null; return ''; }
     var d = F.planDef(run.id).days[U.planCtx.day], done = (run.done || []).indexOf(U.planCtx.day) >= 0;
-    return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your plan</small>Day ' + (U.planCtx.day + 1) + ' \u00b7 ' + d.title + '</span></button>' +
-      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark day ' + (U.planCtx.day + 1) + ' complete">' + ICON.check(done ? '#fff' : '#2A6B66', 16) + '<span>Done</span></button></div>';
+    return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your lesson</small>' + d.title + '</span></button>' +
+      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark ' + d.title + ' done">' + ICON.check(done ? '#fff' : '#2A6B66', 16) + '<span>Done</span></button></div>';
   }
   function go(s) {
     U.plusOpen = false;
-    var toWins = s === 'challenges' || s === 'milestones';
-    if (toWins) { U.winsView = s; s = 'community'; }
+    // the old Plans & Goals and Wins screens now live inside Journey
+    var J = { plans: 'map', community: 'challenges', challenges: 'challenges', milestones: 'milestones', planday: null };
+    if (s in J && s !== 'planday') { U.jTab = J[s]; if (s === 'challenges' || s === 'milestones') U.winsView = s; s = 'journey'; }
+    if (s === 'planday') s = 'lesson';
     U.screen = s; U.err = ''; render();
-    var w = toWins && app.querySelector('#wins');
-    if (w) w.scrollIntoView(); else window.scrollTo(0, 0);
+    window.scrollTo(0, 0);
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
@@ -1653,6 +1655,23 @@
         }).join('') + '</div>' +
         '<div class="push"><button type="button" class="primary" data-a="mddone">' + (done >= MD_STEPS.length ? 'Money date done' : 'Mark money date done') + '</button></div>';
     },
+    journey: function () {
+      var t = U.jTab || 'map';
+      var latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
+      var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + x + '</b></div>'; })() : '';
+      return journeyHead() + toast + celebration(2, ['plan', 'unlock']) + tabChips('jtab', t, [['map', 'Map'], ['challenges', 'Challenges'], ['milestones', 'Milestones']]) +
+        (t === 'map' ? journeyMap()
+          : t === 'challenges' ? V.challenges()
+          : (P.setupDone ? streakCard() : '') + V.milestones() + (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') + goalsCard());
+    },
+    lesson: function () {
+      var L = U.lesson || {}, l = lessonFor(L.id) || { title: 'Lesson', card1: '', card2: '', card3: '' }, cards = [l.card1, l.card2, l.card3].filter(Boolean), i = Math.min(U.lessonCard || 0, cards.length - 1), last = i === cards.length - 1, done = lessonDone(L.id);
+      return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Lesson \u00b7 1 minute</div><h2>' + esc(l.title) + '</h2></div>' +
+        '<div class="card lessoncard">' + esc(cards[i] || '') + '</div><div class="ldots">' + cards.map(function (_, n) { return '<i class="' + (n <= i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
+        (last && l.skoolUrl ? '<p style="font-size:14px">Want more? <a href="' + esc(l.skoolUrl) + '" target="_blank" rel="noopener" style="color:#2A6B66;font-weight:600">Watch the video in the community</a></p>' : '') +
+        (last && l.action ? '<button type="button" class="outline" data-a="lessonact" data-v="' + esc(l.action) + '">' + esc(l.actionLabel || 'Do it now') + ' \u203a</button>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="' + (last ? 'lessondone' : 'lessonnext') + '">' + (last ? (done ? 'Back to my map' : 'Got it') : 'Next') + '</button></div>';
+    },
     plans: function () {
       var now = today(), list = F.PLANS.map(function (def) {
         var run = P.plans.filter(function (p) { return p.id === def.id && !p.ended; })[0];
@@ -2153,6 +2172,97 @@
           '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
         : '';
   }
+  // ---------- Journey: lessons ----------
+  var LESSONS = null;
+  try { fetch('lessons.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) { LESSONS = {}; l.forEach(function (x) { LESSONS[x.id] = x; }); if (U.screen === 'lesson' || U.screen === 'journey') render(); }).catch(function () {}); } catch (e) {}
+  function lessonFor(id) {
+    if (LESSONS && LESSONS[id]) return LESSONS[id];
+    var m = /^reset7-(\d)$/.exec(id); if (!m) return null;
+    var d = F.planDef('reset7').days[+m[1]], r = d.read.concat(['']);
+    return { id: id, title: d.title, card1: r[0], card2: r[1], card3: r[2] || '', action: d.action[1], actionLabel: d.action[0], skoolUrl: '' };
+  }
+  function resetRun() { var run = P.plans.filter(function (p) { return p.id === 'reset7' && !p.ended; })[0]; if (!run) { run = { uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] }; P.plans.push(run); } return run; }
+  function lessonDone(id) { var m = /^reset7-(\d)$/.exec(id); if (m) { var run = P.plans.filter(function (p) { return p.id === 'reset7'; })[0]; return !!run && run.done.indexOf(+m[1]) >= 0; } return ((P.journey || {}).done || []).indexOf(id) >= 0; }
+  // ---------- Journey: the map ----------
+  function jState() {
+    var p = profile(), o = F.outlook(p, today()), pm = Math.max(0, o.plan.extra), sv = num(P.savings);
+    var toCushion = Math.max(0, F.CUSHION - sv), paydays = pm > 0.5 ? Math.ceil(toCushion / pm) : Infinity;
+    P.journey = P.journey || { done: [], makeRoomDone: false };
+    var makeRoom = !P.journey.makeRoomDone && o.step === 1 && (pm <= 0.5 || paydays > 13);
+    return { o: o, step: o.step, pm: pm, sv: sv, paydays: paydays, makeRoom: makeRoom };
+  }
+  // Make room runs once: when its three nodes are done, it's done for good
+  function jCheckRoom() {
+    P.journey = P.journey || { done: [] };
+    if (!P.journey.makeRoomDone && lessonDone('M1') && funSet() && P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; })) { P.journey.makeRoomDone = true; save(); track('make-room-done'); }
+  }
+  function jStars() { return (P.history || []).reduce(function (t, h) { return t + (h.stars || 0); }, 0); }
+  function jNode(o) {
+    var cls = 'mnode' + (o.done ? ' done' : o.locked ? ' locked' : ' open') + (o.kind ? ' ' + o.kind : '');
+    var tag = o.locked || o.done || !o.a ? 'div' : 'button type="button"';
+    return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (o.a && !o.locked && !o.done ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
+      '<span class="orb">' + (o.done ? ICON.check('currentColor', 20) : o.icon) + '</span><span class="jt"><b>' + o.t + '</b><small>' + o.s + '</small></span></' + tag.split(' ')[0] + '>';
+  }
+  function journeyMap() {
+    var j = jState(), nodes = [], off = [0, 1, 1.6, 1, 0, -1, -1.6, -1], k = 0, add = function (n) { n.off = off[k++ % 8]; nodes.push(n); };
+    var bk = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg>';
+    var room = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
+    var sun = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="15" r="4"/><path d="M3 19h18M12 5v3M5.5 8.5l2 2M18.5 8.5l-2 2"/></svg>';
+    var hist = (P.history || []).filter(function (h) { return h.payday; });
+    var past = hist.length ? '<div class="jpast" aria-label="Past paydays">' + (hist.length > 5 ? '<span>+' + (hist.length - 5) + ' earlier</span>' : '') + hist.slice(-5).map(function (h) {
+      return '<span>' + F.fromIso(h.payday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + (h.stars != null ? '<b class="jst">' + '\u2605'.repeat(h.stars) + '<i>' + '\u2605'.repeat(3 - h.stars) + '</i></b>' : '\u2713') + '</span>'; }).join('') + '</div>' : '';
+    var html = past;
+    if (j.step > 1) html += '<div class="jworld done"><b>\u2713 Step 1 \u00b7 Starter Cushion</b><small>Done. Your $1,000 is in place.</small></div>';
+    // Make room comes first when the plan is short or the cushion is a long way off
+    if (j.makeRoom) {
+      var funOk = funSet(), sub = P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; }), subOn = P.challenges.some(function (c) { return c.id === 'cancel1' && !c.ended; });
+      html += '<div class="jchap"><div class="eyebrow">Chapter \u00b7 Make room</div><small>' + (j.pm <= 0.5 ? 'Find room in your budget so your cushion can start.' : 'Your cushion is ' + (j.paydays === Infinity ? 'a long way' : j.paydays + ' paydays') + ' away. Let\u2019s find room to speed it up.') + '</small></div>';
+      add({ icon: bk, t: 'Needs vs wants', s: 'Lesson, 1 minute', a: 'lessonopen', v: 'M1', done: lessonDone('M1') });
+      add({ icon: room, t: 'Set a fun-money limit', s: funOk ? 'Limit set' : 'A limit for the Wants group', a: 'jfun', done: funOk });
+      add({ icon: room, t: 'Cancel One Subscription', s: subOn ? 'In progress: mark it done when you cancel' : 'Find room for the plan', a: 'jsub', done: sub });
+      add({ icon: '<span style="font-size:20px">\u26a1</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
+    }
+    if (j.step === 1) {
+      html += (j.makeRoom ? '' : '') + '<div class="jchap"><div class="eyebrow">Step 1 \u00b7 Starter Cushion</div><small>' + money(j.sv) + ' of $1,000 saved' + (j.makeRoom ? ' \u00b7 opens after Make room' : '') + '</small></div>';
+    } else if (j.step === 2) {
+      html += '<div class="jchap"><div class="eyebrow">Step 2 \u00b7 Debt Snowball</div><small>Your Step 2 map is on the way. Keep checking in: your countdown and stars still count.</small></div>';
+    } else {
+      html += '<div class="jchap"><div class="eyebrow">Step ' + Math.min(j.step, 7) + ' \u00b7 ' + F.STEPS[Math.min(j.step, 7) - 1][0] + '</div><small>The map for this step is on the way. Keep checking in: your stars still count.</small></div>';
+    }
+    // the 7-Day Money Reset is the lesson set for Step 1; one opens after another
+    var firstOpen = true;
+    for (var i = 0; i < 7; i++) {
+      // all lessons stay open (go at your own pace); the next one is highlighted
+      var id = 'reset7-' + i, l = lessonFor(id), dn = lessonDone(id), lock = j.makeRoom, next = !dn && !lock && firstOpen;
+      if (next) firstOpen = false;
+      if (dn && i < 6 && lessonDone('reset7-' + (i + 1))) continue;
+      add({ icon: bk, t: l.title, s: dn ? 'Lesson done' : lock ? 'Opens after Make room' : next ? 'Up next \u00b7 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
+    }
+    // milestones earned since the last payday land on the path
+    var lastPd = hist.length ? hist[hist.length - 1].date : null;
+    F.BADGES.filter(function (b) { return P.badges[b.id] && (!lastPd || P.badges[b.id] >= lastPd); }).slice(-3).forEach(function (b) { add({ icon: ICON.medal, kind: 'gold', t: b.title, s: 'Milestone earned', done: false, a: 'sharebadge', v: b.id }); });
+    var np = F.rollPayday(P.nextPay, P.freq, today()), open = !!ciPayday();
+    add({ icon: sun, kind: 'pay', t: 'Payday, ' + dayMonth(F.fromIso(np)), s: open ? 'Check in for your stars' : 'Opens the day before payday', a: open ? 'checkin' : '', done: false });
+    var a1 = F.nextAfter(np, P.freq), a2 = F.nextAfter(a1, P.freq);
+    [a1, a2].forEach(function (d) { add({ icon: sun, kind: 'future', t: 'Payday, ' + dayMonth(F.fromIso(d)), s: 'Locked', locked: true }); });
+    html += '<div class="mpath">' + nodes.map(jNode).join('') + '</div>';
+    // where this chapter ends, and any dated goals as flags
+    var flags = P.goals.filter(function (g) { return g.by; }).map(function (g) { return '<span class="jflag">' + ICON.flag + ' ' + esc(g.name) + ' \u00b7 ' + shortDate(F.fromIso(g.by)) + '</span>'; }).join('');
+    html += '<p class="jahead">' + (j.makeRoom ? 'Finish Make room to start your cushion.' : j.step === 1 ? (j.pm > 0.5 ? 'About ' + plural(j.paydays, 'payday') + ' to your Starter Cushion.' : 'Give your plan money a job to see your pace.') : j.step === 2 && j.o.target ? 'About ' + plural(Math.max(1, Math.ceil(j.o.target.bal / Math.max(1, j.pm))), 'payday') + ' until ' + esc(j.o.target.name) + ' is gone.' : '') + '</p>' +
+      (flags ? '<div class="jflags">' + flags + '</div>' : '');
+    return html + moneyDateCard() + pathCard(j.o, j.step);
+  }
+  function journeyHead() {
+    var j = jState(), st = Math.min(j.step, 7), pct, l1, l2;
+    if (j.makeRoom) { var n = [lessonDone('M1'), funSet(), P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; })].filter(Boolean).length; pct = n / 3; l1 = 'Make room'; l2 = n + ' of 3 done'; }
+    else if (st === 1) { pct = j.sv / F.CUSHION; l1 = money(j.sv) + ' saved'; l2 = 'of $1,000'; }
+    else if (st === 2) { var orig = 0, bal = 0; P.debts.forEach(function (d) { orig += Math.max(num(d.orig), num(d.bal)); bal += num(d.bal); }); pct = orig ? 1 - bal / orig : 0; l1 = money(orig - bal) + ' paid'; l2 = money(bal) + ' left'; }
+    else { pct = stepProgress(j.o); l1 = 'Step ' + st; l2 = ''; }
+    var v = F.streakView(P.streak, P.nextPay, P.freq, today());
+    return '<div class="jhead"><div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + plural(jStars(), 'star') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
+      '<div class="pbar jbar"><i style="width:' + Math.max(2, Math.min(100, pct * 100)) + '%"></i></div><div class="jsub"><span>' + l1 + '</span><span>' + l2 + '</span></div>' +
+      '<div class="chips" style="margin-top:8px"><span class="chip on" style="min-height:30px;font-size:13px">' + plural(v.count, 'payday') + ' in a row</span>' + (j.makeRoom ? '<span class="chip" style="min-height:30px;font-size:13px">Make room first</span>' : '') + '</div></div>';
+  }
   // a row of bubble tabs that scrolls sideways
   function tabChips(action, cur, opts) {
     return '<div class="tabchips" role="tablist">' + opts.map(function (o) { var on = cur === o[0]; return '<button type="button" role="tab" class="chip' + (on ? ' on' : '') + '" aria-selected="' + on + '" data-a="' + action + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>';
@@ -2272,7 +2382,7 @@
       clearTimeout(U.confirmTimer); U.confirmDel = null; U.confirmEl = null;
     } else resetConfirm();
     switch (a) {
-      case 'go': if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
+      case 'go': if (v === 'journey' && b.closest('.tabbar')) U.jTab = 'map'; if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;
       case 'quickgo':
         if (!(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); break; }
@@ -2604,15 +2714,39 @@
         else if (v.indexOf('goal:') === 0) { var gp = P.goals.filter(function (g) { return g.id === v.slice(5); })[0]; if (gp) gp.saved = num(gp.saved) + amtP; }
         U.pitw = null; save(); render(); break;
       case 'planstart': P.plans.push({ uid: uid(), id: v, start: F.isoDay(today()), done: [] }); save(); track('plan-start'); render(); break;
-      case 'planopen': U.planUid = v; U.planDay = i; go('planday'); break;
+      case 'planopen': U.lesson = { id: 'reset7-' + i }; U.lessonCard = 0; go('lesson'); break;
+      case 'lessonopen': U.lesson = { id: v }; U.lessonCard = 0; go('lesson'); break;
+      case 'lessonnext': U.lessonCard = (U.lessonCard || 0) + 1; render(); break;
+      case 'jtab': U.jTab = v; if (v === 'challenges' || v === 'milestones') U.winsView = v; render(); break;
+      case 'lessondone': (function () {
+        var id = U.lesson && U.lesson.id, m = /^reset7-(\d)$/.exec(id || '');
+        if (lessonDone(id)) { go('journey'); return; }
+        if (m) { var run = resetRun(); if (run.done.indexOf(+m[1]) < 0) run.done.push(+m[1]); U.planToast = 'Lesson done: ' + esc(lessonFor(id).title) + '.'; track('plan-day'); }
+        else { P.journey = P.journey || { done: [] }; P.journey.done.push(id); U.planToast = 'Lesson done.'; track('lesson-' + id); }
+        jCheckRoom(); save(); U.jTab = 'map'; go('journey');
+      })(); break;
+      case 'lessonact': (function () {
+        var m = /^reset7-(\d)$/.exec(U.lesson.id || ''); if (m) { var run = resetRun(); U.planUid = run.uid; U.planDay = +m[1]; U.planCtx = { uid: run.uid, day: +m[1] }; }
+        U.wizReturn = 'lesson';
+        if (v === 'plan') { go('plan'); return; }
+        if (v === 'goalnew') { U.form = { name: '', amount: '', kind: 'dream', months: 6, when: 'date' }; U.formErr = ''; U.back = 'lesson'; U.next = 'lesson'; go('goal'); return; }
+        if (v === 'spend') { if (!P.tx.length) { go('import'); return; } if (spending().unsorted.length) { U.sortHist = []; go('sort'); return; } go('spend'); return; }
+        go(v);
+      })(); break;
+      case 'jfun': U.wizReturn = 'journey'; go('fun'); break;
+      case 'jsub': (function () {
+        if (!P.challenges.some(function (c) { return c.id === 'cancel1' && !c.ended; })) P.challenges.push({ uid: uid(), id: 'cancel1', start: F.isoDay(today()), marks: [], amount: 0 });
+        save(); U.jTab = 'challenges'; U.chTab = 'suggested'; render(); window.scrollTo(0, 0);
+      })(); break;
+      case 'jside': U.jTab = 'challenges'; U.chTab = 'earn'; render(); window.scrollTo(0, 0); break;
       case 'planmark':
         if (U.planCtx) { U.planUid = U.planCtx.uid; U.planDay = U.planCtx.day; }
         var rp = P.plans.filter(function (p) { return p.uid === U.planUid; })[0];
         if (rp.done.indexOf(U.planDay) < 0) rp.done.push(U.planDay);
         U.planCtx = null; U.wizReturn = null;
-        U.planToast = 'Day ' + (U.planDay + 1) + ' complete. Nice work.';
+        U.planToast = 'Lesson done: ' + F.planDef('reset7').days[U.planDay].title + '.'; U.jTab = 'map';
         save(); track('plan-day'); go('plans'); break;
-      case 'planback': if (U.planCtx) { U.planUid = U.planCtx.uid; U.planDay = U.planCtx.day; } U.planCtx = null; go('planday'); break;
+      case 'planback': if (U.planCtx) { U.lesson = { id: 'reset7-' + U.planCtx.day }; U.lessonCard = 2; } U.planCtx = null; go('lesson'); break;
       case 'planact':
         U.planCtx = { uid: U.planUid, day: U.planDay };
         if (v === 'ics') { download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break; }

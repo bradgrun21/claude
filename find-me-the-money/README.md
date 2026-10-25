@@ -125,6 +125,14 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 ## Payday check-in: 3 stars (Journey slice 1)
 On payday the check-in walks through: 1) Payday: paycheck, bills and spending, left to give a job (a short plan is said gently and still counts). 2) Give every dollar a job: Step 1 fills the cushion to $1,000 and rolls the rest to the smallest debt; Step 2 goes smallest debt first; people can leave some without a job (costs star 2). 3) Update balances, prefilled with what's expected, never below $0. 4) Fun money question, only when a week of the period has no purchases logged. Stars: checked in; every dollar has a job; stayed under fun money (needs a limit). Rules live in `STAR_RULES` in app.js. Each check-in's stars, plan money and amount assigned are saved in history.
 
+## Journey (slice 2)
+The Journey tab replaces Plans & Goals and Wins (old links land on the matching Journey tab). Three bubbles:
+- **Map**: past paydays with their stars, then the current chapter. Step 1 shows the 7-Day Money Reset as 3-card lessons (all open, the next one highlighted), milestones earned since the last payday as gold nodes, the payday node (opens the check-in on payday), the next 2 paydays as locked previews, "About N paydays to your Starter Cushion", dated goals as flags, the monthly money date and the 7 steps. When plan money is $0 or less, or the cushion is more than 13 paydays away, a **Make room** chapter comes first: Needs vs wants lesson, set a fun-money limit, Cancel One Subscription (the existing challenge), and an optional earning side quest. It runs once. People past Step 1 see it as done; their step's map comes in a later slice.
+- **Challenges**: the existing bubble tabs (Suggested, Food, Spending, Bills & debt, Saving, Earn more, Completed).
+- **Milestones**: payday streak, all milestones in bubble tabs, and Goals at the bottom.
+
+Lesson text lives in `lessons.json` (id, step, order, chapter, title, card1-card3, skoolUrl, action, actionLabel). Edit it there; a lesson's last card links to its `skoolUrl` when one is set. The last tab spot is now Settings.
+
 ## Payday reminders
 Optional, from Settings (or offered after a payday check-in). The phone subscribes with OneSignal and links to the person's account; an hourly Supabase job (`supabase/functions/reminders`) sends at most one reminder a day at the person's chosen local time: payday check-in, money date, or a bill due tomorrow. Messages never include amounts or names. Modes: off, dry (log only), test (TEST_USER_IDS only), live.
 
