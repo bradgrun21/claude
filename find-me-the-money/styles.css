@@ -571,3 +571,10 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .ytbtn { display: grid; place-items: center; text-decoration: none; }
 .hdricons { display: flex; gap: 6px; flex: none; }
 .hdricons .back { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+
+/* payday stars */
+.stars { display: flex; gap: 4px; }
+.star { font-size: 26px; line-height: 1; color: rgba(27,46,45,.18); }
+.star.on { color: #FFB45E; text-shadow: 0 1px 0 rgba(0,0,0,.08); }
+.sdot { flex: none; width: 22px; height: 22px; border-radius: 11px; border: 1.5px solid rgba(42,107,102,.35); display: grid; place-items: center; font-size: 13px; color: #fff; }
+.sdot.on { background: #2A6B66; border-color: #2A6B66; }

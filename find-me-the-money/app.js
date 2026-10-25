@@ -1536,7 +1536,8 @@
       return homeTop(toast) + hero + homeRest(o, step, snow, nw);
     },
 
-    checkin: function () {
+    checkin: function () { return U.ci ? ciView() : V.checkin0(); },
+    checkin0: function () {
       var o = F.outlook(profile(), today());
       return back('home') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (F.paydayFor(P.nextPay, P.freq, today()) ? 'Payday check-in' : 'Balance update') + ' \u00b7 2 minutes</div><h2>What do your balances say today?</h2>' +
         '<p>Already filled in with last time\u2019s numbers. Check your bank and card apps and change only what\u2019s different. We\u2019ll count your wins.</p></div>' +
@@ -1566,11 +1567,13 @@
         : s.usedGrace ? 'You missed a payday, so your grace pass covered it. Streak saved.'
         : s.earnedGrace ? 'You earned a grace pass. It covers one missed payday.'
         : 'See you next payday, ' + dayMonth(F.fromIso(P.nextPay)) + '.';
+      var starHtml = starsCard(r);
       var savedStat = w.saved >= 0 ? stat(money(w.saved), 'saved') : stat('\u2013' + money(-w.saved), 'from savings');
       return (win ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="eyebrow" style="margin-top:12px">' + (r.counted ? 'Payday check-in' : 'Balance update') + ' \u00b7 ' + dayMonth(today()) + '</div>' +
         '<div class="lime pop"><div style="font-weight:600">' + (r.counted ? 'This payday' : 'Since your last update') + '</div>' +
         '<div style="font-family:var(--display);font-size:30px;font-weight:500;line-height:1.15;margin-top:4px">' + title + '</div>' +
         '<div class="grid3 stats" style="margin-top:16px">' + stat(money(w.debtPaid), 'debt paid') + savedStat + stat((r.daysBack > 0 ? '+' : '') + r.daysBack, 'days stolen back') + '</div></div>' +
+        starHtml +
         (r.paid.length ? '<button type="button" class="primary" data-a="sharepaid">' + ICON.share + ' Share this payoff</button>' : r.goal ? '<button type="button" class="primary" data-a="sharegoal">' + ICON.share + ' Share this goal</button>' : '') +
         (r.paid.length > 1 ? '<p style="text-align:center">Also paid off: ' + r.paid.slice(1).map(esc).join(', ') + '. The snowball grows.</p>' : r.paid.length ? '<p style="text-align:center">That payment now rolls into your next debt. The snowball grows.</p>' : '') +
         (r.daysBack < 0 ? '<div class="note">' + ICON.info + '<span>Your date slipped ' + plural(-r.daysBack, 'day') + '. It happens. Your Payday Plan shows what to adjust before next time.</span></div>' : '') +
@@ -1910,6 +1913,98 @@
     // and the full picture: each phone sends "check-in 1", "check-in 2"... once (no amounts, names or budget data)
     if (sr && !sr.repeat) countCheckin(P.history.filter(function (h) { return h.payday; }).length);
     U.toast = null; go('wins');
+  }
+  // ---------- the payday check-in game: 3 stars per payday ----------
+  // Star rules live here in one place so they can change later (for example, rotating star 3).
+  var STAR_RULES = {
+    checkedIn: { label: 'Checked in', earned: function () { return true; } },
+    everyDollar: { label: 'Every dollar has a job', miss: 'Next payday, give every dollar a job.', earned: function (ci) { return ci.plan > 0.5 && ci.assigned >= ci.plan - 0.5; } },
+    underFun: { label: 'Stayed under fun money', miss: 'Stay under your fun money next time.', none: 'Set a fun-money limit to earn this star.',
+      earned: function (ci) { if (!ci.funLimit) return null; return ci.funKnown ? ci.funSpent <= ci.funLimit + 0.5 : ci.funAns === 'yes'; } }
+  };
+  var STAR_ORDER = ['checkedIn', 'everyDollar', 'underFun'];
+  // a payday check-in that hasn't happened yet for this payday
+  function ciPayday() { var pd = F.paydayFor(P.nextPay, P.freq, today()); return pd && !(P.streak && P.streak.lastPayday === pd) ? pd : null; }
+  // where this payday's plan money goes: Step 1 fills the cushion, then the smallest debt, then the next
+  function ciAlloc(amount) {
+    var o = F.outlook(profile(), today()), ppm = o.plan.ppm, sv = num(P.savings), out = { lines: [], cushion: 0, savings: 0, debt: {} }, rest = Math.max(0, amount);
+    if (o.step === 1) { out.cushion = Math.min(rest, Math.max(0, F.CUSHION - sv)); rest -= out.cushion; if (out.cushion > 0) out.lines.push(['Starter Cushion', out.cushion]); }
+    var open = P.debts.filter(function (d) { return num(d.bal) > 0; }).map(function (d) { return { d: d, left: Math.max(0, num(d.bal) - num(d.min) / ppm) }; }).sort(function (a, b) { return num(a.d.bal) - num(b.d.bal); });
+    if (o.step <= 2) open.forEach(function (x) { var pay = Math.min(rest, x.left); if (pay > 0) { out.debt[x.d.id] = pay; rest -= pay; out.lines.push([x.d.name || 'Debt', pay]); } });
+    if (rest > 0.5) { if (o.step <= 3 && !open.length || o.step === 3) { out.savings = rest; out.lines.push([o.step === 3 ? 'Full Safety Net' : 'Savings', rest]); } else out.lines.push(['Future You (investing)', rest]); }
+    return out;
+  }
+  // fun money spent in the pay period that's ending, and whether any week is missing purchases
+  function ciFun(pd) {
+    var ppm = F.FREQS[P.freq].perMonth, start = F.addDays(F.fromIso(pd), -Math.round(F.FREQS[P.freq].days)), end = today();
+    var want = {}; spendLines().forEach(function (l) { if (l.cat === 'want') want[l.key] = 1; });
+    var inP = P.spends.filter(function (x) { var d = F.fromIso(x.date); return d >= start && d <= end; });
+    var spent = inP.filter(function (x) { return want[x.key]; }).reduce(function (t, x) { return t + num(x.amount); }, 0);
+    var weeks = Math.max(1, Math.round(F.daysBetween(start, end) / 7)), missing = false;
+    for (var w = 0; w < weeks; w++) { var a = F.addDays(start, w * 7), b = F.addDays(start, w * 7 + 7); if (!inP.some(function (x) { var d = F.fromIso(x.date); return d >= a && d < b; })) missing = true; }
+    return { limit: funSet() ? num(P.fun) / ppm : 0, spent: spent, known: !missing };
+  }
+  function ciStart() {
+    var pd = ciPayday(); if (!pd) { U.ci = null; return; }
+    var pl = F.plan(profile()), o = F.outlook(profile(), today()), fn = ciFun(pd);
+    U.ci = { stage: 1, pd: pd, plan: Math.max(0, pl.extra), short: pl.extra <= 0.5 ? Math.ceil(-pl.extra) : 0, assigned: 0, stepBefore: o.step,
+      orig: { savings: P.savings, debts: P.debts.map(function (d) { return d.bal; }) }, funLimit: fn.limit, funSpent: fn.spent, funKnown: fn.known, funAns: '' };
+  }
+  function ciRestore() { var c = U.ci; if (!c) return; P.savings = c.orig.savings; P.debts.forEach(function (d, i) { if (c.orig.debts[i] != null) d.bal = c.orig.debts[i]; }); }
+  // prefill the balances we expect after this payday; the person types what their bank shows
+  function ciExpect() {
+    var c = U.ci, al = ciAlloc(c.assigned), ppm = F.FREQS[P.freq].perMonth; ciRestore();
+    P.debts.forEach(function (d) { if (num(d.bal) > 0) d.bal = String(Math.max(0, Math.round((num(d.bal) - num(d.min) / ppm - (al.debt[d.id] || 0)) * 100) / 100)); });
+    P.savings = String(Math.round((num(P.savings) + al.cushion + al.savings) * 100) / 100);
+  }
+  function ciView() {
+    var c = U.ci, st = c.stage, pl = F.plan(profile()), k = pl.ppm;
+    var head = function (n, title, sub) { return '<div style="display:flex;align-items:center;gap:12px">' + back('').replace('data-a="go" data-v=""', 'data-a="cistep" data-v="' + (st - 1) + '"') + '<div class="bar"><i style="width:' + (n / 4 * 100) + '%"></i></div><span style="font-size:13px;font-weight:600;color:var(--faint)">' + n + ' of 4</span></div>' +
+      '<div class="stack" style="gap:6px"><div class="eyebrow">Payday check-in \u00b7 ' + dayMonth(F.fromIso(c.pd)) + '</div><h2>' + title + '</h2>' + (sub ? '<p>' + sub + '</p>' : '') + '</div>'; };
+    if (st === 1) {
+      var spentOut = num(profile().paycheck) - pl.extra;
+      return head(1, 'It\u2019s payday!', 'Here\u2019s this paycheck at a glance.') +
+        '<div class="card"><div class="row"><span>Paycheck</span><b>' + money(profile().paycheck) + '</b></div><div class="row"><span>Bills and spending</span><b>\u2212' + money(spentOut) + '</b></div>' +
+        '<div class="row"><span style="font-weight:600">Left to give a job</span><b style="color:#2A6B66">' + money(c.plan) + '</b></div></div>' +
+        (c.plan <= 0.5 ? '<div class="note">' + ICON.info + '<span>' + (c.short ? 'This paycheck comes up ' + money(c.short) + ' short. ' : 'Nothing is left over this time. ') + 'That\u2019s OK. Your check-in still counts. When you can, make room in your budget and your countdown starts moving.</span></div>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="cistep" data-v="' + (c.plan > 0.5 ? 2 : 3) + '">Next</button></div>';
+    }
+    if (st === 2) {
+      var al = ciAlloc(c.plan);
+      return head(2, 'Give every dollar a job', 'Here\u2019s where ' + money(c.plan) + ' goes on your path.') +
+        '<div class="card">' + al.lines.map(function (x) { return '<div class="row"><span>' + esc(x[0]) + '</span><b>' + money(x[1]) + '</b></div>'; }).join('') + '</div>' +
+        (U.ciPart ? '<div class="card stack" style="padding:16px 18px;gap:10px"><label class="field">How much gets a job this payday?<input type="number" inputmode="decimal" min="0" max="' + Math.floor(c.plan) + '" data-ciamt value="' + Math.floor(c.plan) + '"></label><span style="font-size:13px;color:var(--muted)">The rest waits without a job. That costs this payday\u2019s second star.</span><button type="button" class="outline" data-a="cipart">Use this amount</button></div>' : '') +
+        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="ciall">Give it all a job</button>' + (U.ciPart ? '' : '<button type="button" class="textbtn" data-a="cipartopen">Leave some without a job</button>') + '</div>';
+    }
+    if (st === 3) {
+      var o = F.outlook(profile(), today());
+      return head(3, 'Update your balances', 'We filled in what we expect after this payday. Check your bank and card apps and type what they actually show. Interest and minimum payments change things.') +
+        (P.payVaries ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>This paycheck</b><label class="field">What landed in your account?<input type="number" inputmode="decimal" min="0" data-thispay value="' + esc(U.thisPay || '') + '" placeholder="' + esc(P.paycheck) + '"></label><span data-live="thispay" style="font-size:14px;color:var(--muted)">Your plan uses ' + money(num(P.paycheck)) + '.</span></div>' : '') +
+        (P.debts.length ? '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Debts</b>' + P.debts.map(function (d, i) { return '<label class="field">' + esc(d.name || 'Debt') + ' balance<input type="number" inputmode="decimal" min="0" data-f="x" data-list="debts" data-i="' + i + '" data-k="bal" value="' + esc(d.bal) + '"></label>'; }).join('') + '</div>' : '') +
+        '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Savings</b>' + field('Emergency savings', 'savings') + '</div>' +
+        P.goals.map(function (g, i) { return '<label class="field">Saved for ' + esc(g.name) + '<input type="number" inputmode="decimal" min="0" data-f="x" data-list="goals" data-i="' + i + '" data-k="saved" value="' + esc(g.saved || '') + '"></label>'; }).join('') +
+        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="ci3next">Next</button></div>' + (o ? '' : '');
+    }
+    return head(4, 'Did you stay under your ' + money(c.funLimit) + ' fun money?', 'A few days this payday don\u2019t have purchases logged, so we\u2019ll take your word for it. Honest answers make the plan work.') +
+      '<div class="choices">' + [['yes', 'Yes, I stayed under'], ['no', 'No, I went over'], ['unsure', 'Not sure']].map(function (x) { return '<button type="button" class="choice' + (c.funAns === x[0] ? ' on' : '') + '" data-a="cifun" data-v="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<p style="font-size:13px">Going over happens. It just means next payday is a fresh start.</p>';
+  }
+  function ciFinish() {
+    var c = U.ci, stars = STAR_ORDER.map(function (k) { return STAR_RULES[k].earned(c); });
+    checkDone();
+    var r = U.result; r.stars = stars;
+    var last = P.history[P.history.length - 1]; if (last) { last.stars = stars.filter(function (x) { return x === true; }).length; last.planMoney = Math.round(c.plan); last.assigned = Math.round(c.assigned); }
+    var o = F.outlook(profile(), today()); if (o.step > c.stepBefore && o.step <= 7) r.stepUp = 'Step ' + o.step + ': ' + F.STEPS[o.step - 1][0];
+    track('stars-' + (last ? last.stars : 1)); U.ci = null; U.ciPart = false; save(); render();
+  }
+  function starsCard(r) {
+    if (!r || !r.stars) return '';
+    var n = r.stars.filter(function (x) { return x === true; }).length;
+    return '<div class="card stack starcard" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:18px">' + n + ' of 3 stars</b><span class="stars" aria-hidden="true">' + r.stars.map(function (x) { return '<span class="star' + (x === true ? ' on' : '') + '">\u2605</span>'; }).join('') + '</span></div>' +
+      STAR_ORDER.map(function (k, i) { var x = r.stars[i], rule = STAR_RULES[k]; return '<div style="display:flex;gap:10px;align-items:flex-start"><span class="sdot' + (x === true ? ' on' : '') + '">' + (x === true ? '\u2713' : '') + '</span><div><b style="font-size:15px">' + rule.label + '</b>' + (x === true ? '' : '<small style="display:block;color:var(--muted);font-size:13px">' + (x === null ? rule.none : rule.miss) + '</small>') + '</div></div>'; }).join('') +
+      (r.stepUp ? '<div class="note">' + ICON.info + '<span><b>' + r.stepUp + ' unlocked.</b> A new part of your path starts now.</span></div>' : '') + '</div>';
   }
   function countCheckin(n) {
     try {
@@ -2361,7 +2456,28 @@
         P.goals.push({ id: uid(), name: nm, amount: amt, kind: U.form.kind, months: U.form.months, per: 0, saved: 0, by: U.form.when === 'date' ? U.form.by : '' });
         save(); track('goal'); go(U.next); break;
       case 'goaldel': P.goals.splice(i, 1); save(); render(); break;
-      case 'checkin': P.prevBalances = P.prevBalances || {}; go('checkin'); break;
+      case 'checkin': P.prevBalances = P.prevBalances || {}; U.err = ''; U.ciPart = false; ciStart(); go('checkin'); break;
+      case 'cistep': (function () {
+        var n = +v; if (!U.ci) return;
+        if (n < 1) { ciRestore(); U.ci = null; go('home'); return; }
+        if (n <= 2) ciRestore();
+        if (n === 3 && U.ci.stage < 3) ciExpect();
+        U.ci.stage = n; U.err = ''; go('checkin'); window.scrollTo(0, 0);
+      })(); break;
+      case 'ciall': U.ci.assigned = U.ci.plan; P.stepAmt = String(Math.floor(U.ci.plan)); U.ciPart = false; U.ci.stage = 3; ciExpect(); U.err = ''; go('checkin'); break;
+      case 'cipartopen': U.ciPart = true; render(); break;
+      case 'cipart': (function () {
+        var el = app.querySelector('[data-ciamt]'), a = num(el && el.value);
+        if (a < 0 || a > U.ci.plan + 0.5) { U.err = 'Pick an amount from $0 to ' + money(U.ci.plan) + '.'; render(); return; }
+        U.ci.assigned = a; P.stepAmt = String(Math.floor(a)); U.ciPart = false; U.ci.stage = 3; ciExpect(); U.err = ''; go('checkin');
+      })(); break;
+      case 'ci3next': (function () {
+        var bad = P.debts.some(function (d) { return String(d.bal).trim() !== '' && num(d.bal) < 0; }) || num(P.savings) < 0;
+        if (bad) { U.err = 'Balances can\u2019t be below $0. Check the numbers and try again.'; render(); return; }
+        if (U.ci.funLimit && !U.ci.funKnown) { U.ci.stage = 4; U.err = ''; go('checkin'); return; }
+        ciFinish();
+      })(); break;
+      case 'cifun': U.ci.funAns = v; ciFinish(); break;
       case 'checkdone': checkDone(); break;
       case 'ics': download('find-me-the-money-paydays.ics', 'text/calendar', icsFile()); break;
       case 'backup': download('find-me-the-money-backup-' + F.isoDay(today()) + '.json', 'application/json', JSON.stringify(P, null, 2)); break;
