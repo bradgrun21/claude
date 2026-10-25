@@ -11,6 +11,8 @@
     // each person can only read their own row (row level security on the plans table).
     supabaseUrl: 'https://ktgwaedkaxsrqencglnu.supabase.co',
     supabaseKey: 'sb_publishable_SRQX7Tks3rdEkwYcaavYbw_cAl5ce6q',
+    // Payday reminders (OneSignal web push). The App ID is public; the key that sends lives only in Supabase.
+    oneSignalAppId: '3c20b5fb-493d-4da3-b894-fdc3d9614d3b',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
@@ -233,6 +235,66 @@
     }
     if (/error_description=/.test(h)) { try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} U.err = 'That sign-in link expired. Ask for a new code below.'; U.screen = 'account'; }
     if (S) cloudPull(false);
+  }
+  // ---------- payday reminders (OneSignal) ----------
+  // The SDK loads only for people who turn reminders on. A daily job in Supabase decides who is due;
+  // the phone just subscribes and links itself to the person's account.
+  var OS = { p: null };
+  function pushOk() { return !!(CONFIG.oneSignalAppId && 'Notification' in window && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')); }
+  function oneSignal() {
+    if (OS.p) return OS.p;
+    OS.p = new Promise(function (res, rej) {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(function (os) {
+        os.init({ appId: CONFIG.oneSignalAppId, serviceWorkerPath: 'sw.js', serviceWorkerParam: { scope: '/' }, notifyButton: { enable: false }, autoResubscribe: true }).then(function () { OS.os = os; res(os); }, rej);
+      });
+      var sc = document.createElement('script'); sc.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'; sc.defer = true;
+      sc.onerror = function () { OS.p = null; rej(new Error('load')); }; document.head.appendChild(sc);
+    });
+    return OS.p;
+  }
+  function remindOn() {
+    if (!S) return;
+    var tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    U.remErr = '';
+    // iPhone only shows the prompt when it's asked right on the tap, so ask straight away when the SDK is ready
+    var ask = OS.os ? Promise.resolve(OS.os.Notifications.requestPermission()).then(function () { return OS.os; }) : oneSignal().then(function (os) { return os.Notifications.requestPermission().then(function () { return os; }); });
+    ask.then(function (os) {
+      return Promise.resolve().then(function () {
+        if (!os.Notifications.permission) throw new Error('denied');
+        return os.login(S.uid).then(function () { return os.User.PushSubscription.optIn(); });
+      });
+    }).then(function () {
+      P.remind = Object.assign({ payday: true, mdate: true, bills: true, hour: 9 }, P.remind || {}, { on: true }); P.tz = tz || P.tz || '';
+      save(); track('reminders-on'); U.toast = ['Reminders are on.', 'We\u2019ll nudge you on payday. Change it anytime in Settings.', true]; render();
+    }, function (er) {
+      U.remErr = er && er.message === 'denied' ? 'Your phone said no to notifications. Turn them on for this app in your phone\u2019s settings, then try again.' : 'We couldn\u2019t turn on reminders right now. Check your connection and try again.';
+      render();
+    });
+  }
+  function remindOff() {
+    P.remind = Object.assign({}, P.remind || {}, { on: false }); save(); track('reminders-off');
+    if (OS.p) OS.p.then(function (os) { return os.User.PushSubscription.optOut(); }).catch(function () {});
+    render();
+  }
+  // a phone that already said yes reconnects quietly when the app opens
+  function remindResume() { if (S && P.remind && P.remind.on && pushOk() && window.Notification && Notification.permission === 'granted') oneSignal().then(function (os) { return os.login(S.uid); }).catch(function () {}); }
+  function remindCard(compact) {
+    if (!CONFIG.oneSignalAppId) return '';
+    var r = P.remind || {}, head = '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Reminders</div><b>' + (compact ? 'Want a nudge next payday?' : 'Payday reminders') + '</b>';
+    var why = '<span style="font-size:14px;color:var(--muted)">One short note on payday so your check-in, and your streak, don\u2019t slip. Nothing else, unless you choose it.</span>';
+    if (!S) return compact ? '' : head + why + '<span style="font-size:14px">Save your plan with your email first. Reminders follow your account.</span><button type="button" class="outline" data-a="edit" data-v="account">Save my plan</button></div>';
+    if (isIOS() && !standalone()) return head + why + '<span style="font-size:14px">On iPhone, reminders work from the Home Screen app. Add it there, open it, and turn them on.</span><button type="button" class="outline" data-a="edit" data-v="install">Show me how</button></div>';
+    if (!pushOk()) return compact ? '' : head + '<span style="font-size:14px;color:var(--muted)">This browser can\u2019t show reminders. Try the Home Screen app, or Chrome on Android.</span></div>';
+    if (window.Notification && Notification.permission === 'denied') return head + '<span style="font-size:14px">Notifications are blocked for this app. Turn them on in your phone\u2019s settings, then come back.</span></div>';
+    if (!r.on) { oneSignal().catch(function () {}); }
+    if (!r.on) return head + why + '<button type="button" class="primary" data-a="remindon">Turn on reminders</button>' + (U.remErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.remErr) + '</p>' : '') + '</div>';
+    if (compact) return '';
+    var tog = function (k, label) { var on = r[k] !== false; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="remindk" data-v="' + k + '">' + (on ? '\u2713 ' : '') + label + '</button>'; };
+    return head + '<span style="font-size:14px;color:var(--muted)">\u2713 On for this phone. One reminder a day at most.</span>' +
+      '<div class="field">Remind me about<div class="chips">' + tog('payday', 'Payday check-in') + tog('mdate', 'Money date') + tog('bills', 'Bills due tomorrow') + '</div></div>' +
+      '<div class="field">Time of day<div class="chips">' + [[8, '8 am'], [9, '9 am'], [12, 'Noon'], [18, '6 pm']].map(function (h) { var on = (r.hour || 9) === h[0]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="remindhour" data-v="' + h[0] + '">' + h[1] + '</button>'; }).join('') + '</div></div>' +
+      '<button type="button" class="textbtn" data-a="remindoff" style="align-self:flex-start;color:var(--warn)">Turn off reminders</button></div>';
   }
   function syncText() {
     return { saving: 'Saving…', saved: '✓ Saved to your account', offline: 'Offline. It’ll save when you’re back online.', expired: 'Signed out. Sign in again to keep saving.' }[C.state] || 'Checking your account…';
@@ -1492,7 +1554,9 @@
         '<div class="push"><button type="button" class="primary" data-a="checkdone">Update my countdown</button></div>' + (o ? '' : '');
     },
 
-    wins: function () {
+    wins: function () { return V.wins0() + (U.result && U.result.counted && !(P.remind && P.remind.on) ? remindCard(true) : '');
+    },
+    wins0: function () {
       var r = U.result, w = r.w, t = P.totals, s = r.streak, v = F.streakView(P.streak, P.nextPay, P.freq, today());
       var title = r.paid.length ? esc(r.paid[0]) + ': PAID OFF' : r.goal ? esc(r.goal) + ': FULLY FUNDED' : r.daysBack > 0 ? plural(r.daysBack, 'day') + ' stolen back' : r.daysBack === 0 && (w.debtPaid > 0 || w.saved > 0) ? 'Right on plan.' : w.debtPaid > 0 || w.saved > 0 ? 'Progress, on the record.' : 'Checked in.';
       var win = r.paid.length || r.goal || r.daysBack > 0 || w.debtPaid > 0 || w.saved > 0;
@@ -1713,7 +1777,7 @@
     },
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
-      return back('home') + '<h2>Settings</h2>' + accountCard() +
+      return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
         '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['import', 'Import a bank file'], ['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
@@ -2308,6 +2372,10 @@
       case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
       case 'stepall': (function () { var pl = F.plan(profile()); P.stepAmt = String(Math.floor(pl.toStep + pl.unassigned)); save(); track('step-assign'); U.toast = ['Every dollar has a job.', 'Your countdown is running.', true]; render(); })(); break;
       case 'commtab': U.commTab = v; render(); break;
+      case 'remindon': remindOn(); break;
+      case 'remindoff': remindOff(); break;
+      case 'remindk': P.remind = P.remind || {}; P.remind[v] = P.remind[v] === false; save(); render(); break;
+      case 'remindhour': P.remind = P.remind || {}; P.remind.hour = +v; try { P.tz = Intl.DateTimeFormat().resolvedOptions().timeZone || P.tz; } catch (err) {} save(); render(); break;
       case 'chtab': U.chTab = v; U.chAllSug = false; render(); break;
       case 'challsug': U.chAllSug = true; render(); break;
       case 'mstab': U.msTab = v; U.msAll = false; render(); break;
@@ -2329,7 +2397,7 @@
           .then(signedIn, function (er) { U.err = er.status >= 500 || !er.status ? 'We couldn\u2019t check the code' + (er.status ? ': ' + er.message : '. Check your connection.') : 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
       })(); break;
       case 'creset': U.cloudStep = null; U.err = ''; render(); break;
-      case 'cout': if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
+      case 'cout': if (OS.p) OS.p.then(function (os) { return os.logout(); }).catch(function () {}); if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
       case 'cdel': U.cdel = true; render(); break;
       case 'cjoinstart': U.joinMode = true; go('account'); break;
       case 'cjoinopen': U.joinOpen = true; render(); var cj = app.querySelector('[data-cjoin]'); if (cj) cj.focus(); break;
@@ -2659,6 +2727,7 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) { if (C.timer) { clearTimeout(C.timer); cloudPush(); } return; } if (S && !C.busy) cloudPull(false); if (U.screen === 'home') render(); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
   cloudStart();
+  remindResume();
   // a shared budget checks for the other person's changes every minute while it's open
   setInterval(function () { if (shared() && !document.hidden && !C.busy && C.ready && !C.timer) cloudPull(false); }, 60000);
   render();

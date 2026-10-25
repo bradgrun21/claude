@@ -122,6 +122,9 @@ Step 1 → Step 2, goals and the slider tradeoff, and payday rollover.
 
 *An educational budgeting tool, not financial, tax or investment advice.*
 
+## Payday reminders
+Optional, from Settings (or offered after a payday check-in). The phone subscribes with OneSignal and links to the person's account; an hourly Supabase job (`supabase/functions/reminders`) sends at most one reminder a day at the person's chosen local time: payday check-in, money date, or a bill due tomorrow. Messages never include amounts or names. Modes: off, dry (log only), test (TEST_USER_IDS only), live.
+
 ## Measuring return visits
 Each phone sends one cookie-free GoatCounter event per payday check-in number: `checkin-1`, `checkin-2`, `checkin-3`... (sent once each, no amounts, names or budget data). In the GoatCounter dashboard, the beta's key number is visitors on `event-checkin-2` divided by visitors on `event-checkin-1`.
 
@@ -129,4 +132,5 @@ Each phone sends one cookie-free GoatCounter event per payday check-in number: `
 - [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
 - [x] Supabase SMTP: sender name "Find Me the Money"
 - [ ] Later: own domain + Resend for sign-in emails (keeps them out of junk)
-- [ ] OneSignal App ID for payday and money date reminders
+- [x] OneSignal App ID (in app.js)
+- [ ] Reminders: deploy `supabase/functions/reminders`, add its secrets, run `supabase/reminders.sql`, then move REMINDERS_MODE from dry to test to live
