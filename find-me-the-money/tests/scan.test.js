@@ -72,6 +72,15 @@ test('phone quirks: name split from its amount, logo scraps on balances, a point
   assert.deepStrictEqual(rows.map((r) => r.merchant + ' ' + r.amount), ['Circle K 58.45', 'City Church 116', 'H-E-B 63.65', '7 Brew Coffee 5.09', 'Chipotle Mexican Grill 21.54', 'Starbucks 3.19', 'Chick-fil-A 11.42', 'H-E-B Gas Station 49.41']);
 });
 
+test('an iPhone reading with positions: names and amounts read apart, logo text, balances', () => {
+  const at = (confidence, text, top, left, height) => ({ text, confidence, top, left, height });
+  const rows = S.parseLines([at(95, 'Oct 19, 2026', 666, 67, 40), at(92, '-$58.45 >', 858, 1294, 54), at(89, 'CIRCLE K', 862, 324, 46), at(86, 'Q  $171.14', 909, 93, 134), at(94, 'Split into 4 payments', 1053, 338, 49),
+    at(93, '-$63.65 >', 1830, 1294, 54), at(93, 'H-E-B', 1834, 326, 46), at(74, 'CED $345.59', 1917, 72, 62), at(87, '@    CHIPOTLE MEXICAN GRILL', 2562, 107, 147), at(93, '-$21.54 >', 2568, 1294, 54), at(96, '$414.33', 2664, 324, 45),
+    at(3, '»Zw STARBUCKS', 2870, 70, 96), at(92, '-$3.19 >', 2892, 1330, 54), at(54, 'gr    $435.87', 2916, 74, 134), at(57, '$          2', 2188, 1316, 54), at(83, 'H-E-B GAS STATION                -$49 41', 2192, 326, 46),
+    at(59, 'ONLINE TRANSFER TO              -$60.00', 2504, 324, 52), at(62, '=      SAV ...1111 TRANSACTION#:', 2594, 118, 88), at(96, '$621.37', 2772, 324, 45)].sort((a, b) => a.top - b.top), { today });
+  assert.deepStrictEqual(rows.map((r) => r.merchant + ' ' + r.amount + (r.skip ? ' skip' : '')), ['Circle K 58.45', 'H-E-B 63.65', 'H-E-B Gas Station 49.41', 'Online Transfer 60 skip', 'Chipotle Mexican Grill 21.54', 'Starbucks 3.19']);
+});
+
 test('pieces of one row read separately are joined left to right', () => {
   const at = (text, top, left) => ({ text, confidence: 91, top, left, height: 40 });
   const rows = S.parseLines([at('Oct 21, 2026', 700, 30), at('-$14.26', 916, 640), at('TARGET', 918, 160), at('$82.69', 1010, 160), at('-$29.00', 1240, 640), at('CORNER MARKET', 1242, 160), at('$96.95', 1288, 160)], { today });
