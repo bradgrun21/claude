@@ -2223,7 +2223,10 @@
       add({ icon: '<span style="font-size:20px">\u26a1</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
     }
     if (j.step === 1) {
-      html += (j.makeRoom ? '' : '') + '<div class="jchap"><div class="eyebrow">Step 1 \u00b7 Starter Cushion</div><small>' + money(j.sv) + ' of $1,000 saved' + (j.makeRoom ? ' \u00b7 opens after Make room' : '') + '</small></div>';
+      var ld = 0; for (var q = 0; q < 7; q++) if (lessonDone('reset7-' + q)) ld++;
+      html += '<div class="jchap"><div class="eyebrow">Step 1 \u00b7 Starter Cushion</div>' +
+        '<div class="jtrack"><span><b>Your cushion</b><small>' + money(j.sv) + ' of $1,000. It grows when you check in on payday.</small></span><span class="jpct">' + Math.min(100, Math.round(j.sv / 10)) + '%</span></div>' +
+        '<div class="jtrack"><span><b>Money basics lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of 7 done. Short reads that help you get there.') + '</small></span><span class="jpct">' + ld + '/7</span></div></div>';
     } else if (j.step === 2) {
       html += '<div class="jchap"><div class="eyebrow">Step 2 \u00b7 Debt Snowball</div><small>Your Step 2 map is on the way. Keep checking in: your countdown and stars still count.</small></div>';
     } else {
@@ -2235,7 +2238,6 @@
       // all lessons stay open (go at your own pace); the next one is highlighted
       var id = 'reset7-' + i, l = lessonFor(id), dn = lessonDone(id), lock = j.makeRoom, next = !dn && !lock && firstOpen;
       if (next) firstOpen = false;
-      if (dn && i < 6 && lessonDone('reset7-' + (i + 1))) continue;
       add({ icon: bk, t: l.title, s: dn ? 'Lesson done' : lock ? 'Opens after Make room' : next ? 'Up next \u00b7 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
     }
     // milestones earned since the last payday land on the path
