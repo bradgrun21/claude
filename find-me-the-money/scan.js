@@ -138,7 +138,7 @@
   function step(name, p) { return p.catch(function (er) { var e = new Error(name + ': ' + describe(er)); e.step = name; throw e; }); }
   // open an image file: createImageBitmap first, then an <img> as a fallback
   function openImage(file) {
-    if (file && file.size === 0) return Promise.reject(new Error('the file is empty (0 KB). It may still be in iCloud. Pick it from Photo Library instead'));
+    if (file && file.size === 0) return Promise.reject(new Error('the photo came through empty (0 KB). Try picking it again'));
     var viaImg = function () { var url = URL.createObjectURL(file); return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('the image could not be opened (' + (file.type || 'unknown type') + ', ' + Math.round(file.size / 1024) + ' KB)')); }; im.src = url; }); };
     return root.createImageBitmap ? root.createImageBitmap(file).catch(viaImg) : viaImg();
   }

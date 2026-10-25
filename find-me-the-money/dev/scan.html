@@ -87,7 +87,13 @@
     if (s.canvas) el.querySelector('[data-cv]').appendChild(s.canvas);
   }
   document.getElementById('files').addEventListener('change', function (e) {
-    var files = Array.prototype.slice.call(e.target.files || []); e.target.value = '';
+    // copy each photo into memory before clearing the picker: iPhone Safari empties picked files once the input is cleared
+    var input = e.target, picked = Array.prototype.slice.call(input.files || []);
+    Promise.all(picked.map(function (f) {
+      return f.arrayBuffer().then(function (b) { var c = new Blob([b], { type: f.type }); c.name = f.name; return c; }, function () { return f; });
+    })).then(function (files) { input.value = ''; addFiles(files); });
+  });
+  function addFiles(files) {
     var chain = Promise.resolve();
     files.forEach(function (f) {
       var i = shots.length, s = { name: f.name, type: f.type, size: f.size, bank: shots.length ? shots[shots.length - 1].bank : 'Chase', missed: 0 };
@@ -97,7 +103,7 @@
           .then(function () { draw(s, i); score(); });
       });
     });
-  });
+  }
   document.getElementById('selftest').onclick = function () {
     var o = document.getElementById('selfout'); o.textContent = 'Checking…';
     FMTMScan.selfTest().then(function (r) { o.textContent = 'Reader works (' + (r.ms / 1000).toFixed(1) + 's). It read: ' + r.text.trim(); },
