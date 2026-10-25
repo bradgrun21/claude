@@ -98,6 +98,8 @@
   // grayscale, invert dark mode, scale small screenshots up 2x, stretch contrast
   function prepare(img) {
     var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height, scale = w < 1000 ? 2 : 1;
+    // phones cap canvas size; keep well under it
+    while (w * scale * h * scale > 12e6 && scale > 0.3) scale = scale * 0.8;
     var cv = document.createElement('canvas'); cv.width = w * scale; cv.height = h * scale;
     var cx = cv.getContext('2d', { willReadFrequently: true }); cx.imageSmoothingQuality = 'high'; cx.drawImage(img, 0, 0, cv.width, cv.height);
     var im = cx.getImageData(0, 0, cv.width, cv.height), d = im.data, n = d.length / 4, sum = 0, g = new Uint8ClampedArray(n);
@@ -119,25 +121,50 @@
     if (workerP) return workerP;
     var v = BASE + 'vendor/tesseract/';
     workerP = (root.Tesseract ? Promise.resolve() : loadScript(v + 'tesseract.min.js')).then(function () {
+      if (!root.Tesseract) throw new Error('tesseract.min.js loaded but did not start');
       return root.Tesseract.createWorker('eng', 1, { workerPath: v + 'worker.min.js', corePath: v + 'core', langPath: v + 'lang', gzip: false, cacheMethod: 'none' });
     }).then(function (w) { return w.setParameters({ tessedit_pageseg_mode: '4', preserve_interword_spaces: '1' }).then(function () { return w; }); });
     workerP.catch(function () { workerP = null; });
     return workerP;
   }
+  // any error, as words a person can pass along
+  function describe(er) {
+    if (!er) return 'unknown error';
+    if (typeof er === 'string') return er;
+    if (er.message) return er.message;
+    if (er.type) return er.type + ' event' + (er.target && er.target.src ? ' (' + String(er.target.src).slice(0, 40) + ')' : '');
+    try { return JSON.stringify(er).slice(0, 200); } catch (e) { return String(er); }
+  }
+  function step(name, p) { return p.catch(function (er) { var e = new Error(name + ': ' + describe(er)); e.step = name; throw e; }); }
+  // open an image file: createImageBitmap first, then an <img> as a fallback
+  function openImage(file) {
+    var viaImg = function () { var url = URL.createObjectURL(file); return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('the image could not be opened (' + (file.type || 'unknown type') + ', ' + Math.round(file.size / 1024) + ' KB)')); }; im.src = url; }); };
+    return root.createImageBitmap ? root.createImageBitmap(file).catch(viaImg) : viaImg();
+  }
   // read one image (File or Blob); returns { rows, lines, text, ms, dark }
   function readImage(file, opts) {
-    var t0 = Date.now(), url = URL.createObjectURL(file);
-    return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = url; }).then(function (im) {
-      var prep = prepare(im); URL.revokeObjectURL(url);
-      return worker().then(function (w) { return w.recognize(prep.canvas, {}, { text: true, blocks: true }); }).then(function (out) {
+    var t0 = Date.now(), prep;
+    return step('opening the image', openImage(file)).then(function (im) {
+      return step('preparing the image', Promise.resolve().then(function () { prep = prepare(im); }));
+    }).then(function () {
+      return step('loading the reader', worker());
+    }).then(function (w) {
+      return step('reading the text', Promise.resolve(w.recognize(prep.canvas, {}, { text: true, blocks: true })));
+    }).then(function (out) {
         var lines = [];
         (out.data.blocks || []).forEach(function (b) { (b.paragraphs || []).forEach(function (p) { (p.lines || []).forEach(function (l) { lines.push({ text: l.text.trim(), confidence: l.confidence, top: l.bbox && l.bbox.y0 }); }); }); });
         lines.sort(function (a, b) { return (a.top || 0) - (b.top || 0); });
         return { rows: parseLines(lines, opts), lines: lines, text: out.data.text, ms: Date.now() - t0, dark: prep.dark, canvas: prep.canvas };
-      });
     });
   }
+  // a quick self-check: draw a line of text and read it back
+  function selfTest() {
+    var cv = document.createElement('canvas'); cv.width = 600; cv.height = 120; var cx = cv.getContext('2d');
+    cx.fillStyle = '#fff'; cx.fillRect(0, 0, 600, 120); cx.fillStyle = '#000'; cx.font = '40px Arial'; cx.fillText('Corner Market -$58.12', 20, 75);
+    var t0 = Date.now();
+    return step('loading the reader', worker()).then(function (w) { return step('reading the text', Promise.resolve(w.recognize(cv))); }).then(function (out) { return { text: out.data.text.trim(), ms: Date.now() - t0 }; });
+  }
 
-  var api = { parseLines: parseLines, findAmounts: findAmounts, findDate: findDate, cleanName: cleanName, rowKey: rowKey, dedupe: dedupe, prepare: prepare, readImage: readImage, worker: worker };
+  var api = { describe: describe, selfTest: selfTest, parseLines: parseLines, findAmounts: findAmounts, findDate: findDate, cleanName: cleanName, rowKey: rowKey, dedupe: dedupe, prepare: prepare, readImage: readImage, worker: worker };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FMTMScan = api;
 })(this);

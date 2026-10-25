@@ -39,6 +39,7 @@
   <div><h1>Screenshot reader test</h1>
   <p>For Brad only, not part of the app. Pick screenshots of a bank app's transaction list. Everything is read on this device; nothing is uploaded or saved.</p></div>
   <label class="pick">Pick screenshots<span style="font-weight:400;font-size:13px;color:var(--muted)">One or more, from Chase, Bank of America or Wells Fargo</span><input type="file" accept="image/*" multiple id="files"></label>
+  <div class="row"><button id="selftest">Check the reader</button><span id="selfout" style="font-size:13px;color:var(--muted);flex:1;min-width:0">Runs the reader on a built-in line of text.</span></div>
   <div class="card" id="summary" hidden></div>
   <div id="out" style="display:grid;gap:14px"></div>
   <p style="font-size:13px">How to score: for each row, tick <b>Right</b> when the amount is exactly right and you'd recognize the store. Under each screenshot, enter how many purchases it <b>missed</b>. Accuracy = rows marked right &divide; (purchases found + missed). Rows tagged "Not a purchase?" or "Transfer?" don't count either way. Goal: 80% or better.</p>
@@ -73,7 +74,8 @@
   }
   function draw(s, i) {
     var el = document.getElementById('shot' + i);
-    if (!s.rows) { el.innerHTML = '<b>' + esc(s.name) + '</b><p class="status">' + (s.err ? 'Could not read: ' + esc(s.err) : 'Reading…') + '</p>'; return; }
+    if (!s.rows) { el.innerHTML = '<b>' + esc(s.name) + '</b><p class="status">' + (s.err ? 'Could not read while ' + esc(s.err) : 'Reading…') + '</p>' +
+      (s.err ? '<p style="font-size:12px">' + esc((s.type || 'unknown type') + ' · ' + Math.round((s.size || 0) / 1024) + ' KB · ' + navigator.userAgent) + '</p>' : ''); return; }
     el.innerHTML = '<div class="row"><b>' + esc(s.name) + '</b><span style="font-size:13px;color:var(--muted)">' + (s.ms / 1000).toFixed(1) + 's · ' + (s.dark ? 'dark mode (inverted)' : 'light mode') + ' · ' + s.rows.length + ' rows</span></div>' +
       '<div class="row"><label>Bank app <select data-bank="' + i + '">' + ['Chase', 'Bank of America', 'Wells Fargo', 'Other'].map(function (b) { return '<option' + (b === s.bank ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select></label>' +
       '<label>Purchases it missed <input type="number" min="0" value="' + (s.missed || 0) + '" data-missed="' + i + '"></label></div>' +
@@ -88,14 +90,19 @@
     var files = Array.prototype.slice.call(e.target.files || []); e.target.value = '';
     var chain = Promise.resolve();
     files.forEach(function (f) {
-      var i = shots.length, s = { name: f.name, bank: shots.length ? shots[shots.length - 1].bank : 'Chase', missed: 0 };
+      var i = shots.length, s = { name: f.name, type: f.type, size: f.size, bank: shots.length ? shots[shots.length - 1].bank : 'Chase', missed: 0 };
       shots.push(s); var div = document.createElement('div'); div.className = 'card'; div.id = 'shot' + i; out.appendChild(div); draw(s, i);
       chain = chain.then(function () {
-        return FMTMScan.readImage(f).then(function (r) { s.rows = r.rows; s.lines = r.lines; s.ms = r.ms; s.dark = r.dark; s.canvas = r.canvas; }, function (er) { s.err = er && er.message || 'error'; s.rows = null; })
+        return FMTMScan.readImage(f).then(function (r) { s.rows = r.rows; s.lines = r.lines; s.ms = r.ms; s.dark = r.dark; s.canvas = r.canvas; }, function (er) { s.err = FMTMScan.describe(er); s.rows = null; })
           .then(function () { draw(s, i); score(); });
       });
     });
   });
+  document.getElementById('selftest').onclick = function () {
+    var o = document.getElementById('selfout'); o.textContent = 'Checking…';
+    FMTMScan.selfTest().then(function (r) { o.textContent = 'Reader works (' + (r.ms / 1000).toFixed(1) + 's). It read: ' + r.text.trim(); },
+      function (er) { o.textContent = 'Reader failed while ' + FMTMScan.describe(er); });
+  };
   out.addEventListener('click', function (e) {
     var bt = e.target.closest('[data-copytext]'); if (!bt) return;
     var s = shots[+bt.dataset.copytext];
