@@ -40,6 +40,16 @@
   <p>For Brad only, not part of the app. Pick screenshots of a bank app's transaction list. Everything is read on this device; nothing is uploaded or saved.</p></div>
   <label class="pick">Pick screenshots<span style="font-weight:400;font-size:13px;color:var(--muted)">Choose Photo Library, then one or more from Chase, Bank of America or Wells Fargo</span><input type="file" accept="image/*" multiple id="files"></label>
   <div class="row"><button id="selftest">Check the reader</button><span id="selfout" style="font-size:13px;color:var(--muted);flex:1;min-width:0">Runs the reader on a built-in line of text.</span></div>
+  <details class="card" id="pickcheck"><summary><b>Picker check</b> (if photos come through as 0 KB)</summary>
+    <p style="font-size:13px">Tap each one, choose <b>Photo Library</b>, and pick the same screenshot. Each line shows what the phone handed over. Nothing is read or saved.</p>
+    <div class="row" style="justify-content:flex-start">
+      <label class="pick" style="padding:10px 14px">1<input type="file" accept="image/*" multiple data-pc="1"></label>
+      <label class="pick" style="padding:10px 14px">2<input type="file" accept="image/*" data-pc="2"></label>
+      <label class="pick" style="padding:10px 14px">3<input type="file" data-pc="3"></label>
+      <label class="pick" style="padding:10px 14px">4<input type="file" accept="image/png,image/jpeg,image/heic" multiple data-pc="4"></label>
+    </div>
+    <pre id="pcout">Results show here.</pre>
+  </details>
   <div class="card" id="summary" hidden></div>
   <div id="out" style="display:grid;gap:14px"></div>
   <p style="font-size:13px">How to score: for each row, tick <b>Right</b> when the amount is exactly right and you'd recognize the store. Under each screenshot, enter how many purchases it <b>missed</b>. Accuracy = rows marked right &divide; (purchases found + missed). Rows tagged "Not a purchase?" or "Transfer?" don't count either way. Goal: 80% or better.</p>
@@ -92,6 +102,17 @@
     Promise.all(picked.map(function (f) {
       return f.arrayBuffer().then(function (b) { var c = new Blob([b], { type: f.type }); c.name = f.name; return c; }, function () { return f; });
     })).then(function (files) { input.value = ''; addFiles(files); });
+  });
+  // picker check: report what each picker setting hands over, at pick time and after reading the bytes
+  var pcout = document.getElementById('pcout'), pclog = [];
+  document.getElementById('pickcheck').addEventListener('change', function (e) {
+    var input = e.target, n = input.dataset.pc, fs = Array.prototype.slice.call(input.files || []);
+    if (!fs.length) { pclog.push(n + ': nothing picked'); pcout.textContent = pclog.join('\n'); return; }
+    Promise.all(fs.map(function (f) {
+      var kb = function (x) { return Math.round(x / 1024) + ' KB'; }, at = f.size;
+      return f.arrayBuffer().then(function (b) { return n + ': ' + (f.type || 'no type') + ' · ' + kb(at) + ' at pick · ' + kb(b.byteLength) + ' read'; },
+        function (er) { return n + ': ' + (f.type || 'no type') + ' · ' + kb(at) + ' at pick · read failed: ' + FMTMScan.describe(er); });
+    })).then(function (lines) { input.value = ''; pclog = pclog.concat(lines); pcout.textContent = pclog.join('\n'); });
   });
   function addFiles(files) {
     var chain = Promise.resolve();
