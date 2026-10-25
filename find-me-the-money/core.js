@@ -221,7 +221,13 @@
     o.debtFree = s.debts.length ? at(debtFree) : null;
     o.debtFreeMins = s.debts.length ? at(debtFree, { minsOnly: true }) : null;
     if (o.target) { var id = o.target.id; o.targetDone = at(function (x) { return x.debts.filter(function (d) { return d.id === id; })[0].bal <= 0; }); }
-    o.cushion = at(function (x) { return x.savings >= CUSHION; });
+    // a cent of float rounding never pushes a date back a payday
+    o.cushion = at(function (x) { return x.savings >= CUSHION - 0.005; });
+    // the snowball order, smallest balance first, with the paycheck number that pays each one off
+    o.payoffs = s.debts.filter(function (d) { return d.bal > 0; }).sort(function (a, b) { return a.bal - b.bal; }).map(function (d) {
+      var n = paychecksUntil(s, ext, ppm, function (x) { return x.debts.filter(function (z) { return z.id === d.id; })[0].bal <= 0.005; });
+      return { id: d.id, name: d.name, bal: d.bal, n: n, date: n === Infinity ? null : dateAfter(p.nextPay, p.freq, n) };
+    });
     o.safetyNet = at(function (x) { return x.savings >= x.target && debtFree(x); });
     o.goals = s.goals.map(function (g) {
       var ready = at(function (x) { var y = x.goals.filter(function (z) { return z.id === g.id; })[0]; return y.saved >= y.amount; });

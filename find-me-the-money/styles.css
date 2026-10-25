@@ -655,3 +655,10 @@ label.primary { display: flex; align-items: center; justify-content: center; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
 .scerr { color: var(--warn); font-size: 14px; background: var(--warn-bg); border-radius: 16px; padding: 10px 14px; }
+/* Journey: finished debts, the snowball ahead, earlier paydays */
+.jgone { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+.jgone span { font-size: 12px; font-weight: 600; color: #2A6B66; background: var(--green-soft); border-radius: 99px; padding: 3px 10px; }
+.jnext { padding: 12px 18px; display: flex; flex-direction: column; }
+.jnext .row:last-child { border-bottom: 0; }
+.jnext small { display: block; color: var(--muted); font-size: 13px; }
+.jmore { font-size: 12px; border: 1px dashed rgba(42,107,102,.45); background: transparent; color: #2A6B66; font-weight: 600; border-radius: 10px; padding: 4px 8px; }

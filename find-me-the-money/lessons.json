@@ -154,5 +154,57 @@
   "skoolUrl": "",
   "actionLabel": "Set up my payday habit",
   "action": "habit"
+ },
+ {
+  "id": "D1",
+  "step": 2,
+  "order": 1,
+  "chapter": "snowball",
+  "title": "Smallest debt first",
+  "card1": "List every debt except the house, smallest balance to largest.",
+  "card2": "Pay minimums on everything. Throw every extra dollar at the smallest one.",
+  "card3": "It isn't always the cheapest math, but it's the math people finish. Quick wins keep you going.",
+  "skoolUrl": "",
+  "actionLabel": "Check my debts",
+  "action": "debts"
+ },
+ {
+  "id": "D2",
+  "step": 2,
+  "order": 2,
+  "chapter": "snowball",
+  "title": "Stop adding new debt",
+  "card1": "You can't climb out of a hole while you're still digging.",
+  "card2": "Pause the credit cards while you work the snowball. Pay with your debit card or cash, and let fun money set the limit.",
+  "card3": "A card can stay open. It just stays home.",
+  "skoolUrl": "",
+  "actionLabel": "",
+  "action": ""
+ },
+ {
+  "id": "D3",
+  "step": 2,
+  "order": 3,
+  "chapter": "snowball",
+  "title": "Roll it forward",
+  "card1": "When a debt is paid off, its payment doesn't disappear. It rolls to the next smallest debt.",
+  "card2": "That's the snowball: every payoff makes the next one faster.",
+  "card3": "On payday, give every dollar a job. The app rolls the money forward for you.",
+  "skoolUrl": "",
+  "actionLabel": "See my budget",
+  "action": "plan"
+ },
+ {
+  "id": "D4",
+  "step": 2,
+  "order": 4,
+  "chapter": "snowball",
+  "title": "Speed it up",
+  "card1": "Every extra dollar brings payoff day closer.",
+  "card2": "Sell something you don't use, pick up a shift, or cancel a subscription.",
+  "card3": "Try one challenge. When it brings in money, your map shows how many paydays you stole back.",
+  "skoolUrl": "",
+  "actionLabel": "Find a challenge",
+  "action": "challenges"
  }
 ]

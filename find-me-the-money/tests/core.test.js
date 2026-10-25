@@ -34,6 +34,13 @@ test('Snowball pays the smallest balance first and finishes before minimums alon
   assert.strictEqual(o.target.name, 'Buy now, pay later');
   assert.ok(o.debtFree < o.debtFreeMins, 'snowball should beat minimums');
 });
+test('Snowball schedule for test person A: cushion on payday 2, store card 4, credit card 8', () => {
+  const A = { paycheck: 2400, freq: 'biweekly', nextPay: '2026-10-30', givingPct: 0, savings: 0, fun: 0, bills: [{ name: 'Bills and spending', amount: 1900 * 26 / 12 }],
+    debts: [{ id: 'c', name: 'Car loan', bal: 3000, min: 0, apr: 0 }, { id: 's', name: 'Store card', bal: 600, min: 0, apr: 0 }, { id: 'k', name: 'Credit card', bal: 2400, min: 0, apr: 0 }], goals: [] };
+  const o = C.outlook(A, new Date(2026, 9, 25));
+  assert.strictEqual(C.isoDay(o.cushion), '2026-11-13');
+  assert.deepStrictEqual(o.payoffs.map((d) => [d.name, d.n]), [['Store card', 4], ['Credit card', 8], ['Car loan', 14]]);
+});
 test('Step 1 when savings are under $1,000', () => {
   const o = C.outlook(Object.assign({}, profile, { savings: 100 }), new Date(2026, 9, 19));
   assert.strictEqual(o.step, 1);

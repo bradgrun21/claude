@@ -2219,13 +2219,13 @@
     var len = [(d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + '-day challenge')];
     return { eyebrow: 'Challenge complete', title: d.title, sub: d.share, chips: len.concat(extra, streakChips()).slice(0, 3), chipsNoAmt: len.concat(streakChips()).slice(0, 3), caption: 'Challenge complete: ' + d.title + '!' };
   }
-  // the next cushion lesson, as the home screen's nudge (Step 1 only)
+  // the next lesson in this step, as the home screen's nudge
   function todayStep() {
-    var j = jState(); if (j.step !== 1 || j.makeRoom) return '';
-    var n = CUSHION_LESSONS.filter(function (x) { return !lessonDone(x[0]); })[0]; if (!n) return '';
-    var k = CUSHION_LESSONS.indexOf(n);
+    var j = jState(), set = j.step === 1 ? CUSHION_LESSONS : j.step === 2 ? SNOWBALL_LESSONS : null; if (!set || j.makeRoom) return '';
+    var n = set.filter(function (x) { return !lessonDone(x[0]); })[0]; if (!n) return '';
+    var k = set.indexOf(n);
     return '<button type="button" class="card" data-a="lessonopen" data-v="' + n[0] + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;gap:14px;align-items:center">' +
-      '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">Cushion lesson ' + (k + 1) + ' of ' + CUSHION_LESSONS.length + '</span>' +
+      '<span class="medal on" aria-hidden="true">' + ICON.book + '</span><span style="flex:1;min-width:0"><span class="eyebrow" style="display:block">' + (j.step === 1 ? 'Cushion' : 'Snowball') + ' lesson ' + (k + 1) + ' of ' + set.length + '</span>' +
       '<span style="display:block;font-family:var(--display);font-weight:600;font-size:18px">' + esc(lessonFor(n[0]).title) + '</span><span style="font-size:13px;color:var(--muted)">1 minute</span></span><span aria-hidden="true">›</span></button>';
   }
   function nwCard() {
@@ -2240,9 +2240,11 @@
   try { fetch('lessons.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) { LESSONS = {}; l.forEach(function (x) { LESSONS[x.id] = x; }); if (U.screen === 'lesson' || U.screen === 'journey') render(); }).catch(function () {}); } catch (e) {}
   // Step 1's lessons: all about the $1,000 cushion (text in lessons.json; titles here until it loads)
   var CUSHION_LESSONS = [['C1', 'Why $1,000 comes first'], ['C2', 'Where to keep it'], ['C3', 'What counts as an emergency'], ['C4', 'Make it a payday habit']];
+  // Step 2's lessons: the debt snowball
+  var SNOWBALL_LESSONS = [['D1', 'Smallest debt first'], ['D2', 'Stop adding new debt'], ['D3', 'Roll it forward'], ['D4', 'Speed it up']];
   function lessonFor(id) {
     if (LESSONS && LESSONS[id]) return LESSONS[id];
-    var c = CUSHION_LESSONS.filter(function (x) { return x[0] === id; })[0]; if (c) return { id: id, title: c[1], card1: '', card2: '', card3: '', action: '', actionLabel: '', skoolUrl: '' };
+    var c = CUSHION_LESSONS.concat(SNOWBALL_LESSONS).filter(function (x) { return x[0] === id; })[0]; if (c) return { id: id, title: c[1], card1: '', card2: '', card3: '', action: '', actionLabel: '', skoolUrl: '' };
     var m = /^reset7-(\d)$/.exec(id); if (!m) return null;
     var d = F.planDef('reset7').days[+m[1]], r = d.read.concat(['']);
     return { id: id, title: d.title, card1: r[0], card2: r[1], card3: r[2] || '', action: d.action[1], actionLabel: d.action[0], skoolUrl: '' };
@@ -2269,59 +2271,122 @@
     return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (live ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
       '<span class="orb">' + (o.done ? ICON.check('currentColor', 20) : o.icon) + '</span><span class="jt"><b>' + o.t + '</b><small>' + o.s + '</small></span></' + tag.split(' ')[0] + '>';
   }
+  // "Nov 13" within the next year, "Apr 2028" after that
+  function whenShort(d) { return F.daysBetween(today(), d) < 330 ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : shortDate(d); }
+  // which step a past payday belonged to, from the balances saved with it
+  function stepAt(h) { return num(h.savings) < F.CUSHION ? 1 : num(h.debt) > 0 ? 2 : 3; }
   function journeyMap() {
-    var j = jState(), nodes = [], off = [0, 1, 1.6, 1, 0, -1, -1.6, -1], k = 0, add = function (n) { n.off = off[k++ % 8]; nodes.push(n); };
+    var j = jState(), cur = Math.min(j.step, 7), view = Math.max(1, Math.min(U.jStep || cur, cur + 1, 7)), nodes = [], off = [0, 1, 1.6, 1, 0, -1, -1.6, -1], k = 0, add = function (n) { n.off = off[k++ % 8]; nodes.push(n); };
     var bk = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg>';
     var room = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
     var sun = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="15" r="4"/><path d="M3 19h18M12 5v3M5.5 8.5l2 2M18.5 8.5l-2 2"/></svg>';
-    var hist = (P.history || []).filter(function (h) { return h.payday; });
-    var past = hist.length ? '<div class="jpast" aria-label="Past paydays">' + (hist.length > 5 ? '<span>+' + (hist.length - 5) + ' earlier</span>' : '') + hist.slice(-5).map(function (h) {
-      return '<span>' + F.fromIso(h.payday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + (h.stars != null ? '<b class="jst">' + '\u2605'.repeat(h.stars) + '<i>' + '\u2605'.repeat(3 - h.stars) + '</i></b>' : '\u2713') + '</span>'; }).join('') + '</div>' : '';
-    var html = past;
-    if (j.step > 1) html += '<div class="jworld done"><b>\u2713 Step 1 \u00b7 Starter Cushion</b><small>Done. Your $1,000 is in place.</small></div>';
+    var mark = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>';
+    var cart = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
+    var lessonNodes = function (set, lock) {
+      // all lessons stay open (go at your own pace) and can be read again; the next one is highlighted
+      var firstOpen = view === cur;
+      set.forEach(function (x) {
+        var id = x[0], l = lessonFor(id), dn = lessonDone(id), next = !dn && !lock && firstOpen;
+        if (next) firstOpen = false;
+        add({ icon: bk, t: l.title, s: dn ? 'Lesson done · read again' : lock ? 'Opens after Make room' : next ? 'Up next · 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, again: true, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
+      });
+    };
+    // a way to look back at earlier steps (and peek at the next one)
+    var stepTabs = [];
+    for (var st = 1; st <= Math.min(7, cur + 1); st++) stepTabs.push([String(st), st < cur ? '✓ Step ' + st : st === cur ? 'Step ' + st + ' · now' : 'Step ' + st + ' · next']);
+    var html = cur > 1 || view !== cur ? tabChips('jstep', String(view), stepTabs) : '';
+    // past paydays in the step being viewed; all of them on request
+    var hist = (P.history || []).filter(function (h) { return h.payday && stepAt(h) === view; });
+    var shown = U.jAllPast ? hist : hist.slice(-5);
+    if (hist.length) html += '<div class="jpast" aria-label="Paydays in this step">' + (hist.length > shown.length ? '<button type="button" class="jmore" data-a="jallpast">+' + (hist.length - shown.length) + ' earlier</button>' : '') + shown.map(function (h) {
+      return '<span>' + F.fromIso(h.payday).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + (h.stars != null ? '<b class="jst">' + '★'.repeat(h.stars) + '<i>' + '★'.repeat(3 - h.stars) + '</i></b>' : '✓') + '</span>'; }).join('') + '</div>';
+    var badgeDate = function (id) { return P.badges[id] ? ' on ' + dayMonth(F.fromIso(P.badges[id])) : ''; };
+
+    // ----- a step that's finished: what happened, lessons to read again -----
+    if (view < cur) {
+      if (view === 1) {
+        html += '<div class="jworld done"><b>✓ Step 1 · Starter Cushion</b><small>Done' + badgeDate('cushion') + '. Your $1,000 is in place.</small></div>';
+        if ((P.journey || {}).makeRoomDone) add({ icon: room, t: 'Make room', s: 'Done', done: true });
+        lessonNodes(CUSHION_LESSONS, false);
+        add({ icon: ICON.medal, kind: 'gold', t: 'Starter Cushion', s: 'Milestone' + badgeDate('cushion'), done: false, a: P.badges.cushion ? 'sharebadge' : '', v: 'cushion' });
+      } else if (view === 2) {
+        html += '<div class="jworld done"><b>✓ Step 2 · Debt Snowball</b><small>Done' + badgeDate('debt-free') + '. Every debt but the house is paid off.</small></div>';
+        P.debts.filter(function (d) { return num(d.orig) > 0; }).forEach(function (d) { add({ icon: mark, t: esc(d.name || 'Debt') + ' paid off', s: money(num(d.orig)) + ' gone', done: true }); });
+        lessonNodes(SNOWBALL_LESSONS, false);
+      } else html += '<div class="jworld done"><b>✓ Step ' + view + ' · ' + F.STEPS[view - 1][0] + '</b><small>Done.</small></div>';
+      return html + (nodes.length ? '<div class="mpath">' + nodes.map(jNode).join('') + '</div>' : '') + '<button type="button" class="outline" data-a="jstep" data-v="' + cur + '">Back to Step ' + cur + '</button>';
+    }
+    // ----- the next step: a peek, nothing to do yet -----
+    if (view > cur) {
+      var when = cur === 1 ? j.o.cushion : cur === 2 ? j.o.debtFree : j.o.safetyNet;
+      html += '<div class="jworld"><b>Step ' + view + ' · ' + F.STEPS[view - 1][0] + '</b><small>' + (cur === 1 ? 'Opens when your $1,000 cushion is in place.' : cur === 2 ? 'Opens when every debt but the house is paid off.' : 'Opens when this step is done.') +
+        (when ? ' At your pace, that’s around ' + shortDate(when) + '.' : '') + '</small></div>';
+      return html + '<button type="button" class="outline" data-a="jstep" data-v="' + cur + '">Back to Step ' + cur + '</button>';
+    }
+
+    // ----- the current step -----
     // Make room comes first when the plan is short or the cushion is a long way off
     if (j.makeRoom) {
       var funOk = funSet(), sub = P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; }), subOn = P.challenges.some(function (c) { return c.id === 'cancel1' && !c.ended; });
-      html += '<div class="jchap"><div class="eyebrow">Chapter \u00b7 Make room</div><small>' + (j.pm <= 0.5 ? 'Find room in your budget so your cushion can start.' : 'Your cushion is ' + (j.paydays === Infinity ? 'a long way' : j.paydays + ' paydays') + ' away. Let\u2019s find room to speed it up.') + '</small></div>';
-      add({ icon: bk, t: 'Needs vs wants', s: 'Lesson, 1 minute', a: 'lessonopen', v: 'M1', done: lessonDone('M1') });
+      html += '<div class="jchap"><div class="eyebrow">Chapter · Make room</div><small>' + (j.pm <= 0.5 ? 'Find room in your budget so your cushion can start.' : 'Your cushion is ' + (j.paydays === Infinity ? 'a long way' : j.paydays + ' paydays') + ' away. Let’s find room to speed it up.') + '</small></div>';
+      add({ icon: bk, t: 'Needs vs wants', s: lessonDone('M1') ? 'Lesson done · read again' : 'Lesson, 1 minute', a: 'lessonopen', v: 'M1', done: lessonDone('M1'), again: true });
       add({ icon: room, t: 'Set a fun-money limit', s: funOk ? 'Limit set' : 'A limit for the Wants group', a: 'jfun', done: funOk });
       add({ icon: room, t: 'Cancel One Subscription', s: subOn ? 'In progress: mark it done when you cancel' : 'Find room for the plan', a: 'jsub', done: sub });
-      add({ icon: '<span style="font-size:20px">\u26a1</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
+      add({ icon: '<span style="font-size:20px">⚡</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
     }
-    if (j.step === 1) {
+    var ahead = '', checkpoints = [];
+    if (cur === 1) {
       var ld = CUSHION_LESSONS.filter(function (x) { return lessonDone(x[0]); }).length, nl = CUSHION_LESSONS.length;
-      html += '<div class="jchap"><div class="eyebrow">Step 1 \u00b7 Starter Cushion</div>' +
+      html += '<div class="jchap"><div class="eyebrow">Step 1 · Starter Cushion</div>' +
         '<div class="jtrack"><span><b>Your cushion</b><small>' + money(j.sv) + ' of $1,000. It grows when you check in on payday.</small></span><span class="jpct">' + Math.min(100, Math.round(j.sv / 10)) + '%</span></div>' +
         '<div class="jtrack"><span><b>Cushion lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of ' + nl + ' done. One minute each.') + '</small></span><span class="jpct">' + ld + '/' + nl + '</span></div></div>';
-    } else if (j.step === 2) {
-      html += '<div class="jchap"><div class="eyebrow">Step 2 \u00b7 Debt Snowball</div><small>Your Step 2 map is on the way. Keep checking in: your countdown and stars still count.</small></div>';
+      ahead = j.makeRoom ? 'Finish Make room to start your cushion.' : j.pm > 0.5 ? 'About ' + plural(j.paydays, 'payday') + ' to your Starter Cushion.' : 'Give your plan money a job to see your pace.';
+    } else if (cur === 2) {
+      // each debt is a chapter, smallest balance first
+      var po = j.o.payoffs || [], now = po[0], d0 = now && P.debts.filter(function (d) { return d.id === now.id; })[0], orig = d0 ? Math.max(num(d0.orig), num(d0.bal)) : 0;
+      var gone = P.debts.filter(function (d) { return num(d.bal) <= 0 && num(d.orig) > 0; });
+      html += '<div class="jchap"><div class="eyebrow">Step 2 · Debt Snowball</div><small>Smallest balance first. When one is paid off, its payment rolls into the next.</small>' +
+        (gone.length ? '<div class="jgone">' + gone.map(function (d) { return '<span>✓ ' + esc(d.name || 'Debt') + '</span>'; }).join('') + '</div>' : '') +
+        (now ? '<div class="jtrack"><span><b>Chapter ' + (gone.length + 1) + ' · ' + esc(now.name || 'Debt') + '</b><small>' + money(now.bal) + ' left' + (orig > now.bal ? ' of ' + money(orig) : '') + '. ' + (now.n === Infinity ? 'Give plan money a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' to go.') + '</small></span><span class="jpct">' + (orig ? Math.round((1 - now.bal / orig) * 100) : 0) + '%</span></div>' : '') + '</div>';
+      if (now) {
+        // a long chapter gets checkpoints so it never feels endless
+        if (now.n !== Infinity && now.n > 8 && orig > 0) {
+          var parts = Math.ceil(now.n / 6), stepAmt = orig / parts;
+          for (var c = 1; c < parts; c++) {
+            var line = Math.max(50, Math.round((orig - stepAmt * c) / 50) * 50), reached = now.bal <= line;
+            checkpoints.push({ icon: mark, t: esc(now.name || 'Debt') + ' under ' + money(line), s: reached ? 'Checkpoint reached' : 'Checkpoint', done: reached });
+          }
+        }
+        ahead = now.n === Infinity ? 'Give your plan money a job to see your pace.' : 'About ' + plural(now.n, 'payday') + ' until ' + esc(now.name) + ' is gone' + (now.date ? ', around ' + whenShort(now.date) : '') + '.';
+      }
     } else {
-      html += '<div class="jchap"><div class="eyebrow">Step ' + Math.min(j.step, 7) + ' \u00b7 ' + F.STEPS[Math.min(j.step, 7) - 1][0] + '</div><small>The map for this step is on the way. Keep checking in: your stars still count.</small></div>';
+      html += '<div class="jchap"><div class="eyebrow">Step ' + cur + ' · ' + F.STEPS[cur - 1][0] + '</div><small>The map for this step is on the way. Keep checking in: your stars still count.</small></div>';
     }
     // this payday period's weekly "Add this week's purchases" nodes
-    var cart = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
     payWeeks().forEach(function (w) {
-      add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added \u00b7 tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
+      add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added · tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
     });
-    // Step 1's cushion lessons; all stay open (go at your own pace), the next one is highlighted
-    var firstOpen = true;
-    for (var i = 0; j.step === 1 && i < CUSHION_LESSONS.length; i++) {
-      var id = CUSHION_LESSONS[i][0], l = lessonFor(id), dn = lessonDone(id), lock = j.makeRoom, next = !dn && !lock && firstOpen;
-      if (next) firstOpen = false;
-      add({ icon: bk, t: l.title, s: dn ? 'Lesson done' : lock ? 'Opens after Make room' : next ? 'Up next \u00b7 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
+    if (cur === 1) lessonNodes(CUSHION_LESSONS, j.makeRoom);
+    if (cur === 2) {
+      lessonNodes(SNOWBALL_LESSONS, false);
+      checkpoints.forEach(add);
+      var po2 = j.o.payoffs || [];
+      if (po2[0]) add({ icon: ICON.medal, kind: 'gold', t: esc(po2[0].name || 'Debt') + ' paid off', s: po2[0].date ? 'Around ' + whenShort(po2[0].date) : 'Your next big win', done: false });
     }
     // milestones earned since the last payday land on the path
-    var lastPd = hist.length ? hist[hist.length - 1].date : null;
+    var allHist = (P.history || []).filter(function (h) { return h.payday; }), lastPd = allHist.length ? allHist[allHist.length - 1].date : null;
     F.BADGES.filter(function (b) { return P.badges[b.id] && (!lastPd || P.badges[b.id] >= lastPd); }).slice(-3).forEach(function (b) { add({ icon: ICON.medal, kind: 'gold', t: b.title, s: 'Milestone earned', done: false, a: 'sharebadge', v: b.id }); });
     var np = F.rollPayday(P.nextPay, P.freq, today()), open = !!ciPayday();
     add({ icon: sun, kind: 'pay', t: 'Payday, ' + dayMonth(F.fromIso(np)), s: open ? 'Check in for your stars' : 'Opens the day before payday', a: open ? 'checkin' : '', done: false });
     var a1 = F.nextAfter(np, P.freq), a2 = F.nextAfter(a1, P.freq);
     [a1, a2].forEach(function (d) { add({ icon: sun, kind: 'future', t: 'Payday, ' + dayMonth(F.fromIso(d)), s: 'Locked', locked: true }); });
     html += '<div class="mpath">' + nodes.map(jNode).join('') + '</div>';
-    // where this chapter ends, and any dated goals as flags
-    var flags = P.goals.filter(function (g) { return g.by; }).map(function (g) { return '<span class="jflag">' + ICON.flag + ' ' + esc(g.name) + ' \u00b7 ' + shortDate(F.fromIso(g.by)) + '</span>'; }).join('');
-    html += '<p class="jahead">' + (j.makeRoom ? 'Finish Make room to start your cushion.' : j.step === 1 ? (j.pm > 0.5 ? 'About ' + plural(j.paydays, 'payday') + ' to your Starter Cushion.' : 'Give your plan money a job to see your pace.') : j.step === 2 && j.o.target ? 'About ' + plural(Math.max(1, Math.ceil(j.o.target.bal / Math.max(1, j.pm))), 'payday') + ' until ' + esc(j.o.target.name) + ' is gone.' : '') + '</p>' +
-      (flags ? '<div class="jflags">' + flags + '</div>' : '');
+    // the chapters after this one, with roughly when each is done
+    if (cur === 2 && (j.o.payoffs || []).length > 1) html += '<div class="card jnext"><b>Up next in the snowball</b>' + j.o.payoffs.slice(1).map(function (d, i) {
+      return '<div class="row"><span>Chapter ' + (P.debts.filter(function (x) { return num(x.bal) <= 0 && num(x.orig) > 0; }).length + i + 2) + ' · ' + esc(d.name || 'Debt') + '<small>' + money(d.bal) + '</small></span><span class="pill">' + (d.date ? whenShort(d.date) : 'Later') + '</span></div>'; }).join('') + '</div>';
+    // dated goals as flags
+    var flags = P.goals.filter(function (g) { return g.by; }).map(function (g) { return '<span class="jflag">' + ICON.flag + ' ' + esc(g.name) + ' · ' + shortDate(F.fromIso(g.by)) + '</span>'; }).join('');
+    html += '<p class="jahead">' + ahead + '</p>' + (flags ? '<div class="jflags">' + flags + '</div>' : '');
     return html + moneyDateCard() + pathCard(j.o, j.step);
   }
   function journeyHead() {
@@ -2455,7 +2520,7 @@
       clearTimeout(U.confirmTimer); U.confirmDel = null; U.confirmEl = null;
     } else resetConfirm();
     switch (a) {
-      case 'go': if (v === 'journey' && b.closest('.tabbar')) U.jTab = 'map'; if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
+      case 'go': if (v === 'journey' && b.closest('.tabbar')) { U.jTab = 'map'; U.jStep = null; U.jAllPast = false; } if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;
       case 'quickgo':
         if (!(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); break; }
@@ -2809,6 +2874,8 @@
       case 'planopen': U.lesson = { id: 'reset7-' + i }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonopen': U.lesson = { id: v }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonnext': U.lessonCard = (U.lessonCard || 0) + 1; render(); break;
+      case 'jstep': U.jStep = +v; U.jAllPast = false; U.jTab = 'map'; render(); break;
+      case 'jallpast': U.jAllPast = true; render(); break;
       case 'jtab': U.jTab = v; if (v === 'challenges' || v === 'milestones') U.winsView = v; render(); break;
       case 'lessondone': (function () {
         var id = U.lesson && U.lesson.id, m = /^reset7-(\d)$/.exec(id || '');
