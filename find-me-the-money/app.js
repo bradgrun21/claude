@@ -2263,7 +2263,8 @@
     var v = F.streakView(P.streak, P.nextPay, P.freq, today());
     return '<div class="jhead"><div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + plural(jStars(), 'star') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
       '<div class="pbar jbar"><i style="width:' + Math.max(2, Math.min(100, pct * 100)) + '%"></i></div><div class="jsub"><span>' + l1 + '</span><span>' + l2 + '</span></div>' +
-      '<div class="chips" style="margin-top:8px"><span class="chip on" style="min-height:30px;font-size:13px">' + plural(v.count, 'payday') + ' in a row</span>' + (j.makeRoom ? '<span class="chip" style="min-height:30px;font-size:13px">Make room first</span>' : '') + '</div></div>';
+      '<div class="jrow"><div class="chips"><span class="chip on" style="min-height:30px;font-size:13px">' + plural(v.count, 'payday') + ' in a row</span>' + (j.makeRoom ? '<span class="chip" style="min-height:30px;font-size:13px">Make room first</span>' : '') + '</div>' +
+      '<button type="button" class="linkbtn jupd" data-a="checkin">Update balances \u203a</button></div></div>';
   }
   // a row of bubble tabs that scrolls sideways
   function tabChips(action, cur, opts) {

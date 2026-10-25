@@ -619,3 +619,5 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .jtrack { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line, rgba(27,46,45,.1)); }
 .jtrack small { display: block; color: var(--muted); font-size: 13px; }
 .jpct { font-weight: 700; color: #2A6B66; white-space: nowrap; }
+.jrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.jupd { font-size: 14px; font-weight: 600; color: #2A6B66; text-decoration: none; padding: 6px 0; min-height: 0; }
