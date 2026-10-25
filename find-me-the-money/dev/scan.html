@@ -79,6 +79,7 @@
       '<label>Purchases it missed <input type="number" min="0" value="' + (s.missed || 0) + '" data-missed="' + i + '"></label></div>' +
       '<div class="scroll"><table><tr><th>Right</th><th>Store</th><th class="n">Amount</th><th>Date</th><th class="n">Confidence</th><th></th></tr>' +
       s.rows.map(function (r, j) { return '<tr class="' + (r.low ? 'low' : '') + '"><td><input type="checkbox" data-ok="' + i + ':' + j + '"' + (r.ok ? ' checked' : '') + (r.skip ? ' disabled' : '') + ' aria-label="Right"></td><td>' + esc(r.merchant) + '<div style="font-size:11px;color:var(--muted)">' + esc(r.raw) + '</div></td><td class="n">' + money(r.amount) + '</td><td>' + esc(r.date || '') + '</td><td class="n">' + r.confidence + (r.low ? ' ⚠' : '') + '</td><td>' + (r.flag ? '<span class="tag">' + esc(r.flag) + '</span>' : '') + '</td></tr>'; }).join('') + '</table></div>' +
+      '<div class="row"><button data-copytext="' + i + '">Copy what it read</button><span style="font-size:13px;color:var(--muted)">Paste it to Claude to tune the reader. It includes store names and amounts.</span></div>' +
       '<details><summary>Raw text it read</summary><pre>' + esc(s.lines.map(function (l) { return Math.round(l.confidence) + '  ' + l.text; }).join('\n')) + '</pre></details>' +
       '<details><summary>Cleaned-up image it read</summary><div data-cv="' + i + '"></div></details>';
     if (s.canvas) el.querySelector('[data-cv]').appendChild(s.canvas);
@@ -94,6 +95,13 @@
           .then(function () { draw(s, i); score(); });
       });
     });
+  });
+  out.addEventListener('click', function (e) {
+    var bt = e.target.closest('[data-copytext]'); if (!bt) return;
+    var s = shots[+bt.dataset.copytext];
+    var t = 'Screenshot: ' + s.bank + (s.dark ? ' (dark mode)' : '') + '\nWHAT IT READ\n' + s.lines.map(function (l) { return Math.round(l.confidence) + '  ' + l.text; }).join('\n') +
+      '\nROWS IT FOUND\n' + s.rows.map(function (r) { return (r.ok ? '[right] ' : '[wrong] ') + r.merchant + ' | ' + money(r.amount) + ' | ' + (r.date || 'no date') + (r.flag ? ' | ' + r.flag : ''); }).join('\n') + '\nMissed: ' + (s.missed || 0);
+    navigator.clipboard.writeText(t).then(function () { bt.textContent = 'Copied'; }, function () { window.prompt('Copy this:', t); });
   });
   out.addEventListener('change', function (e) {
     var t = e.target;
