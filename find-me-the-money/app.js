@@ -795,9 +795,10 @@
   function weekLabel(w) { var a = F.fromIso(w.start), b = F.fromIso(w.end), m = function (d) { return d.toLocaleDateString('en-US', { month: 'short' }); }; return m(a) + ' ' + a.getDate() + '–' + (m(a) === m(b) ? '' : m(b) + ' ') + b.getDate(); }
   function merchKey(m) { return String(m || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   // store words -> the budget line they usually belong to: [store pattern, line name pattern, need or want]
+  // gas comes first so "H-E-B Gas Station" lands on Gas, not Groceries
   var STORE_RULES = [
-    [/\b(h-?e-?b|kroger|aldi|safeway|publix|costco|sam'?s club|whole foods|trader joe'?s|food lion|winco|grocery|market|wegmans|meijer|albertsons|sprouts|walmart|heb)\b/i, /grocer|food|basics/i, 'need'],
     [/\b(shell|chevron|exxon|mobil|circle k|quiktrip|qt|valero|bp|racetrac|speedway|7-eleven|wawa|sunoco|marathon|gas|fuel|buc-?ee'?s)\b/i, /gas|fuel|car|auto|transport/i, 'need'],
+    [/\b(h-?e-?b|kroger|aldi|safeway|publix|costco|sam'?s club|whole foods|trader joe'?s|food lion|winco|grocery|market|wegmans|meijer|albertsons|sprouts|walmart|heb)\b/i, /grocer|food|basics/i, 'need'],
     [/\b(chick-fil-a|mcdonald|starbucks|sonic|chipotle|taco|pizza|coffee|brew|restaurant|grill|cafe|wendy|burger|subway|dunkin|panera|whataburger|doordash|uber eats|grubhub|kfc|popeyes|dutch bros|raising cane)/i, /eat|dining|restaurant|takeout|coffee|food out|fun/i, 'want'],
     [/\b(netflix|spotify|hulu|disney|youtube|apple|skool|prime video|hbo|max|paramount|peacock|audible)\b/i, /subscri|stream|apps?\b|fun/i, 'want'],
     [/\b(target|amazon|amzn|dollar general|dollar tree|walgreens|cvs|home depot|lowe'?s)\b/i, /household|home|shopping|supplies|basics/i, 'need']
