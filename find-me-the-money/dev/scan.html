@@ -49,6 +49,7 @@
       <label class="pick" style="padding:10px 14px">4<input type="file" accept="image/png,image/jpeg,image/heic" multiple data-pc="4"></label>
     </div>
     <pre id="pcout">Results show here.</pre>
+    <p style="font-size:13px">Then try it once more in a <b>Private</b> Safari tab (tap the tabs button, then Private). That tab has no service worker.</p>
   </details>
   <div class="card" id="summary" hidden></div>
   <div id="out" style="display:grid;gap:14px"></div>
@@ -103,16 +104,25 @@
       return f.arrayBuffer().then(function (b) { var c = new Blob([b], { type: f.type }); c.name = f.name; return c; }, function () { return f; });
     })).then(function (files) { input.value = ''; addFiles(files); });
   });
-  // picker check: report what each picker setting hands over, at pick time and after reading the bytes
+  // picker check: try every way of reading what the picker hands over
   var pcout = document.getElementById('pcout'), pclog = [];
+  function pcShow() { pcout.textContent = 'Service worker on this page: ' + (navigator.serviceWorker && navigator.serviceWorker.controller ? 'yes' : 'no') + '\n' + pclog.join('\n'); }
+  function kb(x) { return x == null ? '?' : Math.round(x / 1024) + ' KB'; }
+  function viaBuffer(f) { return f.arrayBuffer().then(function (b) { return kb(b.byteLength); }); }
+  function viaReader(f) { return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(kb(r.result.byteLength)); }; r.onerror = function () { rej(r.error); }; r.readAsArrayBuffer(f); }); }
+  function viaImg(f) { return new Promise(function (res, rej) { var u = URL.createObjectURL(f), im = new Image(); im.onload = function () { res(im.naturalWidth + 'x' + im.naturalHeight); }; im.onerror = function () { rej(new Error('no image')); }; im.src = u; }); }
+  function viaBitmap(f) { return self.createImageBitmap ? createImageBitmap(f).then(function (b) { return b.width + 'x' + b.height; }) : Promise.reject(new Error('none')); }
+  function later(f) { return new Promise(function (res) { setTimeout(res, 2000); }).then(function () { return kb(f.size) + ' size, ' ; }).then(function (t) { return viaBuffer(f).then(function (x) { return t + x + ' read'; }); }); }
+  function tryIt(name, p) { return p.then(function (v) { return name + ' ' + v; }, function (er) { return name + ' failed (' + FMTMScan.describe(er) + ')'; }); }
   document.getElementById('pickcheck').addEventListener('change', function (e) {
     var input = e.target, n = input.dataset.pc, fs = Array.prototype.slice.call(input.files || []);
-    if (!fs.length) { pclog.push(n + ': nothing picked'); pcout.textContent = pclog.join('\n'); return; }
+    if (!fs.length) { pclog.push(n + ': nothing picked'); pcShow(); return; }
+    var slot = pclog.push(n + ': checking…') - 1; pcShow();
     Promise.all(fs.map(function (f) {
-      var kb = function (x) { return Math.round(x / 1024) + ' KB'; }, at = f.size;
-      return f.arrayBuffer().then(function (b) { return n + ': ' + (f.type || 'no type') + ' · ' + kb(at) + ' at pick · ' + kb(b.byteLength) + ' read'; },
-        function (er) { return n + ': ' + (f.type || 'no type') + ' · ' + kb(at) + ' at pick · read failed: ' + FMTMScan.describe(er); });
-    })).then(function (lines) { input.value = ''; pclog = pclog.concat(lines); pcout.textContent = pclog.join('\n'); });
+      var head = n + ': ' + (f.type || 'no type') + ' · ' + kb(f.size) + ' at pick';
+      return Promise.all([tryIt('buffer', viaBuffer(f)), tryIt('reader', viaReader(f)), tryIt('image', viaImg(f)), tryIt('bitmap', viaBitmap(f)), tryIt('after 2s', later(f))])
+        .then(function (r) { return head + '\n   ' + r.join('\n   '); });
+    })).then(function (lines) { input.value = ''; pclog[slot] = lines.join('\n'); pcShow(); });
   });
   function addFiles(files) {
     var chain = Promise.resolve();
