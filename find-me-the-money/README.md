@@ -158,6 +158,11 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 - `people_overview`: one row per person (name, email, on the list, step, joined, last seen, check-ins, lessons, quizzes, weeks scanned, reminders on).
 - `email_list`: first name and email of everyone who said yes. Export as CSV for your email tool. Every marketing email needs an unsubscribe link and a mailing address (CAN-SPAM).
 
+## Free community link and coach offer
+- The "We found" reveal has a small "Join the free community →" link under Reclaim my money (opens `communityUrl`).
+- Right after someone's first payday check-in, the results screen shows "Want a coach in your corner?" once. The line uses their found money from "Find my money" (whole dollars): $100 a month or more says "You found $X a month. Founding Members pay $49."; less, $0 or a gap says "Not much found yet? That's exactly what coaching is for." Either button saves `fmtm.coach` on the phone so it never comes back.
+- To see it without a payday: open the app with `?coachtest` (uses their found money) or `?coachtest=500` / `?coachtest=60` / `?coachtest=0` / `?coachtest=-40` to try an amount. `?coachreset` clears the saved flag.
+
 ## Still to set up
 - [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
 - [x] Supabase SMTP: sender name "Find Me the Money"

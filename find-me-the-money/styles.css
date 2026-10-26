@@ -676,3 +676,13 @@ label.primary { display: flex; align-items: center; justify-content: center; }
 /* sign-up: email-list choice */
 .optin { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); cursor: pointer; }
 .optin input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: #2A6B66; flex: none; }
+/* the free community link on the reveal, and the coach offer after the first check-in */
+.freecomm { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; margin: 2px 0 4px; }
+.freecomm a { color: #2A6B66; font-weight: 600; font-size: 16px; text-decoration: none; padding: 6px 4px; }
+.freecomm small { font-size: 13px; color: var(--muted); max-width: 300px; }
+.coachcard { background: #E9EFEE; color: #1B2E2D; border-radius: 22px; padding: 18px 18px 10px; display: flex; flex-direction: column; gap: 8px; border: 1px solid rgba(42,107,102,.15); }
+.coachcard h3 { margin: 0; font-size: 19px; color: #1B2E2D; }
+.coachcard p { color: #1B2E2D; font-size: 15px; }
+.coachcard .coachline { font-weight: 600; }
+.coachbtn { display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: 999px; background: #2A6B66; color: #fff; font-weight: 600; font-size: 16px; text-decoration: none; margin-top: 4px; }
+.coachcard .textbtn { align-self: center; }

@@ -1265,6 +1265,7 @@
         (rows.length ? '<div class="card stack" style="padding:6px 18px">' + rows.map(function (r) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + r[0] + '</b><small style="color:var(--muted);font-size:13px;margin-top:2px">' + r[2] + '</small></div><b style="color:#2A6B66">' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
         '<h2 style="text-align:center;margin-top:6px">' + (short && q.total <= 0 ? 'Want to find it?' : 'Want it back?') + '</h2>' +
         '<div class="push"><button type="button" class="primary" data-a="claimgo">' + (short && q.total <= 0 ? 'Find my money \u203a' : 'Reclaim my money \u203a') + '</button>' +
+        (CONFIG.communityUrl ? '<div class="freecomm"><a href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community \u2192</a><small>Share your win, get your questions answered, and do the monthly challenge.</small></div>' : '') +
         '<button type="button" class="textbtn" data-a="claimshare">Share this</button><button type="button" class="textbtn" data-a="go" data-v="quick">Change my numbers</button></div>';
     },
     pay: function () {
@@ -1579,6 +1580,7 @@
     },
 
     home: function () {
+      if (U.coachTest != null && !coachSeen()) return homeTop('') + coachCard(U.coachTest === true ? foundMonthly() : U.coachTest) + '<button type="button" class="textbtn" data-a="coachtestoff">Close preview</button>';
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step, h = headline(o), now = today();
       var due = !!F.paydayFor(P.nextPay, P.freq, now), next = F.fromIso(p.nextPay), sv = F.streakView(P.streak, P.nextPay, P.freq, now);
       var cdDays = h.date ? Math.max(0, F.daysBetween(now, h.date)) : null;
@@ -1660,7 +1662,7 @@
         '<div class="lime pop"><div style="font-weight:600">' + (r.counted ? 'This payday' : 'Since your last update') + '</div>' +
         '<div style="font-family:var(--display);font-size:30px;font-weight:500;line-height:1.15;margin-top:4px">' + title + '</div>' +
         '<div class="grid3 stats" style="margin-top:16px">' + stat(money(w.debtPaid), 'debt paid') + savedStat + stat((r.daysBack > 0 ? '+' : '') + r.daysBack, 'days stolen back') + '</div></div>' +
-        starHtml +
+        starHtml + (r.coach && !coachSeen() ? coachCard(foundMonthly()) : '') +
         (r.paid.length ? '<button type="button" class="primary" data-a="sharepaid">' + ICON.share + ' Share this payoff</button>' : r.goal ? '<button type="button" class="primary" data-a="sharegoal">' + ICON.share + ' Share this goal</button>' : '') +
         (r.paid.length > 1 ? '<p style="text-align:center">Also paid off: ' + r.paid.slice(1).map(esc).join(', ') + '. The snowball grows.</p>' : r.paid.length ? '<p style="text-align:center">That payment now rolls into your next debt. The snowball grows.</p>' : '') +
         (r.daysBack < 0 ? '<div class="note">' + ICON.info + '<span>Your date slipped ' + plural(-r.daysBack, 'day') + '. It happens. Your Payday Plan shows what to adjust before next time.</span></div>' : '') +
@@ -2146,8 +2148,22 @@
     var r = U.result; r.stars = stars;
     var last = P.history[P.history.length - 1]; if (last) { last.stars = stars.filter(function (x) { return x === true; }).length; last.planMoney = Math.round(c.plan); last.assigned = Math.round(c.assigned); }
     var o = F.outlook(profile(), today()); if (o.step > c.stepBefore && o.step <= 7) r.stepUp = 'Step ' + o.step + ': ' + F.STEPS[o.step - 1][0];
+    r.coach = r.counted && CONFIG.communityUrl && P.history.filter(function (h) { return h.payday; }).length === 1 && !coachSeen();
     track('stars-' + (last ? last.stars : 1)); U.ci = null; U.ciPart = false; save(); render();
   }
+  // ---------- coach offer: once, right after the first payday check-in ----------
+  var COACH_KEY = 'fmtm.coach';
+  function coachSeen() { try { return !!localStorage.getItem(COACH_KEY); } catch (e) { return false; } }
+  function coachCard(found) {
+    var f = Math.round(found || 0);
+    return '<div class="coachcard" role="region" aria-label="Coaching"><h3>Want a coach in your corner?</h3>' +
+      '<p>For $49 a month, get help deciding what to do with your money, or finding it if it\u2019s not there yet.</p>' +
+      '<p class="coachline">' + (f >= 100 ? 'You found ' + money(f) + ' a month. Founding Members pay $49.' : 'Not much found yet? That\u2019s exactly what coaching is for.') + '</p>' +
+      '<a class="coachbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="coachgo">Become a Founding Member</a>' +
+      '<button type="button" class="textbtn" data-a="coachlater">Maybe later</button></div>';
+  }
+  // the found money from "Find my money": monthly, can be $0 (or below, when there's a gap)
+  function foundMonthly() { var q = quickMath(); return q.total > 0 ? q.total : q.noJob; }
   function starsCard(r) {
     if (!r || !r.stars) return '';
     var n = r.stars.filter(function (x) { return x === true; }).length;
@@ -3107,6 +3123,8 @@
       case 'youtube': track('youtube'); break;
       case 'feedback': track('feedback-' + U.screen); break;
       case 'coaching': track('coaching'); break;
+      case 'coachtestoff': U.coachTest = null; render(); break;
+      case 'coachgo': case 'coachlater': try { localStorage.setItem(COACH_KEY, F.isoDay(today())); } catch (er) {} U.coachTest = null; if (a === 'coachlater') render(); else setTimeout(render, 300); break;
       case 'joincommunity': P.communityJoined = true; save(); track('community'); setTimeout(render, 300); break;
       case 'postcommunity':
         // Skool can't take a post from another site, so copy the caption, save the card, and open the community to paste it
@@ -3294,6 +3312,11 @@
   // a fresh day can make a payday due; re-render when the app comes back to the front
   document.addEventListener('visibilitychange', function () { if (document.hidden) { if (C.timer) { clearTimeout(C.timer); cloudPush(); } return; } if (S && !C.busy) cloudPull(false); if (U.screen === 'home') render(); });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (qs.has('coachreset')) localStorage.removeItem(COACH_KEY);
+    if (qs.has('coachtest')) { localStorage.removeItem(COACH_KEY); U.coachTest = qs.get('coachtest') !== '' && !isNaN(+qs.get('coachtest')) ? +qs.get('coachtest') : true; }
+  } catch (e) {}
   cloudStart();
   remindResume();
   if (cloudOn() && P.setupDone && !S && U.screen === 'home') { U.savePrompt = true; U.afterSave = true; U.screen = 'savesetup'; track('save-prompt'); }
