@@ -149,6 +149,15 @@ Optional, from Settings (or offered after a payday check-in). The phone subscrib
 ## Measuring return visits
 Each phone sends one cookie-free GoatCounter event per payday check-in number: `checkin-1`, `checkin-2`, `checkin-3`... (sent once each, no amounts, names or budget data). In the GoatCounter dashboard, the beta's key number is visitors on `event-checkin-2` divided by visitors on `event-checkin-1`.
 
+## People, email list and activity
+Saving is required at the end of setup: first name, email and a pre-checked "Send me money tips and updates from Brad" box, then the email code. After two codes (or a wrong code), "Having trouble? Continue for now" appears so nobody is locked out; people who set up without saving are asked again each time they open the app. People signed in before names were asked get a "What should we call you?" card on Home. Home says hello by first name; Settings has the name and the email-list box.
+
+The name and email-list choice live in `fmtm.me` on the phone (not in the plan, which a spouse may share) and in the `people` table. Every `track()` event also goes to the `activity` table for signed-in people (events made during setup wait on the phone and go up after sign-in). Events are names like `checkin-2`, `lesson-C1`, `scan-save`; never amounts, store names or budget details. Deleting the account copy removes the people row and activity too.
+
+Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin`:
+- `people_overview`: one row per person (name, email, on the list, step, joined, last seen, check-ins, lessons, quizzes, weeks scanned, reminders on).
+- `email_list`: first name and email of everyone who said yes. Export as CSV for your email tool. Every marketing email needs an unsubscribe link and a mailing address (CAN-SPAM).
+
 ## Still to set up
 - [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
 - [x] Supabase SMTP: sender name "Find Me the Money"

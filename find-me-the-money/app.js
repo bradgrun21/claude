@@ -51,7 +51,48 @@
     out.push([m, m === 1 ? 'month' : 'months'], [d, d === 1 ? 'day' : 'days']);
     return out;
   }
-  function track(name) { try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'event-' + name, title: name, event: true }); } catch (e) {} }
+  function track(name) { try { if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: 'event-' + name, title: name, event: true }); } catch (e) {} actAdd(name); }
+  // ---------- activity for signed-in people: what they did and when, never amounts or names ----------
+  // events wait on the phone (setup happens before sign-in) and go up in small batches
+  var ACT = 'fmtm.act', actTimer = null;
+  function actAdd(name) {
+    try { var q = JSON.parse(localStorage.getItem(ACT) || '[]'); q.push({ event: String(name).slice(0, 60), at: new Date().toISOString() }); localStorage.setItem(ACT, JSON.stringify(q.slice(-300))); } catch (e) {}
+    if (typeof S !== 'undefined' && S) { clearTimeout(actTimer); actTimer = setTimeout(actFlush, 4000); }
+  }
+  function actFlush() {
+    var q; try { q = JSON.parse(localStorage.getItem(ACT) || '[]'); } catch (e) { q = []; }
+    if (!S || !q.length || !cloudOn()) return;
+    fresh().then(function () { return sb('/rest/v1/activity', { method: 'POST', auth: true, body: q, headers: { Prefer: 'return=minimal' } }); }).then(function () {
+      try { var now = JSON.parse(localStorage.getItem(ACT) || '[]'); localStorage.setItem(ACT, JSON.stringify(now.slice(q.length))); } catch (e) {}
+    }, function () {});
+  }
+  // who this phone's person is: first name and email-list choice (not part of the plan, which a spouse may share)
+  var ME_KEY = 'fmtm.me';
+  function me() { try { return JSON.parse(localStorage.getItem(ME_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  function setMe(x) { try { localStorage.setItem(ME_KEY, JSON.stringify(Object.assign(me(), x))); } catch (e) {} }
+  function peopleSave() {
+    if (!S || !cloudOn()) return;
+    var m = me(), row = { user_id: S.uid, email: S.email || null, last_seen: new Date().toISOString(), step: P.setupDone ? Math.min(7, F.outlook(profile(), today()).step) : null };
+    if (m.name) row.first_name = m.name;
+    if (m.optIn != null) row.marketing_opt_in = !!m.optIn;
+    fresh().then(function () { return sb('/rest/v1/people?on_conflict=user_id', { method: 'POST', auth: true, body: row, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' } }); }).catch(function () {});
+  }
+  // on a new phone, bring back the name saved with the account
+  function peopleLoad() {
+    if (!S || !cloudOn()) return Promise.resolve();
+    return fresh().then(function () { return sb('/rest/v1/people?user_id=eq.' + S.uid + '&select=first_name,marketing_opt_in', { auth: true }); }).then(function (rows) {
+      var r = rows && rows[0], m = me();
+      if (r && r.first_name && !m.name) setMe({ name: r.first_name });
+      if (r && m.optIn == null) setMe({ optIn: r.marketing_opt_in });
+    }).catch(function () {});
+  }
+  // once a day while signed in: last seen, current step, and any waiting events
+  function peopleDaily() {
+    if (!S) return;
+    var d = F.isoDay(today()); try { if (localStorage.getItem('fmtm.seen') === d) { actFlush(); return; } localStorage.setItem('fmtm.seen', d); } catch (e) {}
+    peopleLoad().then(function () { peopleSave(); actFlush(); if (U.screen === 'home') render(); });
+  }
+  function firstName() { return String(me().name || '').trim(); }
 
   // ---------- saved data ----------
   function blank() {
@@ -217,6 +258,7 @@
   function cloudQueue() { if (!S || !C.ready) return; clearTimeout(C.timer); C.timer = setTimeout(cloudPush, 1500); }
   function signedIn(r) {
     setSession(r); delete S.synced; keepAuth(); setBase(null); U.cloudStep = null; U.err = ''; track('account-signin');
+    peopleLoad().then(function () { peopleSave(); actFlush(); });
     if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
     return cloudPull(true).then(function () {
       if (U.afterSave && U.screen !== 'cloudpick' && !standalone()) { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; }
@@ -317,12 +359,15 @@
     return '<span style="font-size:14px">' + (P.setupDone ? 'Joining replaces the budget on this phone with your spouse\u2019s. Yours is kept for 30 days, just in case.' : 'Enter the code your spouse sent you.') + '</span>' +
       '<label class="field">Invite code<input type="text" autocapitalize="characters" autocomplete="off" maxlength="8" data-cjoin placeholder="ABC123" style="text-transform:uppercase;letter-spacing:3px"></label><button type="button" class="primary" data-a="cjoin">Join the shared budget</button>';
   }
-  function signInForm() {
-    var st = U.cloudStep;
+  function signInForm(ask) {
+    var st = U.cloudStep, m = me();
     return (st && st.sent ? '<span style="font-size:14px">We emailed a 6-digit code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email. Not there in a minute? Check your junk or spam folder.</span>' +
         '<label class="field">Code<input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="123456"></label>' +
         '<button type="button" class="primary" data-a="cverify">Sign in</button><div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="linkbtn" data-a="csend">Send a new code</button><button type="button" class="linkbtn" data-a="creset">Use a different email</button></div>'
-        : '<label class="field">Email<input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label><button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
+        : (ask ? '<label class="field">First name<input type="text" autocomplete="given-name" autocapitalize="words" data-cname value="' + esc(m.name || '') + '" placeholder="Like Sarah"></label>' : '') +
+          '<label class="field">Email<input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label>' +
+          (ask ? '<label class="optin"><input type="checkbox" data-coptin' + (m.optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad. Unsubscribe anytime.</span></label>' : '') +
+          '<button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
       (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '');
   }
   function saveNudge() {
@@ -332,7 +377,9 @@
   }
   function accountCard() {
     if (!cloudOn()) return '';
-    if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc(S.email || 'Signed in') + '</b>' +
+    if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc((firstName() ? firstName() + ' \u00b7 ' : '') + (S.email || 'Signed in')) + '</b>' +
+      '<label class="field">First name<input type="text" autocomplete="given-name" autocapitalize="words" data-mename value="' + esc(firstName()) + '" placeholder="Like Sarah"></label>' +
+      '<label class="optin"><input type="checkbox" data-meoptin' + (me().optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad</span></label>' +
       '<span style="font-size:14px;color:var(--muted)" data-live="sync">' + syncText() + '</span>' +
       '<span style="font-size:14px;color:var(--muted)">Sign in with this email on any phone, in Safari or the Home Screen app, and your plan is there.</span>' + shareBlock() + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
       (U.cdel ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This deletes the copy saved in your account and signs you out. Your plan stays on this phone.</span></div><div class="grid2"><button type="button" class="outline" data-a="cdelno">Keep it</button><button type="button" class="primary danger" data-a="cdelyes">Delete it</button></div>'
@@ -1910,10 +1957,10 @@
     },
     savesetup: function () {
       return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
-        '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">Last step</div><h2>Save your progress</h2>' +
-        '<p>Your plan is built. Save it with your email so it\u2019s safe if you lose your phone or get a new one. Free, and no password.' + (!standalone() ? ' Next, we\u2019ll show you how to put it on your Home Screen.' : '') + '</p></div>' +
-        '<div class="card stack" style="padding:16px 18px;gap:10px">' + signInForm() + '</div>' +
-        '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Not now</button>' +
+        '<div class="stack" style="gap:10px;margin-top:18px"><div class="eyebrow">' + (U.savePrompt ? 'One quick thing' : 'Last step') + '</div><h2>Save your progress</h2>' +
+        '<p>' + (U.savePrompt ? 'Your plan lives only on this phone right now. Save it with your email so it\u2019s safe if you lose your phone or get a new one. Free, and no password.' : 'Your plan is built. Save it with your email so it\u2019s safe if you lose your phone or get a new one. Free, and no password.') + (!standalone() ? ' Next, we\u2019ll show you how to put it on your Home Screen.' : '') + '</p></div>' +
+        '<div class="card stack" style="padding:16px 18px;gap:10px">' + signInForm(true) + '</div>' +
+        ((U.codeTries || 0) >= 2 ? '<button type="button" class="textbtn" data-a="saveskip" style="align-self:center">Having trouble? Continue for now</button>' : '') +
         '<p style="font-size:14px;text-align:center;color:var(--muted)">Budgeting with a spouse? Save first, then you can invite them on the next screen.</p>';
     },
     account: function () {
@@ -2480,10 +2527,15 @@
     toast = toast || '';
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px"><span class="brand"><span class="logo" style="width:30px;height:30px;border-radius:10px">' + ICON.logo + '</span>Find Me the Money</span>' +
       '<span class="hdricons">' + (CONFIG.communityUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity" aria-label="Open the community on Skool"><svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect width="22" height="22" rx="6" fill="#1F2A44"/><text x="11" y="15.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#fff">S</text></svg></a>' : '') + (CONFIG.youtubeUrl ? '<a class="back ytbtn" href="' + esc(CONFIG.youtubeUrl) + '" target="_blank" rel="noopener" data-a="youtube" aria-label="Watch on YouTube"><svg width="22" height="16" viewBox="0 0 22 16" aria-hidden="true"><rect width="22" height="16" rx="4" fill="#FF0033"/><path d="M9 4.5v7l6-3.5z" fill="#fff"/></svg></a>' : '') +
-      '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></span></div>' + toast + celebration(1);
+      '<button type="button" class="back" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button></span></div>' +
+      (firstName() ? '<p class="hello">' + (new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening') + ', ' + esc(firstName()) + '.</p>' : '') + toast + celebration(1);
   }
   // Home stays simple: the countdown, then one thing to do next
   function nextThing() {
+    // signed in before names were asked: ask once, on Home
+    if (S && !firstName() && !U.nameLater) return '<div class="card stack" style="padding:16px 18px;gap:10px"><b>What should we call you?</b><label class="field">First name<input type="text" autocomplete="given-name" autocapitalize="words" data-namein placeholder="Like Sarah"></label>' +
+      '<label class="optin"><input type="checkbox" data-nameoptin' + (me().optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad. Unsubscribe anytime.</span></label>' +
+      '<div style="display:flex;gap:10px;align-items:center"><button type="button" class="sharebtn" data-a="namesave">Save</button><button type="button" class="textbtn" data-a="namelater">Not now</button></div></div>';
     if (mdDueNow()) return moneyDateCard();
     var t = todayStep(); if (t) return t;
     return checklist();
@@ -2761,7 +2813,12 @@
         U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true];
         if (cloudOn() && !S) { U.cloudStep = null; U.err = ''; U.afterSave = true; go('savesetup'); } else if (S && !standalone()) { U.afterSave = true; go('saveinstall'); } else go('home');
         break;
-      case 'saveskip': track('save-skip'); U.afterSave = false; go('home'); break;
+      case 'namesave': (function () {
+        var nv = String((app.querySelector('[data-namein]') || {}).value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (!nv) return;
+        var oi = app.querySelector('[data-nameoptin]'); setMe({ name: nv, optIn: oi ? oi.checked : true }); peopleSave(); track('name-added'); render();
+      })(); break;
+      case 'namelater': U.nameLater = true; render(); break;
+      case 'saveskip': track('save-skip'); U.afterSave = false; U.savePrompt = false; go('home'); break;
       case 'installlater': U.afterSave = false; go('home'); break;
       case 'installok': P.installSeen = true; save(); U.afterSave = false; track('install-seen'); go('home'); break;
       case 'savenudgeoff': P.saveNudgeOff = true; save(); render(); break;
@@ -2835,8 +2892,11 @@
       case 'mstab': U.msTab = v; U.msAll = false; render(); break;
       case 'msall': U.msAll = true; render(); break;
       case 'csend': (function () {
-        var el = app.querySelector('[data-cemail]'), em = String(el ? el.value : (U.cloudStep && U.cloudStep.email) || '').trim();
+        var el = app.querySelector('[data-cemail]'), em = String(el ? el.value : (U.cloudStep && U.cloudStep.email) || '').trim(), nm = app.querySelector('[data-cname]'), oi = app.querySelector('[data-coptin]');
+        if (nm) { var nmv = String(nm.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (!nmv) { U.err = 'Add your first name.'; render(); return; } setMe({ name: nmv }); }
+        if (oi) setMe({ optIn: oi.checked });
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { U.err = 'That email doesn\u2019t look right.'; render(); return; }
+        U.codeTries = (U.codeTries || 0) + 1;
         U.cloudStep = { email: em, sent: false }; U.err = '';
         var bt = app.querySelector('[data-a=csend]'); if (bt) { bt.disabled = true; bt.textContent = 'Sending\u2026'; }
         sb('/auth/v1/otp?redirect_to=' + encodeURIComponent(location.origin + location.pathname), { method: 'POST', body: { email: em, create_user: true } })
@@ -2848,7 +2908,7 @@
         if (!/^\d{6,10}$/.test(code)) { U.err = 'Enter the code from the email.'; render(); return; }
         var bt = app.querySelector('[data-a=cverify]'); if (bt) { bt.disabled = true; bt.textContent = 'Signing in\u2026'; }
         sb('/auth/v1/verify', { method: 'POST', body: { type: 'email', email: U.cloudStep.email, token: code } })
-          .then(signedIn, function (er) { U.err = er.status >= 500 || !er.status ? 'We couldn\u2019t check the code' + (er.status ? ': ' + er.message : '. Check your connection.') : 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
+          .then(signedIn, function (er) { U.codeTries = (U.codeTries || 0) + 1; U.err = er.status >= 500 || !er.status ? 'We couldn\u2019t check the code' + (er.status ? ': ' + er.message : '. Check your connection.') : 'That code didn\u2019t work. Check it, or send a new one.'; render(); });
       })(); break;
       case 'creset': U.cloudStep = null; U.err = ''; render(); break;
       case 'cout': if (OS.p) OS.p.then(function (os) { return os.logout(); }).catch(function () {}); if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
@@ -2896,6 +2956,7 @@
       case 'cdelyes': (function () {
         U.cdel = false;
         fresh().then(function () { return sb('/rest/v1/plans?user_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
+          .then(function () { return Promise.all([sb('/rest/v1/activity?user_id=eq.' + S.uid, { method: 'DELETE', auth: true }), sb('/rest/v1/people?user_id=eq.' + S.uid, { method: 'DELETE', auth: true })]).catch(function () {}); })
           .then(function () { sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; track('account-delete'); U.toast = ['Your account copy is deleted.', 'Your plan stays on this phone.', true]; render(); },
             function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
       })(); break;
@@ -3149,6 +3210,8 @@
   app.addEventListener('change', function (e) {
     var t = e.target;
     if (t.hasAttribute('data-slide')) { save(); render(); return; }
+    if (t.hasAttribute('data-mename')) { var nv = String(t.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (nv) { setMe({ name: nv }); peopleSave(); render(); } return; }
+    if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
     if (t.getAttribute('data-file') === 'scan') { scanFiles(t); return; }
     if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }
     if (t.hasAttribute('data-scan-key')) { var sk = U.scan.rows[+t.getAttribute('data-scan-key')]; sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; U.scan.err = ''; render(); return; }
@@ -3233,6 +3296,8 @@
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () {});
   cloudStart();
   remindResume();
+  if (cloudOn() && P.setupDone && !S && U.screen === 'home') { U.savePrompt = true; U.afterSave = true; U.screen = 'savesetup'; track('save-prompt'); }
+  peopleDaily();
   // a shared budget checks for the other person's changes every minute while it's open
   setInterval(function () { if (shared() && !document.hidden && !C.busy && C.ready && !C.timer) cloudPull(false); }, 60000);
   render();
