@@ -161,6 +161,7 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 ## Still to set up
 - [x] Run the latest `supabase.sql` in Supabase (SQL Editor). Turns on shared budgets for couples
 - [x] Supabase SMTP: sender name "Find Me the Money"
-- [ ] Later: own domain + Resend for sign-in emails (keeps them out of junk)
+- [ ] Run `supabase/people.sql` (names, email list, activity, admin views)
+- [ ] Soon: own domain + Resend for sign-in emails (keeps them out of junk; matters more now that saving is required)
 - [x] OneSignal App ID (in app.js)
 - [ ] Reminders: deploy `supabase/functions/reminders`, add its secrets, run `supabase/reminders.sql`, then move REMINDERS_MODE from dry to test to live
