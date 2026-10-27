@@ -168,6 +168,6 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 - [x] Supabase SMTP: sender name "Find Me the Money"
 - [ ] Run `supabase/people.sql` (names, email list, activity, admin views)
 - [x] Own domain for email: findmethemoney.app, verified in Resend (send-only key "Supabase sign-in emails")
-- [ ] Supabase SMTP: smtp.resend.com, port 465, user resend, password = the Resend key, sender noreply@findmethemoney.app (the app itself stays on findmethemoney.netlify.app for now)
+- [x] Supabase SMTP: smtp.resend.com, port 465, user resend, password = the Resend key, sender noreply@findmethemoney.app (the app itself stays on findmethemoney.netlify.app for now)
 - [x] OneSignal App ID (in app.js)
 - [ ] Reminders: deploy `supabase/functions/reminders`, add its secrets, run `supabase/reminders.sql`, then move REMINDERS_MODE from dry to test to live

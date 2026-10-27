@@ -361,7 +361,7 @@
   }
   function signInForm(ask) {
     var st = U.cloudStep, m = me();
-    return (st && st.sent ? '<span style="font-size:14px">We emailed a 6-digit code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email. Not there in a minute? Check your junk or spam folder.</span>' +
+    return (st && st.sent ? '<span style="font-size:14px">We emailed a sign-in code to <b>' + esc(st.email) + '</b>. Enter it here, or tap the link in the email. Not there in a minute? Check your junk or spam folder.</span>' +
         '<label class="field">Code<input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="123456"></label>' +
         '<button type="button" class="primary" data-a="cverify">Sign in</button><div style="display:flex;gap:14px;flex-wrap:wrap"><button type="button" class="linkbtn" data-a="csend">Send a new code</button><button type="button" class="linkbtn" data-a="creset">Use a different email</button></div>'
         : (ask ? '<label class="field">First name<input type="text" autocomplete="given-name" autocapitalize="words" data-cname value="' + esc(m.name || '') + '" placeholder="Like Sarah"></label>' : '') +
