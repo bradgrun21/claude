@@ -158,6 +158,9 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 - `people_overview`: one row per person (name, email, on the list, step, joined, last seen, check-ins, lessons, quizzes, weeks scanned, reminders on).
 - `email_list`: first name and email of everyone who said yes. Export as CSV for your email tool. Every marketing email needs an unsubscribe link and a mailing address (CAN-SPAM).
 
+## Setup carries the rough numbers over
+During setup, the expenses step starts with the monthly expenses from "Find my money" and the debts step is just two boxes, total debt and monthly payments, both carried over (one debt called "My debts"). Each can be changed there; a $0 total means no debt. Listing bills or debts one by one is only in Settings after setup.
+
 ## Free community link and coach offer
 - The "We found" reveal has a small "Join the free community →" link under Reclaim my money (opens `communityUrl`).
 - Right after someone's first payday check-in, the results screen shows "Want a coach in your corner?" once. The line uses their found money from "Find my money" (whole dollars): $100 a month or more says "You found $X a month. Founding Members pay $49."; less, $0 or a gap says "Not much found yet? That's exactly what coaching is for." Either button saves `fmtm.coach` on the phone so it never comes back.

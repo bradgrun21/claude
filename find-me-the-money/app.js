@@ -1290,12 +1290,15 @@
     },
     basics: function () {
       var picks = [1500, 2000, 2500, 3000, 3500];
-      var qHint = P.quick && num(P.quick.exp) && !num(P.basics) ? '<div class="note">' + ICON.info + '<span>On the quick screen you said about <b>' + money(P.quick.exp) + '</b> a month. Type the number you want in your budget.</span></div>' : '';
+      // during setup, the rough number from "Find my money" carries over; this is the chance to change it
+      var carried = !P.setupDone && P.quick && num(P.quick.exp) > 0;
+      if (carried && P.basics === '' && !itemized()) P.basics = String(Math.round(num(P.quick.exp)));
+      var qHint = carried ? '<div class="note">' + ICON.info + '<span>We carried over <b>' + money(P.quick.exp) + '</b> a month from your quick numbers. Change it if it\u2019s off, or tap Next.</span></div>' : '';
       return qHint + wizardHead('basics', 'Your monthly expenses', 'About how much do you spend in a month on everything but debt payments? Rent, bills, groceries, gas, eating out, shopping. A rough number is fine.') +
         '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Each month, about', 'basics', { ph: '2000', min: 0 }) +
         '<div class="chips">' + picks.map(function (v) { var on = num(P.basics) === v; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="basicpick" data-v="' + v + '">' + money(v) + '</button>'; }).join('') + '</div>' +
         '<p style="font-size:13px">Leave out debt payments; those come next.</p></div>' +
-        '<button type="button" class="textbtn" data-a="go" data-v="bills" style="align-self:center">Or build it category by category</button>' + wizNext('basics');
+        (P.setupDone ? '<button type="button" class="textbtn" data-a="go" data-v="bills" style="align-self:center">Or build it category by category</button>' : '<p style="font-size:13px;text-align:center">You can list bills one by one later in Settings.</p>') + wizNext('basics');
     },
     bills: function () {
       var total = billsTotal(), monthPay = monthlyIncome();
@@ -1327,8 +1330,16 @@
         (monthPay ? '<small style="color:var(--faint)" data-totalpct>' + Math.round(total / monthPay * 100) + '% of your ' + money(monthPay) + ' monthly take-home</small>' : '') + '</div>' + wizNext('basics');
     },
     debts: function () {
-      // someone who mentioned debt gets one empty line to type into (no amounts filled in)
-      if (!P.debts.length && P.quick && num(P.quick.debt) > 0) P.debts.push({ id: uid(), name: '', bal: '', orig: '', min: '', apr: '' });
+      // during setup: one total and one monthly payment, carried over from "Find my money"; each card and loan can be listed later
+      if (!P.setupDone && P.debts.length <= 1) {
+        var q0 = P.quick || {};
+        if (!P.debts.length && num(q0.debt) > 0) P.debts.push({ id: uid(), name: 'My debts', bal: String(Math.round(num(q0.debt))), orig: '', min: num(q0.min) > 0 ? String(Math.round(num(q0.min))) : '', apr: '', lump: true });
+        var d0 = P.debts[0], lumpField = function (k, label, ph) { return '<label class="field">' + label + '<input type="number" inputmode="decimal" min="0" data-debtlump="' + k + '" value="' + esc(d0 ? d0[k] : '') + '" placeholder="' + ph + '"></label>'; };
+        return wizardHead('debts', 'What do you owe?', 'Everything except your home: credit cards, car loan, student loans, buy-now-pay-later, medical bills. A rough total is fine.') +
+          (d0 && num(q0.debt) > 0 ? '<div class="note">' + ICON.info + '<span>We carried over your quick numbers. Change them if they\u2019re off, or tap Next.</span></div>' : '') +
+          '<div class="card stack" style="padding:16px 18px;gap:14px">' + lumpField('bal', 'Total debt', '0') + lumpField('min', 'Monthly payments, all debts together', '0') +
+          '<p style="font-size:13px">No debt? Leave it at $0. Later, you can list each card and loan in Settings so the snowball pays off the smallest first.</p></div>' + wizNext('debts');
+      }
       var hasQuick = P.debts.some(function (d) { return d.quick; });
       return (hasQuick ? '' : '') + wizardHead('debts', 'What do you owe?', 'List everything except your home: credit cards, car loan, student loans, buy-now-pay-later, medical bills. Married? Include the debts you share or pay together. We line them up smallest to largest and knock them out one at a time. Your card and loan apps show each balance and minimum. Interest is optional.') +
         (hasQuick ? '<div class="note">' + ICON.info + '<span>We started with your total. <b>Split it into each card and loan</b> (rename this one, then + Add a debt) so the snowball can knock out the smallest first.</span></div>' : '') +
@@ -2790,7 +2801,7 @@
       case 'wiz':
         var n = +v; U.err = validate(n);
         if (U.err) { render(); break; }
-        if (WIZ[n - 1] === 'debts') P.debts.forEach(function (d) { if (num(d.bal) > num(d.orig)) d.orig = num(d.bal); });
+        if (WIZ[n - 1] === 'debts') { P.debts = P.debts.filter(function (d) { return !(d.lump && !(num(d.bal) > 0)); }); P.debts.forEach(function (d) { if (num(d.bal) > num(d.orig)) d.orig = num(d.bal); }); }
         save();
         if (P.setupDone) { snapshot(); save(); go(U.wizReturn || 'settings'); }
         else go(n < WIZ.length ? WIZ[n] : 'reveal');
@@ -3146,6 +3157,7 @@
   app.addEventListener('input', function (e) {
     var t = e.target;
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
+    if (t.hasAttribute('data-debtlump')) { if (!P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: '', orig: '', min: '', apr: '', lump: true }); P.debts[0][t.getAttribute('data-debtlump')] = t.value; save(); return; }
     if (t.hasAttribute('data-f')) {
       if (t.hasAttribute('data-list')) P[t.getAttribute('data-list')][+t.getAttribute('data-i')][t.getAttribute('data-k')] = t.value;
       if (t.getAttribute('data-f') === 'basics') P.basicsAuto = false;
