@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30d';
+  var APP_VERSION = '10-30e';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -829,6 +829,8 @@
     cats().forEach(function (c) { out.push({ key: 'c:' + c.id, type: typeOf(c), label: c.name || 'Category', icon: c.icon || '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: catMonthly(c), per: c.per || 'month', amt: num(c.amount) }); });
     if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, type: 'want', label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
     else if (funSet()) out.push({ key: 'fun', type: 'want', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
+    out.push({ key: 'give', label: 'Giving', icon: '\u26EA', grp: 'spend', cat: 'need', mon: giveMonthly() });
+    out.push({ key: 'edu', label: 'Education fund', icon: '\uD83C\uDF93', grp: 'spend', cat: 'need', mon: P.kids === 'yes' ? num(P.collegeMonthly) : 0 });
     out.push({ key: 'basics', type: 'need', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
     recurring().forEach(function (b) { out.push({ key: 'b:' + b.id, label: b.name || 'Bill', icon: b.icon || iconFor(b.name), grp: 'bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
     out.push({ key: 'other', label: 'Something else', icon: '\u2753', grp: 'other', cat: 'other', mon: 0 });
@@ -969,6 +971,8 @@
   function catsMonthly() { return cats().reduce(function (t, c) { return t + catMonthly(c); }, 0); }
   // Sunday to Saturday around a day
   function weekOf(d) { var s0 = F.addDays(d, -d.getDay()); return [F.isoDay(s0), F.isoDay(F.addDays(s0, 6))]; }
+  // giving each month, whether it's set as a percent or a dollar amount
+  function giveMonthly() { return giveAmt() ? giveAmt() : P.givingPct ? Math.round(monthlyIncome() * num(P.givingPct) / 100) : 0; }
   function funMonthly() { return funSet() ? num(P.fun) : 0; }
   // P.basics is the rough monthly total (everything but debt payments). "Everything else" is what the
   // categories and recurring expenses haven't covered yet. Adding one splits the total; changing or
@@ -1000,7 +1004,7 @@
       body = (c ? '<label class="field">Name<input type="text" data-catname value="' + esc(c.name) + '" maxlength="30"></label>' : '') +
         (c ? '<div class="field">Budget it<div class="seg" role="group">' + [['month', 'Monthly'], ['week', 'Weekly']].map(function (t) { var on = (sh.per || c.per || 'month') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="catper" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' : '') +
         '<label class="field"><span data-live="catamtlabel">' + (l.key === 'basics' ? 'Everything else, each month' : (sh.per || (c && c.per) || 'month') === 'week' ? 'Each week' : 'Each month') + '</span><input type="number" inputmode="decimal" min="0" data-catamt value="' + (c ? (c.amount !== '' ? Math.round(num(c.amount)) : '') : l.mon ? Math.round(l.mon) : '') + '" placeholder="$0"></label>' +
-        (c ? '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.map(function (t) { var on = (sh.type || typeOf(c)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="cattype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+        (c ? '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.slice(0, 2).map(function (t) { var on = (sh.type || typeOf(c)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="cattype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
           '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (sh.color || c.color || colorAuto(sh.key)) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="catcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
           '<div class="field">Icon<div class="icgrid">' + ICON_PICKS.map(function (x) { return '<button type="button" class="icpick' + (ic === x ? ' on' : '') + '" data-a="caticon" data-v="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' : '') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="catsave" data-v="' + sh.key + '">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
@@ -1029,6 +1033,19 @@
         (list.length ? '<div class="card rlist">' + list.map(function (x) { var l = lines[x.key] || { icon: '🧾', label: 'Removed category' }; return '<div class="rrow">' + icoBox(l.icon, x.key) + '<span class="cmid"><b>' + esc(x.note || l.label) + '</b><small>' + esc(x.note ? l.label : '') + '</small></span><span class="ramt">' + money2(num(x.amount)) + '</span></div>'; }).join('') + '</div>'
           : '<div class="dayempty"><span aria-hidden="true">🗂️</span>No purchases on this date</div>') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="spendon" data-v="' + sh.iso + '">+ Add a purchase</button><button type="button" class="outline" data-a="sheetclose">Close</button></div>';
+    } else if (sh.k === 'income') {
+      title = 'Your income';
+      body = '<label class="field">Take-home pay, each paycheck<input type="number" inputmode="decimal" min="0" data-incpay value="' + esc(P.paycheck) + '" placeholder="$0"></label>' +
+        '<div class="field">How often<div class="seg wrap" role="group">' + [['weekly', 'Every week'], ['biweekly', 'Every 2 weeks'], ['semimonthly', 'Twice a month'], ['monthly', 'Once a month']].map(function (f) { var on = (sh.freq || P.freq) === f[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="incfreq" data-v="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div></div>' +
+        '<label class="field">Next payday<input type="date" data-incnext value="' + esc(P.nextPay) + '"></label>' +
+        '<div class="sheetbtns"><button type="button" class="primary" data-a="incsave">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
+        '<button type="button" class="textbtn" data-a="edit" data-v="pay">More income options</button>';
+    } else if (sh.k === 'bal') {
+      title = 'Update balances';
+      body = '<label class="field">Emergency savings<input type="number" inputmode="decimal" min="0" data-bal="savings" value="' + esc(P.savings) + '"></label>' +
+        P.goals.map(function (g, i) { return '<label class="field">' + esc(g.name) + ' saved<input type="number" inputmode="decimal" min="0" data-bal="goal" data-i="' + i + '" value="' + esc(g.saved || 0) + '"></label>'; }).join('') +
+        P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return '<label class="field">' + esc(d.name || 'Debt') + ' balance<input type="number" inputmode="decimal" min="0" data-bal="debt" data-v="' + d.id + '" value="' + esc(d.bal) + '"></label>'; }).join('') +
+        '<div class="sheetbtns"><button type="button" class="primary" data-a="balsave">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>';
     } else if (sh.k === 'stepmo') {
       var pl = F.plan(profile()), o = F.outlook(profile(), today());
       title = 'Each month to ' + (o.step === 1 ? 'your Starter Cushion' : o.step === 2 && o.target ? esc(o.target.name) : 'your step');
@@ -1063,14 +1080,16 @@
     cats().forEach(function (c) { by[typeOf(c)] += catMonthly(c); });
     by.want += funMonthly(); by.need += elseMonthly();
     pl.rows.forEach(function (r) { if (r.kind === 'min') by.debt += r.amount * ppm; else if (r.kind === 'give') by.give += r.amount * ppm; else if (r.kind === 'save') by.save += r.amount * ppm; else if (r.kind === 'goal') by.save += r.amount * n; });
-    by.save += pl.toStep * n;
+    // the step takes its amount from each paycheck, but never more than this month has left
+    var before = by.need + by.want + by.debt + by.save + by.give;
+    by.save += Math.min(pl.toStep * n, Math.max(0, income - before));
     var budgeted = by.need + by.want + by.debt + by.save + by.give;
     return { income: income, paychecks: n, budgeted: budgeted, left: income - budgeted, by: by };
   }
   function incomeCard(ym) {
     var mm = monthMoney(ym), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' });
     var chips = [['need', 'Needs'], ['want', 'Wants'], ['debt', 'Debt'], ['save', 'Savings'], ['give', 'Giving']].filter(function (t) { return mm.by[t[0]] > 0.5; });
-    return '<div class="card inc-card"><small>Income for ' + mname + '</small><div class="inc-big">' + money(mm.income) + '</div><small class="inc-n">' + plural(mm.paychecks, 'paycheck') + '</small>' +
+    return '<div class="card inc-card"><button type="button" class="inc-edit" data-a="sheetopen" data-v="income">Edit</button><small>Income for ' + mname + '</small><div class="inc-big">' + money(mm.income) + '</div><small class="inc-n">' + plural(mm.paychecks, 'paycheck') + '</small>' +
       '<div class="inc-left' + (mm.left < -0.5 ? ' over' : Math.abs(mm.left) < 0.5 ? ' zero' : '') + '"><span>Left to budget</span><b>' + (mm.left < -0.5 ? '−' + money(-mm.left) : money(mm.left)) + '</b></div>' +
       (chips.length ? '<div class="inc-types">' + chips.map(function (t) { return '<span class="t-' + t[0] + '"><i></i>' + t[1] + ' ' + money(mm.by[t[0]]) + '</span>'; }).join('') + '</div>' : '') + '</div>';
   }
@@ -1111,21 +1130,25 @@
     var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step, ppm = pl.ppm, sv = num(P.savings);
     var goal = step <= 2 ? F.CUSHION : pl.safetyNet, gname = step <= 2 ? 'Starter cushion' : 'Full safety net';
     var where = step === 1 ? 'your Starter Cushion' : step === 2 ? esc(o.target ? o.target.name : 'your smallest debt') : step === 3 ? 'your Full Safety Net' : 'investing';
-    var flow = '<div class="card stack bud-flow"><b>Where your money goes each month</b>' + [['Take-home pay', p.paycheck * ppm, ''], ['Recurring expenses', recurMonthly(), '−'], ['Spending', catsMonthly() + funMonthly() + elseMonthly(), '−']].concat(pl.rows.filter(function (r) { return r.kind === 'min' || r.kind === 'give' || r.kind === 'save' || r.kind === 'goal'; }).map(function (r) { return [r.label, r.amount * ppm, '−']; })).map(function (r) {
-        return r[1] > 0.5 || r[0] === 'Take-home pay' ? '<div class="row"><span>' + esc(r[0]) + '</span><b>' + r[2] + money(r[1]) + '</b></div>' : ''; }).join('') +
-      '<div class="row bud-extra"><span>Your extra</span><b>' + (pl.extra < 0 ? '−' + money(-pl.extra * ppm) : money(pl.extra * ppm)) + '</b></div></div>';
     var stepCard = step <= 3 ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>To ' + where + '</b><div class="row" style="border:0;padding:4px 0"><span>Each month</span><span style="display:flex;gap:10px;align-items:center"><b>' + money(pl.toStep * ppm) + '</b><button type="button" class="sharebtn" data-a="sheetopen" data-v="stepmo">Change</button></span></div>' +
       '</div>' : '';
-    var cushion = '<div class="card ccard static">' + icoBox('🛟', 'cushion') + '<span class="cmid"><b>' + gname + '</b><span class="cbar"><i style="width:' + Math.min(100, goal ? sv / goal * 100 : 0) + '%;background:var(--green)"></i></span><span class="crow"><span>' + money(sv) + ' saved</span><span>' + money(goal) + '</span></span></span></div>';
+    var cushion = '<div class="card ccard static"' + (step >= 3 ? ' role="button" data-a="edit" data-v="safety"' : '') + '>' + icoBox('🛟', 'cushion') + '<span class="cmid"><b>' + gname + '</b><span class="cbar"><i style="width:' + Math.min(100, goal ? sv / goal * 100 : 0) + '%;background:var(--green)"></i></span><span class="crow"><span>' + money(sv) + ' saved</span><span>' + money(goal) + '</span></span></span></div>';
     var goals = P.goals.map(function (g) {
       return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + '</span></span></span></div>'; }).join('');
-    return cushion + stepCard + '<div class="bud-sec"><div><b>Goals</b></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' + flow;
+    var ret = retireOn() ? (P.retirements || []).filter(function (a) { return accMonthly(a) > 0; }).map(function (a, i) {
+      return '<button type="button" class="ccard" data-a="edit" data-v="retire">' + icoBox('\uD83C\uDF34', 'ret:' + i) + '<span class="cmid"><b>' + esc(accLabel(a)) + '</b><span class="crow"><span>' + money(accMonthly(a)) + ' a month</span><span>' + (a.from === 'post' ? 'from take-home' : 'before payday') + '</span></span></span></button>'; }).join('') : '';
+    return '<button type="button" class="primary" data-a="sheetopen" data-v="bal">Update balances</button>' + cushion + stepCard + '<div class="bud-sec"><div><b>Goals</b></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' +
+      '<div class="bud-sec"><div><b>Retirement</b></div></div>' + ret + '<button type="button" class="outline" data-a="edit" data-v="retire">' + (ret ? 'Edit retirement' : '+ Add retirement') + '</button>';
+  }
+  function homeRow() {
+    var t = P.home === 'free' ? 'Paid off' : P.home === 'mortgage' ? (num(P.mortgage) ? money(num(P.mortgage)) + ' left' : 'Mortgage') : P.home === 'rent' ? 'Renting' : 'Not set';
+    return '<div class="bud-sec"><div><b>Your home</b></div></div><button type="button" class="ccard" data-a="edit" data-v="house">' + icoBox('\uD83C\uDFE0', 'home') + '<span class="cmid"><b>Home</b><span class="crow"><span>' + t + '</span><span></span></span></span></button>';
   }
   function budDebt() {
     var o = F.outlook(profile(), today()), list = P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).slice().sort(function (a, b) { return (num(a.bal) || 1e12) - (num(b.bal) || 1e12); });
     var total = list.reduce(function (t, d) { return t + num(d.bal); }, 0), orig = list.reduce(function (t, d) { return t + Math.max(num(d.orig), num(d.bal)); }, 0), pays = {};
     (o.payoffs || []).forEach(function (x) { pays[x.id] = x; });
-    if (!list.length) return '<div class="card bud-top"><small>Debt</small><div class="bud-big">$0</div></div><button type="button" class="outline" data-a="edit" data-v="debts">+ Add a debt</button>';
+    if (!list.length) return '<div class="card bud-top"><small>Debt</small><div class="bud-big">$0</div></div><button type="button" class="outline" data-a="edit" data-v="debts">+ Add a debt</button>' + homeRow();
     return '<div class="card bud-top"><small>Debt left</small><div class="bud-big">' + money(total) + '</div><span class="spbar big"><i style="width:' + (orig ? (orig - total) / orig * 100 : 0) + '%;background:var(--green)"></i></span>' +
       '<div class="bud-safe">' + money(orig - total) + ' paid so far · ' + money(total) + ' to go</div></div>' +
       '<div class="bud-sec"><div><b>Smallest first</b></div></div>' +
@@ -1134,7 +1157,7 @@
         return '<div class="card ccard static' + (i === 0 && !paid ? ' first' : '') + '">' + icoBox(paid ? '✅' : '💳', 'd:' + d.id) + '<span class="cmid"><b>' + esc(d.name || 'Debt') + (i === 0 && !paid ? ' <span class="tag">Up next</span>' : '') + '</b><span class="cbar"><i style="width:' + (og ? (og - bal) / og * 100 : 0) + '%;background:var(--green)"></i></span>' +
           '<span class="crow"><span>' + (paid ? 'Paid off' : money(bal) + ' left · ' + money(num(d.min)) + '/mo') + '</span><span>' + (og ? Math.round((og - bal) / og * 100) + '% paid' : '') + '</span></span></span></div>';
       }).join('') +
-      '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>';
+      '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>' + homeRow();
   }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
   function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
@@ -2312,7 +2335,7 @@
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
       return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
-        '<div class="card">' + [['pay', 'Paycheck and payday'], ['basics', 'Monthly spending (rough number)'], ['recurring', 'Recurring expenses'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['install', 'Add to Home Screen']].map(function (x) {
+        '<div class="card">' + [['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
@@ -3111,6 +3134,23 @@
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
       case 'sheetclose': U.sheet = null; U.formErr = ''; render(); break;
+      case 'incfreq': U.sheet.freq = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=incfreq]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
+      case 'incsave': (function () {
+        var pay = app.querySelector('[data-incpay]'), nx = app.querySelector('[data-incnext]');
+        if (pay && pay.value !== '' && num(pay.value) > 0) P.paycheck = String(round2(num(pay.value)));
+        if (U.sheet.freq) P.freq = U.sheet.freq;
+        if (nx && /^\d{4}-\d{2}-\d{2}$/.test(nx.value)) P.nextPay = nx.value;
+        save(); track('income-edit'); U.sheet = null; render();
+      })(); break;
+      case 'balsave': (function () {
+        Array.prototype.forEach.call(app.querySelectorAll('[data-bal]'), function (el) {
+          if (el.value === '') return; var k = el.getAttribute('data-bal'), val = String(round2(Math.max(0, num(el.value))));
+          if (k === 'savings') P.savings = val;
+          else if (k === 'goal') { var g = P.goals[+el.getAttribute('data-i')]; if (g) g.saved = num(val); }
+          else if (k === 'debt') P.debts.forEach(function (d) { if (d.id === el.getAttribute('data-v')) { d.bal = val; if (num(val) > num(d.orig)) d.orig = num(val); } });
+        });
+        save(); track('balance-update'); U.sheet = null; render();
+      })(); break;
       case 'stepsave': (function () { var el = app.querySelector('[data-stepin]'); if (el && el.value !== '') { P.stepAmt = String(round2(Math.max(0, num(el.value)) / F.FREQS[P.freq].perMonth)); save(); track('step-assign'); } U.sheet = null; render(); })(); break;
       case 'catadd': (function () {
         if (v === 'open') { U.catAdd = true; U.sheet = null; render(); return; }
@@ -3131,6 +3171,8 @@
         var amt = app.querySelector('[data-catamt]'), nmI = app.querySelector('[data-catname]'), val = amt && amt.value !== '' ? Math.max(0, num(amt.value)) : null;
         // a first amount splits the total; a change to an amount changes the total
         if (v.indexOf('c:') === 0) { var c = cats().filter(function (x) { return 'c:' + x.id === v; })[0]; if (c) { var was = c.amount !== '' ? catMonthly(c) : null; if (U.sheet && U.sheet.per) c.per = U.sheet.per; if (val != null) c.amount = String(round2(val)); if (was != null) shiftRough(catMonthly(c) - was); if (nmI && nmI.value.trim()) c.name = nmI.value.trim().slice(0, 30); if (U.sheet && U.sheet.icon) c.icon = U.sheet.icon; if (U.sheet && U.sheet.type) c.type = U.sheet.type; if (U.sheet && U.sheet.color) c.color = U.sheet.color; } }
+        else if (v === 'give' && val != null) { P.giveMode = 'amt'; P.giveMonthly = String(round2(val)); P.givingPct = 0; }
+        else if (v === 'edu' && val != null) { P.collegeMonthly = String(round2(val)); if (val > 0) P.kids = 'yes'; }
         else if (v === 'fun' && val != null) { if (funSet()) shiftRough(val - num(P.fun)); P.fun = String(round2(val)); P.funParts = []; }
         // everything else: the rough total becomes the details plus this amount
         else if (v === 'basics' && val != null) { P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly() + val)); }
@@ -3337,7 +3379,9 @@
         P.goals.push({ id: uid(), name: nm, amount: amt, kind: U.form.kind, months: U.form.months, per: 0, saved: 0, by: '' });
         save(); track('goal'); go(U.next); break;
       case 'goaldel': P.goals.splice(i, 1); save(); render(); break;
-      case 'checkin': P.prevBalances = P.prevBalances || {}; U.err = ''; U.ciPart = false; ciStart(); go('checkin'); break;
+      case 'checkin':
+        if (!ciPayday()) { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); break; }
+        P.prevBalances = P.prevBalances || {}; U.err = ''; U.ciPart = false; ciStart(); go('checkin'); break;
       case 'cistep': (function () {
         var n = +v; if (!U.ci) return;
         if (n < 1) { ciRestore(); U.ci = null; go('home'); return; }

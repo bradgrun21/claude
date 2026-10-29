@@ -994,3 +994,7 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
 .swatch { width: 34px; height: 34px; border-radius: 17px; border: 3px solid transparent; background: var(--c); padding: 0; }
 .swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px #141414 inset; }
+.gauge.g-prog line.on { stroke: #6FDB8E; }
+.inc-card { position: relative; }
+.inc-edit { position: absolute; top: 12px; right: 12px; border: 0; background: var(--card2); color: var(--ink); font-weight: 700; font-size: 13px; border-radius: 99px; padding: 6px 12px; }
+.ccard[role=button] { cursor: pointer; }
