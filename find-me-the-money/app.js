@@ -1951,21 +1951,27 @@
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
       var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.round(pl.unassigned) : 0;
-      if (nojob > 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
-        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + money(nojob) + ' of extra each paycheck has no job yet.</div>' +
-        '<div style="font-size:15px;color:rgba(255,255,255,.88)">Give it a job and your countdown starts.</div>' +
-        '<div class="stack" style="gap:8px"><button type="button" class="sunbtn" data-a="stepall">Put ' + money(nojob) + ' toward ' + where + '</button><button type="button" class="ghostbtn" data-a="go" data-v="plan">Choose in my budget</button></div>' + paydayStrip + '</div>' +
+      var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
+      if (nojob > 0) return homeTop(toast) + '<div class="hero">' + stepChip + gauge(prog ? prog[0] : 0, 'idle') +
+        '<div class="hmid"><div class="hbig">' + money(nojob) + '</div><small>of extra each paycheck has no job yet</small></div>' +
+        '<p class="hsub">Give it a job and your countdown starts.</p>' +
+        '<div class="stack" style="gap:8px;width:100%"><button type="button" class="primary" data-a="stepall">Put ' + money(nojob) + ' toward ' + where + '</button><button type="button" class="outline" data-a="go" data-v="plan">Choose in my budget</button></div>' + paydayStrip + '</div>' +
         homeRest(o, step, snow0(o, step));
-      if (short >= 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
-        '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + (short > 0 ? 'You\u2019re ' + money(short) + ' short each paycheck.' : 'Every dollar has a job. None is left for your step yet.') + '</div>' +
-        '<div style="font-size:15px;color:rgba(255,255,255,.88)">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</div>' +
-        '<div class="stack" style="gap:8px">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim a bill in my budget'], ['scan', '', 'See where my money goes']].map(function (x) { return '<button type="button" class="ghostbtn" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
+      if (short >= 0) return homeTop(toast) + '<div class="hero">' + stepChip + gauge(prog ? prog[0] : 0, 'idle') +
+        '<div class="hmid">' + (short > 0 ? '<div class="hbig over">' + money(short) + '</div><small>short each paycheck</small>' : '<div class="hbig">$0</div><small>left for your step</small>') + '</div>' +
+        '<p class="hsub">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your countdown starts. Pick one:</p>' +
+        '<div class="stack" style="gap:8px;width:100%">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim my budget'], ['scan', '', 'See where my money goes']].map(function (x) { return '<button type="button" class="outline" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
         homeRest(o, step, snow0(o, step));
-      var hero = '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">' + h.label + '</div>' +
-        (cd ? '<div class="cd" style="grid-template-columns:repeat(' + cd.length + ',minmax(0,1fr))">' + cd.map(function (x) { return '<div><b>' + x[0] + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div><div style="font-size:15px">on ' + longDate(h.date) + '</div>'
-          : step >= 4 ? '<div style="font-family:var(--display);font-size:36px;line-height:1.1;color:var(--sun-soft)">Debt-free with a full safety net.</div>'
-          : '<div style="font-family:var(--display);font-size:26px;color:var(--sun-soft)">Your plan needs a little more room. Check your Payday Plan.</div>') +
-        (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
+      // one big number: days under 100, then months, then years
+      var big = '', unit = '';
+      if (cdDays === 0) { big = 'Today'; unit = ''; } else if (cdDays != null) { if (cdDays <= 99) { big = String(cdDays); unit = cdDays === 1 ? 'day' : 'days'; } else if (cdDays < 730) { big = String(Math.round(cdDays / 30.44)); unit = 'months'; } else { big = String(Math.round(cdDays / 365.25 * 10) / 10); unit = 'years'; } }
+      var goalText = step === 1 ? 'until your Starter Cushion is full' : step === 2 ? 'until ' + esc(o.target.name) + ' is paid off' : step === 3 ? 'until your Full Safety Net' : '';
+      if (cdDays === 0) goalText = step === 1 ? 'your Starter Cushion fills with this paycheck' : step === 2 ? esc(o.target.name) + ' is paid off with this paycheck' : 'your Full Safety Net fills with this paycheck';
+      var hero = '<div class="hero">' + stepChip + gauge(prog ? prog[0] : 1, step >= 4 ? 'ok' : 'prog') +
+        (cdDays != null ? '<div class="hmid"><div class="hbig' + (cdDays === 0 ? ' word' : '') + '">' + big + '<span>' + unit + '</span></div><small>' + goalText + '</small></div><p class="hdate">' + longDate(h.date) + '</p>'
+          : step >= 4 ? '<div class="hmid"><div class="hbig" style="font-size:30px">Debt-free</div><small>with a full safety net</small></div>'
+          : '<div class="hmid"><small>Your plan needs a little more room.</small></div><p class="hsub">Check your Budget to give your extra a job.</p>') +
+        (prog ? '<div class="hpill"><span>' + prog[1] + '</span><b>' + Math.round(Math.min(1, prog[0]) * 100) + '%</b><span>' + prog[2] + '</span></div>' : '') +
         paydayStrip + '</div>';
       var snow = snow0(o, step);
       var nw = nwCard();
