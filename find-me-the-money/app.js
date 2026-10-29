@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30e';
+  var APP_VERSION = '10-30f';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -2075,7 +2075,7 @@
         (v.count >= 2 ? '<button type="button" class="textbtn" style="min-height:32px;padding:0;margin-top:4px" data-a="sharestreak">' + ICON.share + ' Share my streak</button>' : '') + '</div></div>' +
         celebration(9) +
         '<div class="card"><div class="row"><span style="font-weight:600">Since you started</span><span></span></div>' +
-        '<div class="row"><span style="color:var(--muted)">Debt paid</span><b>' + money(t.debtPaid) + '</b></div><div class="row"><span style="color:var(--muted)">Money saved</span><b>' + money(t.saved) + '</b></div>' + + '</div>' +
+        '<div class="row"><span style="color:var(--muted)">Debt paid</span><b>' + money(t.debtPaid) + '</b></div><div class="row"><span style="color:var(--muted)">Money saved</span><b>' + money(t.saved) + '</b></div></div>' +
         '<div class="push"><button type="button" class="' + (r.paid.length || r.goal ? 'outline' : 'primary') + '" data-a="winsdone">Back to my plan</button></div>';
     },
 
