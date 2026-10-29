@@ -57,6 +57,11 @@ test('A big dream goal gains nothing from early money; it only delays debt-free'
   assert.ok(g.ready >= g.ready0, 'the snowball funds it on the same schedule either way');
   assert.ok(o.debtFree > g.debtFree0, 'early money pushes debt-free later');
 });
+test('Adding days across the fall clock change keeps the weekday', () => {
+  assert.strictEqual(C.isoDay(C.addDays(C.fromIso('2026-10-29'), 7)), '2026-11-05');
+  assert.strictEqual(C.nextAfter('2026-10-29', 'weekly'), '2026-11-05');
+  assert.strictEqual(C.nextAfter('2026-03-05', 'weekly'), '2026-03-12');
+});
 test('A missed payday rolls forward on schedule', () => {
   assert.strictEqual(C.rollPayday('2026-10-01', 'biweekly', new Date(2026, 9, 19)), '2026-10-29');
   assert.strictEqual(C.rollPayday('2026-10-25', 'weekly', new Date(2026, 9, 19)), '2026-10-25');

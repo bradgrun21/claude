@@ -25,7 +25,8 @@
   function isoDay(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function fromIso(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
-  function addDays(d, n) { return new Date(d.getTime() + Math.round(n) * DAY); }
+  // calendar days, not 24-hour blocks, so a clock change never slips a date back a day
+  function addDays(d, n) { var r = new Date(d.getTime()); r.setDate(r.getDate() + Math.round(n)); return r; }
   function daysBetween(a, b) { return Math.round((fromIso(isoDay(b)) - fromIso(isoDay(a))) / DAY); }
   // moves a payday that has already passed forward to the next one on schedule
   function rollPayday(iso, freq, today) {
