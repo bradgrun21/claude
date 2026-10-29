@@ -1013,6 +1013,15 @@
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="recursave">' + (f.id ? 'Save' : 'Add it') + '</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
         (f.id ? '<button type="button" class="textbtn" style="color:var(--warn)" data-a="recurdel">Remove this expense</button>' : '');
+    } else if (sh.k === 'day') {
+      var d0 = F.fromIso(sh.iso), list = (P.spends || []).filter(function (x) { return x.date === sh.iso; }), lines = {}, tot = 0;
+      spendLines().forEach(function (l) { lines[l.key] = l; });
+      list.forEach(function (x) { tot += num(x.amount); });
+      title = d0.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      body = '<p class="daysub">' + (list.length ? plural(list.length, 'purchase') + ' · ' + money2(tot) : 'No purchases') + '</p>' +
+        (list.length ? '<div class="card rlist">' + list.map(function (x) { var l = lines[x.key] || { icon: '🧾', label: 'Removed category' }; return '<div class="rrow">' + icoBox(l.icon, x.key) + '<span class="cmid"><b>' + esc(x.note || l.label) + '</b><small>' + esc(x.note ? l.label : '') + '</small></span><span class="ramt">' + money2(num(x.amount)) + '</span></div>'; }).join('') + '</div>'
+          : '<div class="dayempty"><span aria-hidden="true">🗂️</span>No purchases on this date</div>') +
+        '<div class="sheetbtns"><button type="button" class="primary" data-a="spendon" data-v="' + sh.iso + '">+ Add a purchase</button><button type="button" class="outline" data-a="sheetclose">Close</button></div>';
     } else if (sh.k === 'stepmo') {
       var pl = F.plan(profile()), o = F.outlook(profile(), today());
       title = 'Each month to ' + (o.step === 1 ? 'your Starter Cushion' : o.step === 2 && o.target ? esc(o.target.name) : 'your step');
@@ -1024,12 +1033,25 @@
   }
   // ---------- Budget tabs ----------
   function icoBox(ic, key) { return '<span class="cicon" style="--c:' + colorFor(key) + '">' + ic + '</span>'; }
+  // a semicircle of segments; lit segments show what's left
+  function gauge(frac, status) {
+    var n = 22, lit = Math.round(Math.max(0, Math.min(1, frac)) * n), out = '';
+    for (var i = 0; i < n; i++) {
+      var a = Math.PI - i / (n - 1) * Math.PI, r1 = 74, r2 = 96, cx = 110, cy = 104;
+      out += '<line x1="' + (cx + r1 * Math.cos(a)).toFixed(1) + '" y1="' + (cy - r1 * Math.sin(a)).toFixed(1) + '" x2="' + (cx + r2 * Math.cos(a)).toFixed(1) + '" y2="' + (cy - r2 * Math.sin(a)).toFixed(1) + '" class="' + (i < lit ? 'on' : '') + '"/>';
+    }
+    return '<svg class="gauge g-' + (status || 'ok') + '" viewBox="0 0 220 112" aria-hidden="true">' + out + '</svg>';
+  }
   function budSpend(ym) {
     var m = spentMap(ym), lines = spendLines().filter(function (l) { return l.grp === 'spend'; }), now = today(), isNow = ym === monthOf(F.isoDay(now));
     var budget = lines.reduce(function (t, l) { return t + l.mon; }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
     var dl = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1, perDay = isNow && left > 0 ? left / dl : 0;
-    var top = '<div class="card bud-top"><small>' + (isNow ? 'Left to spend' : 'Spent') + '</small><div class="bud-big' + (left < -0.5 ? ' over' : '') + '">' + (isNow ? (left < -0.5 ? '−' + money2(-left) : money2(left)) : money2(spent)) + '</div>' +
-      '<span class="spbar big' + (left < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, budget ? spent / budget * 100 : 0) + '%"></i></span>' +
+    // on track = spending at or under where the month's pace says it should be
+    var dim = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(), pace = isNow ? budget * now.getDate() / dim : budget;
+    var status = !budget ? '' : spent > budget + 0.5 ? 'over' : isNow && spent > pace * 1.1 + 1 ? 'fast' : 'ok';
+    var top = '<div class="card bud-top">' + (status ? '<span class="bstat ' + status + '">' + (status === 'over' ? 'Over budget' : status === 'fast' ? 'Spending fast' : 'On track') + '</span>' : '') +
+      gauge(budget ? Math.max(0, left) / budget : 0, status) +
+      '<div class="gmid"><small>' + (isNow ? 'Left to spend' : 'Spent') + '</small><div class="bud-big' + (left < -0.5 ? ' over' : '') + '">' + (isNow ? (left < -0.5 ? '−' + money2(-left) : money2(left)) : money2(spent)) + '</div></div>' +
       '<div class="bud-safe">' + (isNow ? (left < -0.5 ? money(-left) + ' over this month. It happens: next month is a fresh start.' : '<b>' + money2(perDay) + '/day</b> safe to spend · ' + plural(dl, 'day') + ' left') : money(spent) + ' of ' + money(budget) + ' budgeted') + '</div></div>';
     var cards = lines.map(function (l) {
       var sp = m[l.key] || 0, lf = l.mon - sp, pct = l.mon ? Math.round(sp / l.mon * 100) : (sp ? 100 : 0);
@@ -1268,12 +1290,13 @@
     for (var b = 0; b < first.getDay(); b++) cells += '<span></span>';
     for (var d = 1; d <= days; d++) {
       var iso = F.isoDay(new Date(y, m, d)), list = by[iso] || [], sum = list.reduce(function (t, x) { return t + x.amount; }, 0); total += sum;
-      cells += '<button type="button" class="cday sp' + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (sum ? ': ' + money(sum) + ' spent' : '')) + '"><span>' + d + '</span><em class="spamt">' + (sum ? '$' + (sum >= 1000 ? (sum / 1000).toFixed(1) + 'k' : Math.round(sum)) : '') + '</em></button>';
+      cells += '<button type="button" class="cday sp' + (iso === todayIso ? ' today' : '') + (iso > todayIso ? ' future' : '') + '" data-a="spday" data-v="' + iso + '" aria-label="' + esc(d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (sum ? ': ' + money(sum) + ' spent' : '')) + '"><span>' + d + '</span><em class="spamt">' + (sum ? '$' + (sum >= 1000 ? (sum / 1000).toFixed(1) + 'k' : Math.round(sum)) : '') + '</em></button>';
     }
-    var selList = U.calDay && by[U.calDay];
-    var sel = selList ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + ' · ' + money(selList.reduce(function (t, x) { return t + x.amount; }, 0)) + '</b>' + selList.map(function (x) { return '<div class="row" style="padding:4px 0;border:0"><span>' + esc(x.note) + '</span><b>' + money2(x.amount) + '</b></div>'; }).join('') + '</div>' : '';
+    var sel = '', pm = new Date(y, m - 1, 1), prev = spendByDay(pm.getFullYear(), pm.getMonth()), prevTotal = Object.keys(prev).reduce(function (t, k) { return t + prev[k].reduce(function (a, x) { return a + x.amount; }, 0); }, 0);
+    var vs = prevTotal > 0 ? Math.round((total - prevTotal) / prevTotal * 100) : null, pmName = pm.toLocaleDateString('en-US', { month: 'long' });
     return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">‹</button>' +
-      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (total ? money(total) + ' spent' : 'Purchases you add show up here') + '</small></div>' +
+      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (total ? money(total) + ' spent' : 'Purchases you add show up here') + '</small>' +
+        (vs != null ? '<span class="calvs ' + (vs <= 0 ? 'down' : 'up') + '">' + (vs <= 0 ? '↓ ' : '↑ ') + Math.abs(vs) + '% vs ' + pmName + '</span>' : '') + '</div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">›</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel + '</div>';
@@ -3106,6 +3129,8 @@
         save(); track('recurring-save'); U.sheet = null; render();
       })(); break;
       case 'recurdel': budgetV2(); P.bills.forEach(function (x) { if (x.id === U.form.id) shiftRough(-F.billMonthly(x)); }); P.bills = P.bills.filter(function (x) { return x.id !== U.form.id; }); save(); U.sheet = null; render(); break;
+      case 'spday': U.sheet = { k: 'day', iso: v }; render(); break;
+      case 'spendon': U.spendBack = U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: v }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;

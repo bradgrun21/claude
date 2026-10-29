@@ -927,3 +927,25 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 @keyframes sheetup { from { transform: translate(-50%, 40px); opacity: .4; } to { transform: translate(-50%, 0); opacity: 1; } }
 @keyframes sheetfade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheetback { animation: none; } }
+/* Budget gauge */
+.bud-top { position: relative; padding-top: 16px; }
+.gauge { width: 100%; max-width: 280px; display: block; margin: 4px auto -6px; }
+.gauge line { stroke: rgba(255,255,255,.1); stroke-width: 11; stroke-linecap: round; }
+.gauge.g-ok line.on { stroke: #6FDB8E; }
+.gauge.g-fast line.on { stroke: var(--hi); }
+.gauge.g-over line.on { stroke: var(--warn); }
+.gmid { margin-top: -62px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 64px; }
+.bstat { align-self: flex-start; font-size: 13px; font-weight: 700; }
+.bstat.ok { color: #6FDB8E; }
+.bstat.fast { color: var(--hi); }
+.bstat.over { color: var(--warn); }
+/* calendar: month vs last month, day pop-up */
+.calvs { display: inline-block; margin-top: 3px; font-size: 12px; font-weight: 700; border-radius: 99px; padding: 1px 8px; }
+.calvs.down { color: #6FDB8E; background: rgba(111,219,142,.12); }
+.calvs.up { color: var(--hi); background: rgba(255,201,126,.12); }
+.daysub { margin-top: -8px; font-size: 14px; }
+.dayempty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 36px 0; color: var(--muted); font-size: 16px; }
+.dayempty span { font-size: 36px; opacity: .7; }
+.gauge { max-width: 320px; }
+.bud-top .gmid .bud-big { font-size: 40px; }
+.gmid { margin-top: -78px; }
