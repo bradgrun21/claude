@@ -1952,9 +1952,7 @@
       var starHtml = starsCard(r);
       var savedStat = w.saved >= 0 ? stat(money(w.saved), 'saved') : stat('\u2013' + money(-w.saved), 'from savings');
       return (win ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="eyebrow" style="margin-top:12px">' + (r.counted ? 'Payday check-in' : 'Balance update') + ' \u00b7 ' + dayMonth(today()) + '</div>' +
-        '<div class="lime pop"><div style="font-weight:600">' + (r.counted ? 'This payday' : 'Since your last update') + '</div>' +
-        '<div style="font-family:var(--display);font-size:30px;font-weight:500;line-height:1.15;margin-top:4px">' + title + '</div>' +
-        '<div class="grid3 stats" style="margin-top:16px">' + stat(money(w.debtPaid), 'debt paid') + savedStat + stat((r.daysBack > 0 ? '+' : '') + r.daysBack, 'days stolen back') + '</div></div>' +
+        recapCard(r, title, savedStat) +
         starHtml + (r.coach && !coachSeen() ? coachCard(foundMonthly()) : '') +
         (r.paid.length ? '<button type="button" class="primary" data-a="sharepaid">' + ICON.share + ' Share this payoff</button>' : r.goal ? '<button type="button" class="primary" data-a="sharegoal">' + ICON.share + ' Share this goal</button>' : '') +
         (r.paid.length > 1 ? '<p style="text-align:center">Also paid off: ' + r.paid.slice(1).map(esc).join(', ') + '. The snowball grows.</p>' : r.paid.length ? '<p style="text-align:center">That payment now rolls into your next debt. The snowball grows.</p>' : '') +
@@ -2458,6 +2456,19 @@
   }
   // the found money from "Find my money": monthly, can be $0 (or below, when there's a gap)
   function foundMonthly() { return quickMath().noJob; }
+  // the payday recap: one card to screenshot or share
+  function recapCard(r, title, savedStat) {
+    var w = r.w, o = F.outlook(profile(), today()), n = r.stars ? r.stars.filter(function (x) { return x === true; }).length : 0, sv = num(P.savings), prog = '';
+    if (o.step <= 1) prog = ['Starter cushion', sv / F.CUSHION, money(sv) + ' of $1,000'];
+    else if (o.step === 2 && o.target) { var d0 = P.debts.filter(function (d) { return d.id === o.target.id; })[0], og = Math.max(num(d0 && d0.orig), o.target.bal); prog = [esc(o.target.name), og ? (og - o.target.bal) / og : 0, money(o.target.bal) + ' left']; }
+    else if (o.step === 3) prog = ['Full safety net', Math.min(1, sv / o.plan.safetyNet), money(sv) + ' of ' + money(o.plan.safetyNet)];
+    var who = firstName();
+    return '<div class="lime pop recap"><div class="recap-top"><span>' + (r.counted ? (who ? esc(who) + '’s payday' : 'This payday') : 'Since your last update') + '</span>' + (r.stars ? '<span class="rstars" aria-label="' + n + ' of 3 stars">' + '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i></span>' : '') + '</div>' +
+      '<div style="font-family:var(--display);font-size:30px;font-weight:600;line-height:1.15;margin-top:4px">' + title + '</div>' +
+      '<div class="grid3 stats" style="margin-top:14px">' + stat(money(w.debtPaid), 'debt paid') + savedStat + stat((r.daysBack > 0 ? '+' : '') + r.daysBack, 'days stolen back') + '</div>' +
+      (prog ? '<div class="recap-prog"><div><span>' + prog[0] + '</span><span>' + prog[2] + '</span></div><span class="rbar"><i style="width:' + Math.max(2, Math.min(100, prog[1] * 100)) + '%"></i></span></div>' : '') +
+      (r.counted ? '<button type="button" class="recap-share" data-a="sharerecap">' + ICON.share + ' Share this check-in</button>' : '') + '</div>';
+  }
   function starsCard(r) {
     if (!r || !r.stars) return '';
     var n = r.stars.filter(function (x) { return x === true; }).length;
@@ -3469,6 +3480,11 @@
       case 'winsdone': P.unseen = P.unseen.filter(function (u) { return u.type !== 'badge'; }); save(); go('home'); break;
       case 'sharebadge': markSeen('badge:' + v); openShare(cardForBadge(v)); break;
       case 'sharech': markSeen('challenge:' + v); openShare(cardForChallenge(v)); break;
+      case 'sharerecap': (function () {
+        var r = U.result, n = r.stars ? r.stars.filter(function (x) { return x === true; }).length : 0, who = firstName();
+        openShare({ eyebrow: (who ? who + '\u2019s ' : '') + 'payday check-in', title: n + ' of 3 stars', sub: r.w.debtPaid > 0 || r.w.saved > 0 ? 'Paid ' + money(r.w.debtPaid) + ' of debt and saved ' + money(Math.max(0, r.w.saved)) + ' this payday.' : 'Checked in on payday. Every dollar has a job.', subNoAmt: 'Another payday on the plan.',
+          chips: [plural(P.streak.count || 1, 'payday') + ' in a row'].concat(r.daysBack > 0 ? ['+' + r.daysBack + ' days stolen back'] : []), caption: 'Payday check-in done: ' + n + ' of 3 stars.' });
+      })(); break;
       case 'sharestreak':
         openShare({ eyebrow: 'Payday streak', title: plural(P.streak.count, 'payday') + ' in a row', sub: 'Showing up for my future, one paycheck at a time.', chips: P.totals.daysBack > 0 ? ['+' + P.totals.daysBack + ' days stolen back'] : [], caption: plural(P.streak.count, 'payday') + ' in a row of sticking to my plan.' });
         break;

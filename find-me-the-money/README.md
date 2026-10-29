@@ -173,6 +173,9 @@ Home is just the countdown and bar to the next win (the cushion in Step 1, the n
 
 The whole app is dark: tokens at the top of styles.css (`--bg`, `--card`, `--ink`, `--hi` for the warm highlight, `--green` for good news) plus a dark-theme block at the end. Buttons are white pills.
 
+## Payday recap
+The results screen after a payday check-in opens with a recap card: whose payday, the stars, debt paid, saved, days stolen back, and a bar for the current goal (cushion, the debt being paid off, or the safety net). "Share this check-in" makes a share card (amounts can be hidden).
+
 ## Budget: Spending, Saving, Debt
 The Budget tab has three bubbles.
 - **Spending**: "Left to spend" this month (spending categories minus what was spent) with "$X/day safe to spend · N days left". Each category is a card with an icon, a colored bar and "$167 left / $220". Add categories from suggestions (groceries, gas, eating out, kids, pets...) or your own name; tap one to change its amount, name or icon. "Everything else" is the part of the rough monthly number (from the intro) that no category or recurring expense covers yet. Below that, **Recurring expenses**: set up once with a name, icon, amount, how often (monthly, every 2 weeks, weekly, yearly) and the day of the month or next due date. They show on the calendar and count every month.

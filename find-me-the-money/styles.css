@@ -907,3 +907,12 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .typeit { display: flex; gap: 8px; align-items: center; }
 .typeit input { flex: 1; min-width: 0; min-height: 50px; border-radius: 16px; border: 1px solid rgba(255,255,255,.12); background: var(--card2); color: var(--ink); padding: 0 14px; font: inherit; font-size: 16px; }
 .typeit .sharebtn { min-height: 50px; padding: 0 18px; }
+/* payday recap card */
+.recap-top { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+.rstars { font-size: 20px; letter-spacing: 2px; color: var(--sun-deep); }
+.rstars i { font-style: normal; opacity: .28; }
+.recap-prog { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.recap-prog > div { display: flex; justify-content: space-between; gap: 8px; }
+.rbar { display: block; height: 8px; border-radius: 4px; background: rgba(59,29,14,.15); overflow: hidden; }
+.rbar i { display: block; height: 100%; border-radius: 4px; background: var(--sun-deep); }
+.recap-share { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: rgba(59,29,14,.12); color: var(--sun-deep); font-weight: 700; font-size: 14px; }
