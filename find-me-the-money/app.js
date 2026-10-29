@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30f';
+  var APP_VERSION = '10-30g';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -827,11 +827,13 @@
   function spendLines() {
     var out = [];
     cats().forEach(function (c) { out.push({ key: 'c:' + c.id, type: typeOf(c), label: c.name || 'Category', icon: c.icon || '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: catMonthly(c), per: c.per || 'month', amt: num(c.amount) }); });
-    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, type: 'want', label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
-    else if (funSet()) out.push({ key: 'fun', type: 'want', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
-    out.push({ key: 'give', label: 'Giving', icon: '\u26EA', grp: 'spend', cat: 'need', mon: giveMonthly() });
-    out.push({ key: 'edu', label: 'Education fund', icon: '\uD83C\uDF93', grp: 'spend', cat: 'need', mon: P.kids === 'yes' ? num(P.collegeMonthly) : 0 });
-    out.push({ key: 'basics', type: 'need', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
+    // the built-in lines take the name, icon and type picked for them, and leave once removed
+    function bi(l) { var m = lineMeta(l.key); if (m.hidden) return; l.label = m.name || l.label; l.icon = m.icon || l.icon; l.type = m.type || l.type; out.push(l); }
+    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) bi({ key: 'f:' + x.id, type: 'want', label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
+    else if (funSet()) bi({ key: 'fun', type: 'want', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
+    bi({ key: 'give', type: 'need', label: 'Giving', icon: '\u26EA', grp: 'spend', cat: 'need', mon: giveMonthly() });
+    bi({ key: 'edu', type: 'need', label: 'Education fund', icon: '\uD83C\uDF93', grp: 'spend', cat: 'need', mon: P.kids === 'yes' ? num(P.collegeMonthly) : 0 });
+    bi({ key: 'basics', type: 'need', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
     recurring().forEach(function (b) { out.push({ key: 'b:' + b.id, label: b.name || 'Bill', icon: b.icon || iconFor(b.name), grp: 'bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
     out.push({ key: 'other', label: 'Something else', icon: '\u2753', grp: 'other', cat: 'other', mon: 0 });
     return out;
@@ -944,7 +946,7 @@
   // spending categories people can add, with an icon each
   var SPEND_SUGGEST = [['Groceries', '🛒'], ['Gas', '⛽'], ['Eating out', '🍔'], ['Shopping', '🛍️'], ['Kids', '🧸'], ['Household', '🧺'], ['Personal care', '💇'], ['Pets', '🐾'], ['Gifts', '🎁'], ['Coffee', '☕'], ['Entertainment', '🎬'], ['Medical', '💊']];
   var RECUR_SUGGEST = [['Rent', '🏠'], ['Mortgage', '🏡'], ['Electricity', '💡'], ['Water', '💧'], ['Internet', '📶'], ['Phone', '📱'], ['Car insurance', '🚗'], ['Health insurance', '🩺'], ['Childcare', '👶'], ['Streaming', '📺'], ['Music', '🎵'], ['Gym', '🏋️'], ['Trash', '🗑️']];
-  var ICON_PICKS = ['🛒', '⛽', '🍔', '🛍️', '🧸', '🧺', '💇', '🐾', '🎁', '☕', '🎬', '💊', '🏠', '💡', '💧', '📶', '📱', '🚗', '🩺', '👶', '📺', '🎵', '🏋️', '🎉', '⛪', '📚', '✈️', '🧾'];
+  var ICON_PICKS = ['🛒', '⛽', '🍔', '🛍️', '🧸', '🧺', '💇', '🐾', '🎁', '☕', '🎬', '💊', '🏠', '💡', '💧', '📶', '📱', '🚗', '🩺', '👶', '📺', '🎵', '🏋️', '🎉', '⛪', '🎓', '📚', '✈️', '🧾'];
   var CAT_COLORS = ['#7ED9C0', '#FFC97E', '#FF9F7A', '#C8BCF5', '#9AD0F5', '#FFB4D0', '#B5E48C', '#F5D76E', '#FF8A8A', '#8EE3F5'];
   // what a budget line is for; spending categories and recurring expenses pick one
   var TYPES = [['need', 'Need'], ['want', 'Want'], ['debt', 'Debt'], ['save', 'Savings / goal']];
@@ -956,9 +958,14 @@
     for (var i = 0; i < m.length; i++) if (m[i][0].test(n)) return m[i][1];
     return '🧾';
   }
+  // the built-in lines (fun, giving, education fund, everything else): what was picked for them
+  var BUILT_IN = [['fun', 'Fun money', '\uD83C\uDF89'], ['give', 'Giving', '\u26EA'], ['edu', 'Education fund', '\uD83C\uDF93'], ['basics', 'Everything else', '\uD83E\uDDFE']];
+  function lineMeta(k) { return (P.lineMeta || {})[k] || {}; }
+  // undefined leaves a field as it is, '' clears it
+  function setMeta(k, o) { P.lineMeta = P.lineMeta || {}; var m = P.lineMeta[k] = P.lineMeta[k] || {}; Object.keys(o).forEach(function (x) { if (o[x] === '') delete m[x]; else if (o[x] !== undefined) m[x] = o[x]; }); if (!Object.keys(m).length) delete P.lineMeta[k]; }
   // a line's own color if one was picked, else a steady one from its key
   function colorFor(key) {
-    var k = String(key), own = k.indexOf('c:') === 0 ? (P.cats || []).filter(function (x) { return 'c:' + x.id === k; })[0] : k.indexOf('b:') === 0 ? P.bills.filter(function (x) { return 'b:' + x.id === k; })[0] : null;
+    var k = String(key), own = k.indexOf('c:') === 0 ? (P.cats || []).filter(function (x) { return 'c:' + x.id === k; })[0] : k.indexOf('b:') === 0 ? P.bills.filter(function (x) { return 'b:' + x.id === k; })[0] : lineMeta(k);
     if (own && own.color) return own.color;
     return colorAuto(key);
   }
@@ -978,6 +985,7 @@
   // categories and recurring expenses haven't covered yet. Adding one splits the total; changing or
   // removing one changes the total. Plans from before (no budgetV2) keep their old math until touched.
   function elseMonthly() {
+    if (lineMeta('basics').hidden) return 0;
     if (!P.budgetV2) return itemized() ? 0 : basicsNet();
     return Math.max(0, num(P.basics) - recurMonthly() - catsMonthly() - funMonthly());
   }
@@ -1001,14 +1009,14 @@
       var l = spendLines().filter(function (x) { return x.key === sh.key; })[0]; if (!l) { U.sheet = null; return ''; }
       var c = sh.key.indexOf('c:') === 0 ? cats().filter(function (x) { return 'c:' + x.id === sh.key; })[0] : null, ic = sh.icon || (c && c.icon) || l.icon;
       title = l.icon + ' ' + esc(l.label);
-      body = (c ? '<label class="field">Name<input type="text" data-catname value="' + esc(c.name) + '" maxlength="30"></label>' : '') +
+      body = '<label class="field">Name<input type="text" data-catname value="' + esc(c ? c.name : l.label) + '" maxlength="30"></label>' +
         (c ? '<div class="field">Budget it<div class="seg" role="group">' + [['month', 'Monthly'], ['week', 'Weekly']].map(function (t) { var on = (sh.per || c.per || 'month') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="catper" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' : '') +
-        '<label class="field"><span data-live="catamtlabel">' + (l.key === 'basics' ? 'Everything else, each month' : (sh.per || (c && c.per) || 'month') === 'week' ? 'Each week' : 'Each month') + '</span><input type="number" inputmode="decimal" min="0" data-catamt value="' + (c ? (c.amount !== '' ? Math.round(num(c.amount)) : '') : l.mon ? Math.round(l.mon) : '') + '" placeholder="$0"></label>' +
-        (c ? '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.slice(0, 2).map(function (t) { var on = (sh.type || typeOf(c)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="cattype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
-          '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (sh.color || c.color || colorAuto(sh.key)) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="catcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
-          '<div class="field">Icon<div class="icgrid">' + ICON_PICKS.map(function (x) { return '<button type="button" class="icpick' + (ic === x ? ' on' : '') + '" data-a="caticon" data-v="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' : '') +
+        '<label class="field"><span data-live="catamtlabel">' + ((sh.per || (c && c.per) || 'month') === 'week' ? 'Each week' : 'Each month') + '</span><input type="number" inputmode="decimal" min="0" data-catamt value="' + (c ? (c.amount !== '' ? Math.round(num(c.amount)) : '') : l.mon ? Math.round(l.mon) : '') + '" placeholder="$0"></label>' +
+        ('<div class="field">Type<div class="seg wrap" role="group">' + TYPES.slice(0, 2).map(function (t) { var on = (sh.type || (c ? typeOf(c) : l.type)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="cattype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (sh.color || colorFor(sh.key)) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="catcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
+          '<div class="field">Icon<div class="icgrid">' + ICON_PICKS.map(function (x) { return '<button type="button" class="icpick' + (ic === x ? ' on' : '') + '" data-a="caticon" data-v="' + x + '">' + x + '</button>'; }).join('') + '</div></div>') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="catsave" data-v="' + sh.key + '">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
-        (c ? '<button type="button" class="textbtn" style="color:var(--warn)" data-a="catdel" data-v="' + sh.key + '">Remove this category</button>' : '');
+        '<button type="button" class="textbtn" style="color:var(--warn)" data-a="catdel" data-v="' + sh.key + '">Remove this category</button>';
     } else if (sh.k === 'recur') {
       var f = U.form || {}, freq = f.freq || 'monthly', days = '';
       for (var d = 1; d <= 31; d++) days += '<option value="' + d + '"' + (+f.day === d ? ' selected' : '') + '>' + ordinal(d) + '</option>';
@@ -1078,7 +1086,7 @@
     var by = { need: 0, want: 0, debt: 0, save: 0, give: 0 };
     recurring().forEach(function (b) { by[typeOf(b)] += F.billMonthly(b); });
     cats().forEach(function (c) { by[typeOf(c)] += catMonthly(c); });
-    by.want += funMonthly(); by.need += elseMonthly();
+    by[lineMeta('fun').type || 'want'] += funMonthly(); by[lineMeta('basics').type || 'need'] += elseMonthly();
     pl.rows.forEach(function (r) { if (r.kind === 'min') by.debt += r.amount * ppm; else if (r.kind === 'give') by.give += r.amount * ppm; else if (r.kind === 'save') by.save += r.amount * ppm; else if (r.kind === 'goal') by.save += r.amount * n; });
     // the step takes its amount from each paycheck, but never more than this month has left
     var before = by.need + by.want + by.debt + by.save + by.give;
@@ -1113,7 +1121,7 @@
       return card;
     }).join('');
     var have = {}; lines.forEach(function (l) { have[l.label.toLowerCase()] = 1; });
-    var add = U.catAdd ? '<div class="card stack" style="padding:14px 16px;gap:10px"><b>Add a spending category</b><div class="chips">' + SPEND_SUGGEST.filter(function (x) { return !have[x[0].toLowerCase()]; }).map(function (x) { return '<button type="button" class="chip" data-a="catadd" data-v="' + esc(x[0]) + '" data-i="' + x[1] + '">' + x[1] + ' ' + esc(x[0]) + '</button>'; }).join('') + '</div>' +
+    var add = U.catAdd ? '<div class="card stack" style="padding:14px 16px;gap:10px"><b>Add a spending category</b><div class="chips">' + BUILT_IN.filter(function (x) { return lineMeta(x[0]).hidden || (x[0] === 'fun' && !funSet()); }).map(function (x) { var m = lineMeta(x[0]); return '<button type="button" class="chip" data-a="catback" data-v="' + x[0] + '">' + (m.icon || x[2]) + ' ' + esc(m.name || x[1]) + '</button>'; }).join('') + SPEND_SUGGEST.filter(function (x) { return !have[x[0].toLowerCase()]; }).map(function (x) { return '<button type="button" class="chip" data-a="catadd" data-v="' + esc(x[0]) + '" data-i="' + x[1] + '">' + x[1] + ' ' + esc(x[0]) + '</button>'; }).join('') + '</div>' +
       '<div class="badd"><input type="text" data-catnew placeholder="Or name your own" maxlength="30" aria-label="Category name"><button type="button" class="sharebtn" data-a="catnew">Add</button></div><button type="button" class="textbtn" data-a="catadd" data-v="">Close</button></div>'
       : '<button type="button" class="outline" data-a="catadd" data-v="open">+ Add a category</button>';
     var rec = recurring().slice().sort(function (x, y) { return (x.due ? F.fromIso(x.due).getDate() : 40) - (y.due ? F.fromIso(y.due).getDate() : 40); });
@@ -3177,9 +3185,29 @@
         // everything else: the rough total becomes the details plus this amount
         else if (v === 'basics' && val != null) { P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly() + val)); }
         else if (v.indexOf('f:') === 0 && val != null) { var fp = (P.funParts || []).filter(function (x) { return 'f:' + x.id === v; })[0]; if (fp) { shiftRough(val - num(fp.amount)); fp.amount = String(round2(val)); P.fun = String((P.funParts || []).reduce(function (t, x) { return t + num(x.amount); }, 0)); } }
+        if (v.indexOf('c:') !== 0) {
+          var dn = (BUILT_IN.filter(function (x) { return x[0] === v; })[0] || [])[1], nm = nmI ? nmI.value.trim().slice(0, 30) : '', sh = U.sheet || {};
+          if (v.indexOf('f:') === 0) { var fq = (P.funParts || []).filter(function (x) { return 'f:' + x.id === v; })[0]; if (fq && nm) fq.name = nm; nm = undefined; }
+          setMeta(v, { name: nm === undefined ? undefined : nm && nm !== dn ? nm : '', icon: sh.icon, type: sh.type, color: sh.color });
+        }
         U.sheet = null; save(); render();
       })(); break;
-      case 'catdel': budgetV2(); cats().forEach(function (x) { if ('c:' + x.id === v) shiftRough(-catMonthly(x)); }); P.cats = cats().filter(function (x) { return 'c:' + x.id !== v; }); U.sheet = null; save(); render(); break;
+      case 'catdel': budgetV2();
+        if (v.indexOf('c:') === 0) { cats().forEach(function (x) { if ('c:' + x.id === v) shiftRough(-catMonthly(x)); }); P.cats = cats().filter(function (x) { return 'c:' + x.id !== v; }); }
+        else if (v.indexOf('f:') === 0) { (P.funParts || []).forEach(function (x) { if ('f:' + x.id === v) shiftRough(-num(x.amount)); }); P.funParts = P.funParts.filter(function (x) { return 'f:' + x.id !== v; }); delete (P.lineMeta || {})[v]; P.fun = P.funParts.length ? String(P.funParts.reduce(function (t, x) { return t + num(x.amount); }, 0)) : ''; }
+        else {
+          if (v === 'fun') { shiftRough(-funMonthly()); P.fun = ''; P.funParts = []; }
+          else if (v === 'give') { P.giveMode = 'amt'; P.giveMonthly = '0'; P.givingPct = 0; }
+          else if (v === 'edu') P.collegeMonthly = '';
+          else if (v === 'basics') P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly()));
+          setMeta(v, { hidden: true });
+        }
+        U.sheet = null; save(); track('cat-remove'); render(); break;
+      case 'catback': budgetV2(); setMeta(v, { hidden: '' });
+        if (v === 'fun' && !funSet()) { P.fun = '0'; P.funParts = []; }
+        if (v === 'basics') P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly()));
+        U.catAdd = false; U.sheet = { k: 'cat', key: v }; save(); render();
+        (function () { var am = app.querySelector('[data-catamt]'); if (am) am.focus(); })(); break;
       case 'recuropen': (function () {
         var bl = v ? P.bills.filter(function (x) { return x.id === v; })[0] : null;
         U.form = bl ? { id: bl.id, name: bl.name, icon: bl.icon || iconFor(bl.name), type: bl.type || typeOf(bl), color: bl.color || '', amount: bl.amount, freq: bl.freq || (bl.per === 'yr' ? 'yearly' : 'monthly'), day: bl.due ? F.fromIso(bl.due).getDate() : 1, due: bl.due || '' } : { name: '', icon: '🧾', amount: '', freq: 'monthly', day: 1, due: '' };
