@@ -158,6 +158,11 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 - `people_overview`: one row per person (name, email, on the list, step, joined, last seen, check-ins, lessons, quizzes, weeks scanned, reminders on).
 - `email_list`: first name and email of everyone who said yes. Export as CSV for your email tool. Every marketing email needs an unsubscribe link and a mailing address (CAN-SPAM).
 
+## First open and the dark look
+New people see a one-question-per-screen intro (`ob` in app.js, list `OB`): two "tap to continue" story screens, first name, "alright Brad, let's find your money", take-home pay, how often, next payday, monthly spending, total debt + payments, savings, then "we found $X a month" (with the free community link), then save with email and code. After sign-in (or "Having trouble? Continue for now" after two codes) the 7-step path animates to their step ("You're here"), then Home. The intro's numbers become the plan: rough expenses, one debt called "My debts", savings. Everything else (safety net, retirement, kids, home, giving, listing bills or debts) lives in Settings.
+
+The whole app is dark: tokens at the top of styles.css (`--bg`, `--card`, `--ink`, `--hi` for the warm highlight, `--green` for good news) plus a dark-theme block at the end. Buttons are white pills.
+
 ## Setup carries the rough numbers over
 During setup, the expenses step starts with the monthly expenses from "Find my money" and the debts step is just two boxes, total debt and monthly payments, both carried over (one debt called "My debts"). Each can be changed there; a $0 total means no debt. Listing bills or debts one by one is only in Settings after setup.
 

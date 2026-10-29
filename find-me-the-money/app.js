@@ -261,6 +261,7 @@
     peopleLoad().then(function () { peopleSave(); actFlush(); });
     if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
     return cloudPull(true).then(function () {
+      if (U.obAfter && U.screen !== 'cloudpick') { if (!P.setupDone) finishSetup(); U.obAfter = false; U.toast = null; peopleSave(); go('steps'); return; }
       if (U.afterSave && U.screen !== 'cloudpick' && !standalone()) { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; }
       if (U.afterSave && U.screen !== 'cloudpick') { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home' && !P.setupDone) { U.joinOpen = true; go('account'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
   }
@@ -514,7 +515,7 @@
     var html = (V[U.screen] || V.home)();
     if (U.planCtx) html = planBar() + html;
     // beta: a small Feedback tab on every screen
-    if (CONFIG.feedbackUrl) html += '<a class="fbtab" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener" data-a="feedback" aria-label="Send feedback">Feedback</a>';
+    if (CONFIG.feedbackUrl && U.screen !== 'welcome' && U.screen !== 'steps') html += '<a class="fbtab" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener" data-a="feedback" aria-label="Send feedback">Feedback</a>';
     if (tabbed) {
       var news = P.unseen.length;
       html += '<nav class="tabbar" aria-label="Sections" style="grid-template-columns:repeat(' + tabs.length + ',minmax(0,1fr))">' + tabs.map(function (t) {
@@ -574,7 +575,7 @@
     var run = P.plans.filter(function (p) { return p.uid === U.planCtx.uid; })[0]; if (!run) { U.planCtx = null; return ''; }
     var d = F.planDef(run.id).days[U.planCtx.day], done = (run.done || []).indexOf(U.planCtx.day) >= 0;
     return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your lesson</small>' + d.title + '</span></button>' +
-      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark ' + d.title + ' done">' + ICON.check(done ? '#fff' : '#2A6B66', 16) + '<span>Done</span></button></div>';
+      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark ' + d.title + ' done">' + ICON.check(done ? '#141414' : '#7ED9C0', 16) + '<span>Done</span></button></div>';
   }
   function go(s) {
     U.plusOpen = false;
@@ -826,6 +827,33 @@
     out.push({ key: 'other', label: 'Something else', cat: 'other', mon: 0 });
     return out;
   }
+  // ---------- end of setup: the plan is built ----------
+  function finishSetup() {
+    P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
+    if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
+    snapshot(); save(); track('setup-done');
+    U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
+  }
+  // ---------- the intro: one question per screen, then sign in, then the 7-step path ----------
+  var OB = ['story1', 'story2', 'name', 'hello', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'savings', 'found', 'save'];
+  var OB_ASK = ['pay', 'freq', 'nextpay', 'exp', 'debt', 'savings'];
+  function obAt() { var i = OB.indexOf(U.ob); return i < 0 ? 0 : i; }
+  function obGo(k) { U.ob = k; U.err = ''; render(); window.scrollTo(0, 0); var f = app.querySelector('.ob input:not([type=checkbox])'); if (f && k !== 'save') setTimeout(function () { try { f.focus(); } catch (e) {} }, 60); }
+  // the numbers from the intro become the plan: rough expenses, one total for debt, savings
+  function obApply() {
+    quickApply();
+    P.basics = String(Math.round(num(P.qExp))); P.basicsAuto = false;
+    var d = num(P.qDebt), m = num(P.qMin);
+    P.debts = P.debts.filter(function (x) { return !x.lump; });
+    if (d > 0 && !P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: String(Math.round(d)), orig: Math.round(d), min: String(Math.round(m)), apr: '', lump: true });
+    if (P.savings === '') P.savings = '0';
+    save();
+  }
+  // a line of big type with some words lit up: hi('a plan') marks a highlighted word
+  function hi(t) { return '<em>' + t + '</em>'; }
+  function obArrow() { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'; }
+  function obBtn(label, a, v) { return '<button type="button" class="obbtn" data-a="' + a + '"' + (v ? ' data-v="' + v + '"' : '') + '><span>' + label + '</span>' + obArrow() + '</button>'; }
+  function obInput(key, ph, pre) { return '<label class="obin">' + (pre ? '<span>' + pre + '</span>' : '') + '<input type="number" inputmode="decimal" min="0" data-f="' + key + '" value="' + esc(P[key]) + '" placeholder="' + ph + '" autocomplete="off"></label>'; }
   // ---------- weekly purchases: scan a bank app screenshot, or add by hand ----------
   // the weeks of the current payday period (two for every-two-weeks pay, one for weekly)
   function payWeeks() {
@@ -1218,16 +1246,72 @@
   }
 
   var V = {
-    welcome: function () {
-      return '<div class="brand"><div class="logo">' + ICON.logo + '</div>Find Me the Money</div>' +
-        '<div class="stack" style="gap:14px;margin-top:28px"><h1>Find the <span class="sunword">money</span> you didn\u2019t know you had.</h1>' +
-        '<p style="font-size:17px">Three quick numbers. We build your budget and count down to debt-free.</p></div>' +
-        (trashed() ? '<button type="button" class="choice best" data-a="untrash" style="text-align:left"><div class="ic">' + ICON.file + '</div><div><b>Bring back your plan</b><span class="d">The one you deleted or replaced on ' + dayMonth(F.fromIso(trashed().at)) + '. Kept for 30 days.</span></div></button>' : '') +
-        (storageOk ? '' : '<div class="note">' + ICON.info + '<span>This browser is blocking saved data (private browsing?), so your plan won\u2019t be kept. Open it in a regular tab.</span></div>') +
-        '<div class="push"><button type="button" class="primary" data-a="go" data-v="quick">Find my money \u00b7 30 seconds</button>' +
-        (cloudOn() && !S ? '<button type="button" class="textbtn" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
-        (standalone() ? '<button type="button" class="textbtn" data-a="go" data-v="restore" style="min-height:36px;font-size:14px">Started in Safari? Bring your plan over</button>' : '') +
-        '<div class="fine">Free \u00b7 private \u00b7 an educational budgeting tool, not financial advice</div></div>';
+    welcome: function () { return V.ob(); },
+    ob: function () {
+      var k = OB[obAt()], i = obAt(), name = firstName(), err = U.err ? '<p class="oberr" role="alert">' + esc(U.err) + '</p>' : '';
+      var top = i > 0 ? '<div class="obtop"><button type="button" class="obback" data-a="obback" aria-label="Back">‹</button>' + (OB_ASK.indexOf(k) >= 0 ? '<div class="obbar"><i style="width:' + Math.round((OB_ASK.indexOf(k) + 1) / OB_ASK.length * 100) + '%"></i></div>' : '') + '</div>' : '';
+      var wrap = function (body, foot) { return '<div class="ob ob-' + k + '">' + top + '<div class="obbody">' + body + '</div><div class="obfoot">' + err + foot + '</div></div>'; };
+      var tap = '<button type="button" class="obtap" data-a="obnext">Tap to continue ' + obArrow() + '</button>';
+      if (k === 'story1') return wrap('<h1 class="obbig">ever wonder where your ' + hi('paycheck') + ' goes?</h1>' +
+          '<p class="obline">payday hits<br>a week later<br>' + hi('it’s already gone') + '</p>' +
+          '<p class="obline">coffee, takeout, a few clicks online<br>it ' + hi('adds up fast') + '</p>' +
+          '<p class="obline">you’re not bad with money<br>you just ' + hi('don’t have a plan') + ' yet</p>',
+        tap + (trashed() ? '<button type="button" class="oblink" data-a="untrash">Bring back the plan you deleted</button>' : '') +
+        (cloudOn() && !S ? '<button type="button" class="oblink" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
+        (standalone() ? '<button type="button" class="oblink" data-a="go" data-v="restore">Started in Safari? Bring your plan over</button>' : '') +
+        (storageOk ? '' : '<p class="oberr">This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</p>'));
+      if (k === 'story2') return wrap('<h1 class="obbig">your money needs ' + hi('a plan') + '<br>not more willpower</h1>' +
+          '<p class="obline">Find Me the Money gives every dollar ' + hi('a job') + '</p>' +
+          '<p class="obline">finds the money ' + hi('slipping away') + '</p>' +
+          '<p class="obline">and walks you ' + hi('7 steps') + ' from stressed to free</p>', tap);
+      if (k === 'name') return wrap('<p class="obkicker">first things first</p><h1 class="obq">What should we call you?</h1>' +
+          '<label class="obin"><input type="text" autocomplete="given-name" autocapitalize="words" data-obname value="' + esc(name) + '" placeholder="First name" maxlength="40"></label>', obBtn('Continue', 'obnext'));
+      if (k === 'hello') return wrap('<div class="obface" aria-hidden="true">' + ICON.logo + '</div><h1 class="obbig">alright ' + hi(esc(name || 'friend')) + ',<br>let’s find your money.</h1>' +
+          '<p class="obline">a few quick questions. Rough numbers are fine, and you can change anything later.</p>', obBtn('Start', 'obnext'));
+      if (k === 'pay') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">How much is your take-home pay?</h1>' + obInput('paycheck', '0', '$') +
+          '<p class="obhint">What lands in your account each payday, after taxes.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'freq') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">How often do you get paid?</h1><div class="obopts">' + Object.keys(F.FREQS).map(function (f) {
+          return '<button type="button" class="obopt' + (P.freq === f ? ' on' : '') + '" data-a="obfreq" data-v="' + f + '">' + F.FREQS[f].label + '</button>'; }).join('') + '</div>', '');
+      if (k === 'nextpay') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">When’s your next payday?</h1>' +
+          '<label class="obin"><input type="date" data-f="nextPay" value="' + esc(P.nextPay) + '"></label><p class="obhint">Your countdown and check-ins line up with it.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'exp') return wrap('<p class="obkicker">your spending</p><h1 class="obq">About how much do you spend a month?</h1>' + obInput('qExp', '0', '$') +
+          '<p class="obhint">Rent, bills, groceries, gas, eating out, shopping. Everything except debt payments.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'debt') return wrap('<p class="obkicker">your debt</p><h1 class="obq">Any debt, besides your home?</h1>' + obInput('qDebt', '0', '$') +
+          '<p class="obhint">Credit cards, car, student loans, buy now pay later, medical. One rough total.</p>' +
+          '<p class="obkicker" style="margin-top:22px">payments, all together</p>' + obInput('qMin', '0', '$') + '<p class="obhint">Your minimum payments each month.</p>',
+        obBtn('Continue', 'obnext') + '<button type="button" class="oblink" data-a="obnodebt">I don’t have any debt</button>');
+      if (k === 'savings') return wrap('<p class="obkicker">your savings</p><h1 class="obq">How much do you have saved?</h1>' + obInput('savings', '0', '$') +
+          '<p class="obhint">Checking cushion and savings you could use in an emergency.</p>', obBtn('Continue', 'obnext') + '<button type="button" class="oblink" data-a="obnosave">Nothing saved yet</button>');
+      if (k === 'found') {
+        var q = quickMath(), gap = q.noJob < 0 && q.total <= 0;
+        return wrap('<p class="obkicker">alright ' + esc(name || 'friend') + ', ' + (gap ? 'here’s the gap' : 'we found') + '</p><div class="obfound">' + money(gap ? -q.noJob : q.total) + '<span>a month</span></div>' +
+          '<h1 class="obbig" style="font-size:30px">' + (gap ? 'to find, so every bill is ' + hi('covered') + '.' : 'That’s ' + hi(money(q.total * 12)) + ' a year.') + '</h1>' +
+          (q.min > 0 ? '<p class="obline">' + hi(money(q.min) + '/mo') + ' in debt payments you keep once you’re debt-free</p>' : '') +
+          (q.noJob > 0 ? '<p class="obline">' + hi(money(q.noJob) + '/mo') + ' with no job yet. Money without a plan usually disappears.</p>' : '') +
+          (gap ? '<p class="obline">your expenses and payments are more than your pay. ' + hi('Let’s close that gap.') + '</p>' : ''),
+          obBtn(gap ? 'Find my money' : 'Reclaim my money', 'obnext') +
+          (CONFIG.communityUrl ? '<div class="freecomm"><a href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community →</a><small>Share your win, get your questions answered, and do the monthly challenge.</small></div>' : ''));
+      }
+      // save: email, then the code
+      var st = U.cloudStep, m = me();
+      if (!cloudOn()) return wrap('<h1 class="obbig">your plan is ' + hi('ready') + '.</h1>', obBtn('Show me my path', 'obskip'));
+      if (st && st.sent) return wrap('<p class="obkicker">almost there</p><h1 class="obq">Check your email</h1><p class="obline" style="font-size:17px">We sent a sign-in code to ' + hi(esc(st.email)) + '. Not there in a minute? Check your junk folder.</p>' +
+          '<label class="obin"><input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="Code"></label>' +
+          '<div class="oblinks"><button type="button" class="oblink" data-a="csend">Send a new code</button><button type="button" class="oblink" data-a="creset">Use a different email</button></div>',
+        obBtn('Sign in', 'cverify') + ((U.codeTries || 0) >= 2 ? '<button type="button" class="oblink" data-a="obskip">Having trouble? Continue for now</button>' : ''));
+      return wrap('<p class="obkicker">last step</p><h1 class="obq">Save your plan</h1><p class="obline" style="font-size:17px">So it’s ' + hi('safe') + ' if you lose your phone or get a new one. Free, and no password: we email you a code.</p>' +
+          '<label class="obin"><input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label>' +
+          '<label class="optin"><input type="checkbox" data-coptin' + (m.optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad. Unsubscribe anytime.</span></label>',
+        obBtn('Email me a code', 'csend') + ((U.codeTries || 0) >= 2 ? '<button type="button" class="oblink" data-a="obskip">Having trouble? Continue for now</button>' : ''));
+    },
+    // right after sign-in: the 7-step path, filling up to the person's step
+    steps: function () {
+      var o = F.outlook(profile(), today()), cur = Math.min(o.step, 7), name = firstName();
+      return '<div class="ob ob-steps"><div class="obbody"><p class="obkicker">' + (name ? esc(name) + ', here’s your path' : 'here’s your path') + '</p><h1 class="obbig" style="font-size:32px">7 steps from ' + hi('stressed') + ' to ' + hi('free') + '</h1>' +
+        '<div class="obpath">' + F.STEPS.map(function (stp, i) {
+          var n = i + 1, cls = n < cur ? 'done' : n === cur ? 'now' : '';
+          return '<div class="obstep ' + cls + '" style="--d:' + (0.2 + i * 0.32).toFixed(2) + 's"><b>' + (n < cur ? ICON.check('#141414', 16) : n) + '</b><div><div class="t">' + stp[0] + (n === cur ? ' <span class="obhere">You’re here</span>' : '') + '</div>' + (n === cur ? '<small>' + STEP_WHY[i] + '</small>' : '') + '</div></div>';
+        }).join('') + '</div></div><div class="obfoot">' + obBtn('Take me home', 'obhome') + '</div></div>';
     },
 
     path: function () {
@@ -1262,7 +1346,7 @@
       return '<div class="eyebrow" style="margin-top:20px">' + (short && q.total <= 0 ? 'Here\u2019s the gap' : 'We found') + '</div>' +
         '<div class="lime pop"><div style="font-weight:600">Find Me the Money</div><div class="big" style="font-size:60px;margin-top:6px">' + big + '<span style="font-size:22px"> a month</span></div>' +
         '<div style="font-weight:600;font-size:18px">' + (short && q.total <= 0 ? 'to find, so every bill is covered' : 'That\u2019s ' + money(q.total * 12) + ' a year.') + '</div></div>' +
-        (rows.length ? '<div class="card stack" style="padding:6px 18px">' + rows.map(function (r) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + r[0] + '</b><small style="color:var(--muted);font-size:13px;margin-top:2px">' + r[2] + '</small></div><b style="color:#2A6B66">' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
+        (rows.length ? '<div class="card stack" style="padding:6px 18px">' + rows.map(function (r) { return '<div class="row" style="align-items:flex-start;padding:12px 0"><div><b>' + r[0] + '</b><small style="color:var(--muted);font-size:13px;margin-top:2px">' + r[2] + '</small></div><b style="color:var(--green)">' + r[1] + '</b></div>'; }).join('') + '</div>' : '') +
         '<h2 style="text-align:center;margin-top:6px">' + (short && q.total <= 0 ? 'Want to find it?' : 'Want it back?') + '</h2>' +
         '<div class="push"><button type="button" class="primary" data-a="claimgo">' + (short && q.total <= 0 ? 'Find my money \u203a' : 'Reclaim my money \u203a') + '</button>' +
         (CONFIG.communityUrl ? '<div class="freecomm"><a href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community \u2192</a><small>Share your win, get your questions answered, and do the monthly challenge.</small></div>' : '') +
@@ -1286,7 +1370,7 @@
             '<button type="button" class="x" data-a="rm" data-v="otherIncome" data-i="' + i + '" aria-label="Remove ' + esc(x.label || 'income') + '">\u00d7</button></div>';
         }).join('') +
         '<div class="chips">' + OTHER_INCOME.map(function (n) { return '<button type="button" class="chip" data-a="otheradd" data-v="' + (n === 'Something else' ? '' : n) + '">+ ' + n + '</button>'; }).join('') + '</div></div>' +
-        (extraIncomes().length || otherMonthly() ? '<p data-live="together" style="font-size:14px;font-weight:600;color:#2A6B66">Together: about ' + money(monthlyIncome()) + ' a month after taxes.</p>' : '') + wizNext('pay');
+        (extraIncomes().length || otherMonthly() ? '<p data-live="together" style="font-size:14px;font-weight:600;color:var(--green)">Together: about ' + money(monthlyIncome()) + ' a month after taxes.</p>' : '') + wizNext('pay');
     },
     basics: function () {
       var picks = [1500, 2000, 2500, 3000, 3500];
@@ -1453,7 +1537,7 @@
       return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><h2>Add it to your Home Screen</h2><p>' + (ios ? 'On iPhone, Safari can clear saved data from websites you haven\u2019t opened in about a week. Apps on your Home Screen are safe, and they open like a real app.' : 'It opens like a real app and is one tap away on payday.') + '</p></div>' +
         (ios && !standalone() && P.setupDone && cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>' + (S ? 'Your plan comes with you' : 'First: save your plan with your email') + '</b><span style="font-size:14px;color:var(--muted)">' + (S ? 'Open the Home Screen app and sign in with ' + esc(S.email || 'your email') + '. Your plan will be there.' : 'The Home Screen app starts empty. Save your plan first, then sign in there with the same email.') + '</span>' + (S ? '' : '<button type="button" class="outline" data-a="edit" data-v="account">Save my plan</button>') + '</div>' : '') +
         (ios && !standalone() && P.setupDone && !cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
-          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
+          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
         guideBox(ios ? 'ios' : 'android') +
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
@@ -1508,7 +1592,7 @@
         '<div class="row total"><span>Freed up for your plan</span><b data-live="found2">' + money(found) + '/mo</b></div></div>' +
         '<input type="range" min="0" max="' + Math.max(10, wants) + '" step="10" value="' + U.limit + '" data-range="limit" aria-label="Fun-money limit per month">' +
         '<div class="row" style="border:0;padding:0;font-size:13px;color:var(--faint)"><span>Keep less, free more</span><span>Keep it all</span></div>' +
-        '<p data-live="impact" style="font-size:14px;font-weight:600;color:#2A6B66">' + foundImpact(U.limit, wants) + '</p></div>' +
+        '<p data-live="impact" style="font-size:14px;font-weight:600;color:var(--green)">' + foundImpact(U.limit, wants) + '</p></div>' +
         (top.length ? '<div class="card stack" style="padding:14px 18px;gap:2px"><div class="eyebrow" style="margin-bottom:4px">Where your wants go</div>' + top.map(function (x) {
           return '<div class="row" style="padding:8px 0"><span>' + esc(x.m) + '</span><b>' + money(x.split.want * s.scale) + '/mo</b></div>'; }).join('') +
           '<p style="font-size:13px;margin-top:6px">You don’t have to cut any one thing. Spend your fun money however you like, just within the limit.</p></div>' : '') +
@@ -1585,7 +1669,7 @@
         '<div class="field">When do you want it?<div class="seg wrap" role="group" aria-label="When" style="align-self:flex-start">' + (f.kind === 'fund' ? [[3, 'In 3 months'], [6, 'In 6 months'], [12, 'In 12 months'], ['date', 'Pick a date']] : [['asap', 'When my plan allows'], ['date', 'Pick a date']]).map(function (m) {
           var on = f.when === 'date' ? m[0] === 'date' : f.kind === 'fund' ? f.months === m[0] : m[0] === 'asap';
           return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="gmonths" data-v="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div></div>' +
-        (f.when === 'date' ? '<label class="field">Date<input type="date" data-g="by" min="' + F.isoDay(F.addDays(today(), 1)) + '" value="' + esc(f.by || '') + '"></label><p data-live="gper" style="font-size:14px;font-weight:600;color:#2A6B66">' + goalDateNote(f) + '</p>' : '') +
+        (f.when === 'date' ? '<label class="field">Date<input type="date" data-g="by" min="' + F.isoDay(F.addDays(today(), 1)) + '" value="' + esc(f.by || '') + '"></label><p data-live="gper" style="font-size:14px;font-weight:600;color:var(--green)">' + goalDateNote(f) + '</p>' : '') +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') + '</div>' +
         '<div class="push"><button type="button" class="primary" data-a="goalsave">Save my goal</button><button type="button" class="textbtn" data-a="go" data-v="' + U.next + '">Cancel</button></div>';
     },
@@ -1702,7 +1786,7 @@
         else if (d.kind === 'count') body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chplus" data-v="' + c.uid + '">+1 \u00b7 ' + act + '</button>' : '';
         else if (d.kind === 'clean') body = U.slip === c.uid ? '<div class="grid2"><button type="button" class="outline" data-a="chslipno">Never mind</button><button type="button" class="primary danger" data-a="chslip" data-v="' + c.uid + '">Yes, it happened</button></div>'
           : '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><button type="button" class="textbtn" style="min-height:36px;padding:0" data-a="chslipask" data-v="' + c.uid + '">' + act + '</button>' +
-            '<button type="button" class="sharebtn" data-a="chcomplete" data-v="' + c.uid + '">' + ICON.check('#2A6B66', 14) + ' I made it</button></div>';
+            '<button type="button" class="sharebtn" data-a="chcomplete" data-v="' + c.uid + '">' + ICON.check('#7ED9C0', 14) + ' I made it</button></div>';
         else if (d.kind === 'earn') {
           var log = c.log || [];
           body = ('<div class="rowedit" style="grid-template-columns:minmax(0,1fr) 96px auto"><input type="text" aria-label="What you earned it from" placeholder="From what?" data-earnnote="' + c.uid + '"><input type="number" inputmode="decimal" aria-label="Amount earned" placeholder="$0" data-earnamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="earnadd" data-v="' + c.uid + '">Add</button></div>') +
@@ -1756,7 +1840,7 @@
     journey: function () {
       var t = U.jTab || 'map';
       var latest = Object.keys(P.badges).filter(function (k) { return F.BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
-      var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + x + '</b></div>'; })() : '';
+      var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + x + '</b></div>'; })() : '';
       return journeyHead() + toast + celebration(2, ['plan', 'unlock']) + tabChips('jtab', t, [['map', 'Map'], ['challenges', 'Challenges'], ['milestones', 'Milestones']]) +
         (t === 'map' ? journeyMap()
           : t === 'challenges' ? V.challenges()
@@ -1784,7 +1868,7 @@
       var L = U.lesson || {}, l = lessonFor(L.id) || { title: 'Lesson', card1: '', card2: '', card3: '' }, cards = [l.card1, l.card2, l.card3].filter(Boolean), i = Math.min(U.lessonCard || 0, cards.length - 1), last = i === cards.length - 1, done = lessonDone(L.id);
       return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Lesson \u00b7 1 minute</div><h2>' + esc(l.title) + '</h2></div>' +
         '<div class="card lessoncard">' + esc(cards[i] || '') + '</div><div class="ldots">' + cards.map(function (_, n) { return '<i class="' + (n <= i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
-        (last && l.skoolUrl ? '<p style="font-size:14px">Want more? <a href="' + esc(l.skoolUrl) + '" target="_blank" rel="noopener" style="color:#2A6B66;font-weight:600">Watch the video in the community</a></p>' : '') +
+        (last && l.skoolUrl ? '<p style="font-size:14px">Want more? <a href="' + esc(l.skoolUrl) + '" target="_blank" rel="noopener" style="color:var(--green);font-weight:600">Watch the video in the community</a></p>' : '') +
         (last && l.action ? '<button type="button" class="outline" data-a="lessonact" data-v="' + esc(l.action) + '">' + esc(l.actionLabel || 'Do it now') + ' \u203a</button>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="' + (last ? 'lessondone' : 'lessonnext') + '">' + (last ? (done ? 'Back to my map' : 'Got it') : 'Next') + '</button></div>';
     },
@@ -1807,7 +1891,7 @@
           }).join('') + '</div></div>';
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
-        (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + t + '</b></div>'; })() : '') +
+        (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + t + '</b></div>'; })() : '') +
         celebration(2, ['plan', 'unlock']) + goalsCard() + moneyDateCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
@@ -1856,7 +1940,7 @@
           var on = last === l.key; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="spendcat" data-v="' + l.key + '">' + esc(l.label) + '</button>'; }).join('') + '</div></div>';
       };
       return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">5 seconds</div><h2>Add spending</h2><p>What did you spend, and on what? It counts against that line in your budget.</p></div>' +
-        (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#2A6B66', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
+        (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
         '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
         chips('need', 'Needs') + chips('want', 'Wants') + chips('other', 'Not in my budget') +
@@ -1947,7 +2031,7 @@
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
-        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:#2A6B66;font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
+        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
         (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone' + (S ? ' and signs you out. The copy in your account stays, so you can sign in again to get it back.' : '. It can’t be undone unless you have a backup.') + '</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
@@ -2127,7 +2211,7 @@
       var spentOut = num(profile().paycheck) - pl.extra;
       return head(1, 'It\u2019s payday!', 'Here\u2019s this paycheck at a glance.') +
         '<div class="card"><div class="row"><span>Paycheck</span><b>' + money(profile().paycheck) + '</b></div><div class="row"><span>Bills and spending</span><b>\u2212' + money(spentOut) + '</b></div>' +
-        '<div class="row"><span style="font-weight:600">Your extra<small style="display:block;font-weight:400;color:var(--muted);font-size:13px">What\u2019s left after bills, spending and minimums</small></span><b style="color:#2A6B66">' + money(c.plan) + '</b></div></div>' +
+        '<div class="row"><span style="font-weight:600">Your extra<small style="display:block;font-weight:400;color:var(--muted);font-size:13px">What\u2019s left after bills, spending and minimums</small></span><b style="color:var(--green)">' + money(c.plan) + '</b></div></div>' +
         (c.plan <= 0.5 ? '<div class="note">' + ICON.info + '<span>' + (c.short ? 'This paycheck comes up ' + money(c.short) + ' short. ' : 'Nothing is left over this time. ') + 'That\u2019s OK. Your check-in still counts. When you can, make room in your budget and your countdown starts moving.</span></div>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="cistep" data-v="' + (c.plan > 0.5 ? 2 : 3) + '">Next</button></div>';
     }
@@ -2712,6 +2796,24 @@
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
       case 'guidestep': (function () { var k = b.getAttribute('data-k'); U.gStep = U.gStep || {}; U.gPaused = U.gPaused || {}; U.gStep[k] = +v; U.gPaused[k] = true; clearInterval(csvTimer); csvTimer = null; var el = app.querySelector('[data-guide="' + k + '"]'); if (el) el.innerHTML = guideScene(k, U.gStep[k]); })(); break;
+      case 'obback': (function () { var i = obAt(); if (i > 0) { if (OB[i] === 'save' && U.cloudStep && U.cloudStep.sent) { U.cloudStep = null; render(); return; } obGo(OB[i - 1]); } })(); break;
+      case 'obnext': (function () {
+        var k = OB[obAt()];
+        if (k === 'name') { var nv = String((app.querySelector('[data-obname]') || {}).value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (!nv) { U.err = 'Add your first name.'; render(); return; } setMe({ name: nv }); }
+        if (k === 'pay' && !(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); return; }
+        if (k === 'nextpay' && !/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) { U.err = 'Pick your next payday.'; render(); return; }
+        if (k === 'exp' && !(num(P.qExp) > 0)) { U.err = 'Enter about how much you spend a month. A rough number is fine.'; render(); return; }
+        if (k === 'debt' && num(P.qDebt) > 0 && !(num(P.qMin) > 0)) { U.err = 'Add your monthly debt payments. A rough number is fine.'; render(); return; }
+        if (k === 'savings') { obApply(); track('quick-done'); }
+        if (k === 'found') { track('claim'); U.obAfter = true; U.afterSave = false; U.cloudStep = null; }
+        if (k === 'story1') track('setup-start');
+        obGo(OB[Math.min(obAt() + 1, OB.length - 1)]);
+      })(); break;
+      case 'obfreq': P.freq = v; save(); obGo('nextpay'); break;
+      case 'obnodebt': P.qDebt = ''; P.qMin = ''; save(); obGo('savings'); break;
+      case 'obnosave': P.savings = '0'; save(); obApply(); track('quick-done'); obGo('found'); break;
+      case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
+      case 'obhome': U.obAfter = false; go('home'); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
       case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
@@ -2834,10 +2936,7 @@
         else go(U.wizReturn === 'planday' ? 'planday' : 'home');
         break;
       case 'finish':
-        P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
-        if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
-        snapshot(); save(); track('setup-done');
-        U.toast = ['Your plan is ready.', 'Next: Day 1 of your 7-Day Money Reset. It takes 2 minutes.', true];
+        finishSetup();
         if (cloudOn() && !S) { U.cloudStep = null; U.err = ''; U.afterSave = true; go('savesetup'); } else if (S && !standalone()) { U.afterSave = true; go('saveinstall'); } else go('home');
         break;
       case 'namesave': (function () {
@@ -2991,7 +3090,9 @@
         var pk = U.cloudPick; U.cloudPick = null; C.ready = true;
         if (v === 'cloud') adopt(pk.row);
         else { try { localStorage.setItem(TRASH, JSON.stringify({ at: F.isoDay(today()), plan: Object.assign(blank(), pk.row.data) })); } catch (err) {} S.synced = -1; keepAuth(); cloudPush(); }
-        U.toast = ['You\u2019re signed in.', 'Your plan now saves to your account.', true]; go(P.setupDone ? 'home' : 'welcome');
+        U.toast = ['You\u2019re signed in.', 'Your plan now saves to your account.', true];
+        if (U.obAfter && !P.setupDone) { finishSetup(); U.obAfter = false; U.toast = null; go('steps'); return; }
+        go(P.setupDone ? 'home' : 'welcome');
       })(); break;
       case 'delno': U.confirmDelete = false; render(); break;
       case 'chstart':
@@ -3154,6 +3255,11 @@
   });
 
   // typing updates the saved data in place, so the keyboard never loses its place
+  // the return key moves the intro along
+  app.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.closest || !e.target.closest('.ob')) return;
+    var bt = app.querySelector('.ob .obbtn'); if (bt) { e.preventDefault(); bt.click(); }
+  });
   app.addEventListener('input', function (e) {
     var t = e.target;
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
