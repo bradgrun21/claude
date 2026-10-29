@@ -823,3 +823,8 @@ input::placeholder, textarea::placeholder { color: #6E6D68; }
 /* no spinner arrows on number boxes */
 input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* calendar: Due & wins / Spending */
+.caltabs { align-self: center; }
+.caltabs button { min-height: 34px; font-size: 13px; }
+.cday.sp em.spamt { display: block; font-style: normal; font-size: 10px; font-weight: 700; color: var(--hi); min-height: 13px; line-height: 13px; }
+.sunbtn { min-height: 52px; border-radius: 999px; font-size: 16px; font-weight: 700; }

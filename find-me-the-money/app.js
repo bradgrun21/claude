@@ -1066,8 +1066,16 @@
     (P.moneyDates || []).forEach(function (iso) { add(iso, 'checkin', 'Money date done'); });
     return ev;
   }
+  // purchases by day: { iso: [{ note, amount }] }
+  function spendByDay(y, m) {
+    var out = {}, add = function (iso, note, amt) { var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (out[iso] = out[iso] || []).push({ note: note, amount: num(amt) }); };
+    var lines = {}; spendLines().forEach(function (l) { lines[l.key] = l.label; });
+    (P.spends || []).forEach(function (x) { add(x.date, x.note || lines[x.key] || 'Purchase', x.amount); });
+    return out;
+  }
   function calendarCard() {
     var now = today(), cur = U.calMonth || [now.getFullYear(), now.getMonth()], y = cur[0], m = cur[1], ev = calEvents(y, m);
+    if (U.calTab === 'spend') return calSpendCard(now, y, m);
     var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = first.getDay(), todayIso = F.isoDay(now), cells = '';
     for (var b = 0; b < lead; b++) cells += '<span></span>';
     for (var d = 1; d <= days; d++) {
@@ -1084,12 +1092,29 @@
     soon = soon.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; }).slice(0, 5);
     var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="' + (x.md ? 'cal-mdate' : 'cal-bill') + '"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + (x.md ? '' : money(x.amt)) + '</b></div>'; }).join('') + '</div>'
       : (itemized() && !P.bills.some(function (b) { return b.due; }) ? '<button type="button" class="linkbtn" data-a="go" data-v="plan" style="align-self:flex-start;font-size:13px">Add due dates to your bills to see them here \u203a</button>' : '');
-    return '<div class="card stack cal" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
+    return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
       '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + (P.moneyDate && P.moneyDate.due ? '<span><i class="cal-mdate"></i>Money date</span>' : '') + '<span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
+  }
+  function calTabs() { return '<div class="seg caltabs" role="group" aria-label="Calendar view">' + [['due', 'Due & wins'], ['spend', 'Spending']].map(function (t) { var on = (U.calTab || 'due') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="caltab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'; }
+  // the same month, with what was spent on each day
+  function calSpendCard(now, y, m) {
+    var by = spendByDay(y, m), first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), todayIso = F.isoDay(now), cells = '', total = 0;
+    for (var b = 0; b < first.getDay(); b++) cells += '<span></span>';
+    for (var d = 1; d <= days; d++) {
+      var iso = F.isoDay(new Date(y, m, d)), list = by[iso] || [], sum = list.reduce(function (t, x) { return t + x.amount; }, 0); total += sum;
+      cells += '<button type="button" class="cday sp' + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (sum ? ': ' + money(sum) + ' spent' : '')) + '"><span>' + d + '</span><em class="spamt">' + (sum ? '$' + (sum >= 1000 ? (sum / 1000).toFixed(1) + 'k' : Math.round(sum)) : '') + '</em></button>';
+    }
+    var selList = U.calDay && by[U.calDay];
+    var sel = selList ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + ' · ' + money(selList.reduce(function (t, x) { return t + x.amount; }, 0)) + '</b>' + selList.map(function (x) { return '<div class="row" style="padding:4px 0;border:0"><span>' + esc(x.note) + '</span><b>' + money2(x.amount) + '</b></div>'; }).join('') + '</div>' : '';
+    return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">‹</button>' +
+      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (total ? money(total) + ' spent' : 'Purchases you add show up here') + '</small></div>' +
+      '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">›</button></div>' +
+      '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="cgrid">' + cells + '</div>' + sel + '</div>';
   }
   // ---------- bill due dates, repeating, shown on the calendar ----------
   var REPEATS = [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly'], ['once', 'One time']];
@@ -1684,18 +1709,9 @@
       if (step === 1) prog = [p.savings / F.CUSHION, money(p.savings) + ' saved', money(F.CUSHION) + ' goal'];
       else if (step === 2) { var t = o.target, d0 = P.debts.filter(function (d) { return d.id === t.id; })[0], orig = Math.max(num(d0.orig), t.bal); prog = [(orig - t.bal) / orig, money(orig - t.bal) + ' paid', money(t.bal) + ' left to pay']; }
       else if (step === 3) prog = [Math.min(1, p.savings / pl.safetyNet), money(p.savings) + ' saved', money(pl.safetyNet) + ' goal (' + efMonths() + ' months)'];
-      var vs = '';
-      if (o.debtFree && o.debtFreeMins && step <= 2) {
-        var nxt = step === 2 ? o.state.debts.filter(function (d) { return d.bal > 0 && d.id !== o.target.id; }).sort(function (a, b) { return a.bal - b.bal; })[0] : null;
-        var lead = step === 1 ? 'Then debt-free ' + shortDate(o.debtFree) + ', ' : (nxt ? 'Next up: ' + esc(nxt.name) + '. ' : 'Last one! ') + 'Debt-free ' + shortDate(o.debtFree) + ', ';
-        var gap = F.daysBetween(o.debtFree, o.debtFreeMins);
-        vs = gap > 0 ? lead + '<b style="color:var(--sun-soft)">' + span(gap) + ' sooner</b> than paying minimums' : lead.replace(/, $/, '.');
-      } else if (o.debtFree && !o.debtFreeMins && step <= 2) vs = 'Debt-free ' + shortDate(o.debtFree) + '. Minimum payments alone would never get you there.';
       var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
-      var pdIso = due ? F.paydayFor(P.nextPay, P.freq, now) : null;
-      var paydayStrip = '<div class="pstrip"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>' + (due ? (F.daysBetween(F.fromIso(pdIso), now) > 0 ? 'Check-in time' : 'It\u2019s payday!') : 'Next payday') + '</b><span>' + dayMonth(due ? F.fromIso(pdIso) : next) + '</span></div>' +
-        '<div class="ps-sub">' + (pl.toStep >= 0.5 ? '<b>' + money(pl.toStep) + '</b> of your extra goes to ' + where + '.' : 'None of your extra goes to ' + where + ' yet.') + (pl.unassigned >= 0.5 ? ' ' + money(pl.unassigned) + (pl.toStep >= 0.5 ? ' more' : '') + ' has no job yet.' : '') + ' Extra is what\u2019s left of your ' + money(p.paycheck) + ' paycheck after bills, spending and minimums.' + '</div>' +
-        '<button type="button" class="' + (due ? 'sunbtn' : 'ghostbtn') + '" data-a="checkin">' + (due ? (sv.count ? 'Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'Check in and start my streak') : 'Update my balances') + '</button></div>';
+      // a check-in button only when a payday check-in is due
+      var paydayStrip = due ? '<button type="button" class="sunbtn" data-a="checkin">' + (sv.count ? 'It\u2019s payday! Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'It\u2019s payday! Check in') + '</button>' : '';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
       var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
@@ -1714,7 +1730,7 @@
           : step >= 4 ? '<div style="font-family:var(--display);font-size:36px;line-height:1.1;color:var(--sun-soft)">Debt-free with a full safety net.</div>'
           : '<div style="font-family:var(--display);font-size:26px;color:var(--sun-soft)">Your plan needs a little more room. Check your Payday Plan.</div>') +
         (prog ? '<div class="pbar"><i style="width:' + Math.max(1, prog[0] * 100) + '%"></i></div><div style="display:flex;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.72)"><span>' + prog[1] + '</span><span>' + prog[2] + '</span></div>' : '') +
-        (vs ? '<div style="font-size:14px;color:rgba(255,255,255,.88);border-top:1px solid rgba(255,255,255,.18);padding-top:12px">' + vs + '</div>' : '') + paydayStrip + '</div>';
+        paydayStrip + '</div>';
       var snow = snow0(o, step);
       var nw = nwCard();
       return homeTop(toast) + hero + homeRest(o, step, snow, nw);
@@ -2671,7 +2687,7 @@
       '</div>';
   }
   function homeRest(o, step, snow, nw) {
-    return nextThing() + communityCard() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+    return communityCard() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
   }
   function snow0(o, step) {
     return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
@@ -2814,6 +2830,7 @@
       case 'obnosave': P.savings = '0'; save(); obApply(); track('quick-done'); obGo('found'); break;
       case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
       case 'obhome': U.obAfter = false; go('home'); break;
+      case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
       case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
