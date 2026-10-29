@@ -94,7 +94,12 @@
     return 'other';
   }
   // A bill's monthly cost: yearly bills are set aside a twelfth at a time.
-  function billMonthly(b) { var a = +b.amount || 0; return b.per === 'yr' ? a / 12 : a; }
+  // Recurring expenses store the amount each time it's due (freq); older bills store a monthly or yearly amount (per).
+  function billMonthly(b) {
+    var a = +b.amount || 0;
+    if (b.freq) return b.freq === 'weekly' ? a * 52 / 12 : b.freq === 'biweekly' ? a * 26 / 12 : b.freq === 'yearly' ? a / 12 : a;
+    return b.per === 'yr' ? a / 12 : a;
+  }
   // Bills rolled up by group, in catalog order, for the plan.
   function billGroups(bills) {
     return BUDGET.map(function (g) {

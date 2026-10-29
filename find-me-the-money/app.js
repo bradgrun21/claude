@@ -403,7 +403,7 @@
       // until fun money is set, assume 10% of take-home pay so the countdown isn't too rosy
       fun: funSet() ? num(P.fun) : 0, funEst: false,
       // one "bills and basics" number until the person lists bills one by one
-      bills: itemized() ? F.billGroups(P.bills) : [{ name: 'Bills and basics', amount: basicsNet() }],
+      bills: F.billGroups(P.bills).concat([{ name: 'Spending categories', amount: catsMonthly() }, { name: 'Everything else', amount: elseMonthly() }]).filter(function (b) { return b.amount > 0; }),
       // interest is optional; a blank rate is estimated at 20%
       debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       efMonths: efMonths(), saveRows: saveRows(),
@@ -817,14 +817,16 @@
     P.spends = P.spends || [];
   }
   function monthOf(iso) { return String(iso).slice(0, 7); }
-  // the categories a purchase can count against: the spending lines in their own budget
+  // the lines a purchase can count against: spending categories, fun money, everything else, recurring expenses
+  // grp: spend | bill | other. cat stays need/want for older code (fun money is the want)
   function spendLines() {
     var out = [];
-    if (itemized()) P.bills.forEach(function (b) { if (F.billMonthly(b) > 0) out.push({ key: 'b:' + b.id, label: b.name || 'Bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
-    else out.push({ key: 'basics', label: 'Bills and basics', cat: 'need', mon: num(P.basics) });
-    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, label: x.name || 'Fun money', cat: 'want', mon: num(x.amount) }); });
-    else out.push({ key: 'fun', label: 'Fun money', cat: 'want', mon: profile().fun });
-    out.push({ key: 'other', label: 'Something else', cat: 'other', mon: 0 });
+    cats().forEach(function (c) { out.push({ key: 'c:' + c.id, label: c.name || 'Category', icon: c.icon || '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: num(c.amount) }); });
+    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
+    else if (funSet()) out.push({ key: 'fun', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
+    out.push({ key: 'basics', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
+    recurring().forEach(function (b) { out.push({ key: 'b:' + b.id, label: b.name || 'Bill', icon: b.icon || iconFor(b.name), grp: 'bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
+    out.push({ key: 'other', label: 'Something else', icon: '\u2753', grp: 'other', cat: 'other', mon: 0 });
     return out;
   }
   // ---------- end of setup: the plan is built ----------
@@ -869,7 +871,7 @@
     // keep cents, so the monthly number comes back exactly (4,200 a month stays 4,200)
     if (num(P.qPayMonth) > 0) P.paycheck = String(Math.round(num(P.qPayMonth) / F.FREQS[P.freq].perMonth * 100) / 100);
     quickApply();
-    P.basics = String(Math.round(num(P.qExp))); P.basicsAuto = false;
+    P.basics = String(Math.round(num(P.qExp))); P.basicsAuto = false; P.budgetV2 = true;
     var d = num(P.qDebt), m = num(P.qMin);
     P.debts = P.debts.filter(function (x) { return !x.lump; });
     if (d > 0 && !P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: String(Math.round(d)), orig: Math.round(d), min: String(Math.round(m)), apr: '', lump: true });
@@ -910,9 +912,9 @@
     if (mem && lines.some(function (l) { return l.key === mem; })) return { key: mem, tag: 'Remembered' };
     for (var i = 0; i < STORE_RULES.length; i++) {
       var r = STORE_RULES[i]; if (!r[0].test(merchant)) continue;
-      var hit = lines.filter(function (l) { return l.cat !== 'other' && r[1].test(l.label); })[0];
-      if (!hit && r[2] === 'need' && !itemized()) hit = lines.filter(function (l) { return l.key === 'basics'; })[0];
-      if (!hit && r[2] === 'want') hit = lines.filter(function (l) { return l.key === 'fun'; })[0];
+      var hit = lines.filter(function (l) { return l.grp !== 'other' && r[1].test(l.label); })[0];
+      if (!hit && r[2] === 'need') hit = lines.filter(function (l) { return l.key === 'basics'; })[0];
+      if (!hit && r[2] === 'want') hit = lines.filter(function (l) { return l.key === 'fun'; })[0] || lines.filter(function (l) { return l.key === 'basics'; })[0];
       if (hit) return { key: hit.key, tag: 'Suggested' };
     }
     return { key: '', tag: '' };
@@ -946,6 +948,108 @@
     });
   }
   function weekDone(ws, how) { P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
+  // ---------- the budget: spending categories, recurring expenses, everything else ----------
+  // spending categories people can add, with an icon each
+  var SPEND_SUGGEST = [['Groceries', '🛒'], ['Gas', '⛽'], ['Eating out', '🍔'], ['Shopping', '🛍️'], ['Kids', '🧸'], ['Household', '🧺'], ['Personal care', '💇'], ['Pets', '🐾'], ['Gifts', '🎁'], ['Coffee', '☕'], ['Entertainment', '🎬'], ['Medical', '💊']];
+  var RECUR_SUGGEST = [['Rent', '🏠'], ['Mortgage', '🏡'], ['Electricity', '💡'], ['Water', '💧'], ['Internet', '📶'], ['Phone', '📱'], ['Car insurance', '🚗'], ['Health insurance', '🩺'], ['Childcare', '👶'], ['Streaming', '📺'], ['Music', '🎵'], ['Gym', '🏋️'], ['Trash', '🗑️']];
+  var ICON_PICKS = ['🛒', '⛽', '🍔', '🛍️', '🧸', '🧺', '💇', '🐾', '🎁', '☕', '🎬', '💊', '🏠', '💡', '💧', '📶', '📱', '🚗', '🩺', '👶', '📺', '🎵', '🏋️', '🎉', '⛪', '📚', '✈️', '🧾'];
+  var CAT_COLORS = ['#7ED9C0', '#FFC97E', '#FF9F7A', '#C8BCF5', '#9AD0F5', '#FFB4D0', '#B5E48C', '#F5D76E'];
+  // an icon for bills saved before icons existed, by name
+  function iconFor(name) {
+    var n = String(name || '').toLowerCase(), m = [[/rent|mortgage|home|house/, '🏠'], [/electric|power|light/, '💡'], [/water|sewer/, '💧'], [/internet|wifi/, '📶'], [/phone|cell/, '📱'], [/car|auto|gas|fuel/, '🚗'], [/health|doctor|dental|medical|prescription/, '🩺'], [/child|daycare|kid|school/, '👶'], [/stream|netflix|hulu|disney/, '📺'], [/music|spotify/, '🎵'], [/gym|fitness/, '🏋️'], [/grocer|food/, '🛒'], [/insurance/, '🛡️'], [/pet|vet/, '🐾'], [/trash/, '🗑️'], [/church|tithe|giv/, '⛪']];
+    for (var i = 0; i < m.length; i++) if (m[i][0].test(n)) return m[i][1];
+    return '🧾';
+  }
+  function colorFor(key) { var h = 0; String(key).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 997; }); return CAT_COLORS[h % CAT_COLORS.length]; }
+  function cats() { return P.cats || (P.cats = []); }
+  function recurring() { return P.bills.filter(function (b) { return F.billMonthly(b) > 0; }); }
+  function recurMonthly() { return recurring().reduce(function (t, b) { return t + F.billMonthly(b); }, 0); }
+  function catsMonthly() { return cats().reduce(function (t, c) { return t + num(c.amount); }, 0); }
+  function funMonthly() { return funSet() ? num(P.fun) : 0; }
+  // P.basics is the rough monthly total (everything but debt payments). "Everything else" is what the
+  // categories and recurring expenses haven't covered yet. Adding one splits the total; changing or
+  // removing one changes the total. Plans from before (no budgetV2) keep their old math until touched.
+  function elseMonthly() {
+    if (!P.budgetV2) return itemized() ? 0 : basicsNet();
+    return Math.max(0, num(P.basics) - recurMonthly() - catsMonthly() - funMonthly());
+  }
+  function budgetV2() {
+    if (P.budgetV2) return;
+    P.basics = String(Math.round(recurMonthly() + (itemized() ? 0 : basicsNet()) + funMonthly() + catsMonthly())); P.budgetV2 = true; P.basicsAuto = false;
+  }
+  function shiftRough(delta) { if (P.budgetV2 && delta) P.basics = String(Math.max(0, Math.round(num(P.basics) + delta))); }
+  var FREQ_LABEL = { monthly: 'a month', biweekly: 'every 2 weeks', weekly: 'a week', yearly: 'a year' };
+  function dueText2(b) {
+    if (!b.due) return '';
+    var d = F.fromIso(b.due), f = b.freq || b.rep || 'monthly';
+    return f === 'monthly' ? 'Due the ' + ordinal(d.getDate()) : f === 'yearly' ? 'Due ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' each year' : (f === 'weekly' ? 'Every ' : 'Every other ') + d.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+  // the next date with this day of the month, starting today
+  function nextDay(day) { var t = today(), y = t.getFullYear(), m = t.getMonth(); if (day < t.getDate()) m++; var dim = new Date(y, m + 1, 0).getDate(); return F.isoDay(new Date(y, m, Math.min(day, dim))); }
+  // ---------- Budget tabs ----------
+  function icoBox(ic, key) { return '<span class="cicon" style="--c:' + colorFor(key) + '">' + ic + '</span>'; }
+  function budSpend(ym) {
+    var m = spentMap(ym), lines = spendLines().filter(function (l) { return l.grp === 'spend'; }), now = today(), isNow = ym === monthOf(F.isoDay(now));
+    var budget = lines.reduce(function (t, l) { return t + l.mon; }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
+    var dl = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1, perDay = isNow && left > 0 ? left / dl : 0;
+    var top = '<div class="card bud-top"><small>' + (isNow ? 'Left to spend' : 'Spent') + '</small><div class="bud-big' + (left < -0.5 ? ' over' : '') + '">' + (isNow ? (left < -0.5 ? '−' + money2(-left) : money2(left)) : money2(spent)) + '</div>' +
+      '<span class="spbar big' + (left < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, budget ? spent / budget * 100 : 0) + '%"></i></span>' +
+      '<div class="bud-safe">' + (isNow ? (left < -0.5 ? money(-left) + ' over this month. It happens: next month is a fresh start.' : '<b>' + money2(perDay) + '/day</b> safe to spend · ' + plural(dl, 'day') + ' left') : money(spent) + ' of ' + money(budget) + ' budgeted') + '</div></div>';
+    var cards = lines.map(function (l) {
+      var sp = m[l.key] || 0, lf = l.mon - sp, pct = l.mon ? Math.round(sp / l.mon * 100) : (sp ? 100 : 0), open = U.catEdit === l.key;
+      var card = '<button type="button" class="ccard" data-a="catopen" data-v="' + l.key + '">' + icoBox(l.icon, l.key) + '<span class="cmid"><b>' + esc(l.label) + '</b><span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, pct) + '%;background:' + colorFor(l.key) + '"></i></span>' +
+        '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + '</span><span>' + money2(l.mon) + '</span></span>' + (l.key === 'basics' ? '<small>From your rough monthly number. Add categories to break it down.</small>' : '') + '</span></button>';
+      if (!open) return card;
+      var c = l.key.indexOf('c:') === 0 ? cats().filter(function (x) { return 'c:' + x.id === l.key; })[0] : null;
+      return card + '<div class="card cedit stack">' + (c ? '<label class="field">Name<input type="text" data-catname value="' + esc(c.name) + '" maxlength="30"></label>' : '') +
+        '<label class="field">' + (l.key === 'basics' ? 'Everything else, each month' : 'Each month') + '<input type="number" inputmode="decimal" min="0" data-catamt value="' + Math.round(l.mon) + '"></label>' +
+        (c ? '<div class="icgrid">' + ICON_PICKS.map(function (ic) { return '<button type="button" class="icpick' + (c.icon === ic ? ' on' : '') + '" data-a="caticon" data-v="' + ic + '">' + ic + '</button>'; }).join('') + '</div>' : '') +
+        '<div style="display:flex;gap:10px;align-items:center"><button type="button" class="sharebtn" data-a="catsave" data-v="' + l.key + '">Save</button><button type="button" class="textbtn" data-a="catopen" data-v="">Close</button>' + (c ? '<button type="button" class="textbtn" style="color:var(--warn);margin-left:auto" data-a="catdel" data-v="' + l.key + '">Remove</button>' : '') + '</div></div>';
+    }).join('');
+    var have = {}; lines.forEach(function (l) { have[l.label.toLowerCase()] = 1; });
+    var add = U.catAdd ? '<div class="card stack" style="padding:14px 16px;gap:10px"><b>Add a spending category</b><div class="chips">' + SPEND_SUGGEST.filter(function (x) { return !have[x[0].toLowerCase()]; }).map(function (x) { return '<button type="button" class="chip" data-a="catadd" data-v="' + esc(x[0]) + '" data-i="' + x[1] + '">' + x[1] + ' ' + esc(x[0]) + '</button>'; }).join('') + '</div>' +
+      '<div class="badd"><input type="text" data-catnew placeholder="Or name your own" maxlength="30" aria-label="Category name"><button type="button" class="sharebtn" data-a="catnew">Add</button></div><button type="button" class="textbtn" data-a="catadd" data-v="">Close</button></div>'
+      : '<button type="button" class="outline" data-a="catadd" data-v="open">+ Add a category</button>';
+    var rec = recurring().slice().sort(function (x, y) { return (x.due ? F.fromIso(x.due).getDate() : 40) - (y.due ? F.fromIso(y.due).getDate() : 40); });
+    var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b><small>Set up once. Rent, bills, subscriptions.</small></div><span>' + money(recurMonthly()) + '/mo</span></div>' +
+      (rec.length ? '<div class="card rlist">' + rec.map(function (b) {
+        var f = b.freq || 'monthly', nx = b.due ? nextDue(b, now) : null;
+        return '<button type="button" class="rrow" data-a="recuropen" data-v="' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + '</b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
+      }).join('') + '</div>' : '<p style="font-size:14px">None yet. Add rent, utilities, phone and subscriptions once, and they count every month.</p>') +
+      '<button type="button" class="outline" data-a="recuropen" data-v="">+ Add a recurring expense</button>';
+    return top + '<div class="bud-sec"><div><b>Spending</b><small>What you spend each month, by category.</small></div><span>' + money(budget) + '/mo</span></div>' + cards + add +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button><button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all purchases</button></div>' + recHtml;
+  }
+  function budSave() {
+    var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step, ppm = pl.ppm, sv = num(P.savings);
+    var goal = step <= 2 ? F.CUSHION : pl.safetyNet, gname = step <= 2 ? 'Starter cushion' : 'Full safety net';
+    var where = step === 1 ? 'your Starter Cushion' : step === 2 ? esc(o.target ? o.target.name : 'your smallest debt') : step === 3 ? 'your Full Safety Net' : 'investing';
+    var flow = '<div class="card stack bud-flow"><b>Where your money goes each month</b>' + [['Take-home pay', p.paycheck * ppm, ''], ['Recurring expenses', recurMonthly(), '−'], ['Spending', catsMonthly() + funMonthly() + elseMonthly(), '−']].concat(pl.rows.filter(function (r) { return r.kind === 'min' || r.kind === 'give' || r.kind === 'save' || r.kind === 'goal'; }).map(function (r) { return [r.label, r.amount * ppm, '−']; })).map(function (r) {
+        return r[1] > 0.5 || r[0] === 'Take-home pay' ? '<div class="row"><span>' + esc(r[0]) + '</span><b>' + r[2] + money(r[1]) + '</b></div>' : ''; }).join('') +
+      '<div class="row bud-extra"><span>Your extra</span><b>' + (pl.extra < 0 ? '−' + money(-pl.extra * ppm) : money(pl.extra * ppm)) + '</b></div></div>';
+    var stepCard = step <= 3 ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>To ' + where + '</b><label class="field">Each month<input type="number" inputmode="decimal" min="0" data-stepmo value="' + Math.round(pl.toStep * ppm) + '"></label>' +
+      (pl.unassigned >= 0.5 ? '<p style="font-size:14px">' + money(pl.unassigned * ppm) + ' a month of your extra has no job yet.</p><button type="button" class="primary" data-a="stepall">Give it a job: put it toward ' + where + '</button>' : pl.tight ? '<p style="font-size:14px;color:var(--warn)">Your paycheck doesn’t cover everything yet. Trim a category or a recurring expense.</p>' : '<p style="font-size:14px">Every dollar has a job. ✓</p>') + '</div>' : '';
+    var cushion = '<div class="card ccard static">' + icoBox('🛟', 'cushion') + '<span class="cmid"><b>' + gname + '</b><span class="cbar"><i style="width:' + Math.min(100, goal ? sv / goal * 100 : 0) + '%;background:var(--green)"></i></span><span class="crow"><span>' + money(sv) + ' saved</span><span>' + money(goal) + '</span></span></span></div>';
+    var goals = P.goals.map(function (g) {
+      return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + (g.by ? ' by ' + shortDate(F.fromIso(g.by)) : '') + '</span></span></span></div>'; }).join('');
+    return cushion + stepCard + '<div class="bud-sec"><div><b>Goals</b><small>A trip, a car, Christmas. Each gets a date.</small></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' + flow;
+  }
+  function budDebt() {
+    var o = F.outlook(profile(), today()), list = P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).slice().sort(function (a, b) { return (num(a.bal) || 1e12) - (num(b.bal) || 1e12); });
+    var total = list.reduce(function (t, d) { return t + num(d.bal); }, 0), orig = list.reduce(function (t, d) { return t + Math.max(num(d.orig), num(d.bal)); }, 0), pays = {};
+    (o.payoffs || []).forEach(function (x) { pays[x.id] = x; });
+    if (!list.length) return '<div class="card bud-top"><small>Debt</small><div class="bud-big">$0</div><div class="bud-safe">No debt besides your home. Nice.</div></div><button type="button" class="outline" data-a="edit" data-v="debts">+ Add a debt</button>';
+    return '<div class="card bud-top"><small>Debt left</small><div class="bud-big">' + money(total) + '</div><span class="spbar big"><i style="width:' + (orig ? (orig - total) / orig * 100 : 0) + '%;background:var(--green)"></i></span>' +
+      '<div class="bud-safe">' + money(orig - total) + ' paid so far' + (o.debtFree ? ' · debt-free around <b>' + shortDate(o.debtFree) + '</b>' : '') + '</div></div>' +
+      '<div class="bud-sec"><div><b>Smallest first</b><small>Pay minimums on all. Every extra dollar goes to the top one.</small></div></div>' +
+      list.map(function (d, i) {
+        var bal = num(d.bal), og = Math.max(num(d.orig), bal), x = pays[d.id], paid = bal <= 0;
+        return '<div class="card ccard static' + (i === 0 && !paid ? ' first' : '') + '">' + icoBox(paid ? '✅' : '💳', 'd:' + d.id) + '<span class="cmid"><b>' + esc(d.name || 'Debt') + (i === 0 && !paid ? ' <span class="tag">Up next</span>' : '') + '</b><span class="cbar"><i style="width:' + (og ? (og - bal) / og * 100 : 0) + '%;background:var(--green)"></i></span>' +
+          '<span class="crow"><span>' + (paid ? 'Paid off' : money(bal) + ' left · ' + money(num(d.min)) + '/mo') + '</span><span>' + (x && x.date ? whenShort(x.date) : '') + '</span></span></span></div>';
+      }).join('') +
+      (list.length === 1 && list[0].lump ? '<p style="font-size:14px">This is your total from the first questions. List each card and loan to see which one goes first.</p>' : '') +
+      '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>';
+  }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
   function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
   function tracking() { return P.spends.length > 0 || Object.keys(P.storeLine || {}).length > 0; }
@@ -1708,6 +1812,29 @@
     },
 
     plan: function () {
+      if (!P.setupDone) return V.planClassic();
+      var tab = U.bTab || 'spend', ym = curSpendMonth(), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      var head = '<div class="bud-head"><h2>Budget</h2><div class="bud-month">' + (tab === 'spend' ? '<button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">‹</button>' : '') + '<span>' + mname + '</span>' + (tab === 'spend' ? '<button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">›</button>' : '') + '</div></div>' +
+        '<div class="seg bud-tabs" role="group" aria-label="Budget">' + [['spend', 'Spending'], ['save', 'Saving'], ['debt', 'Debt']].map(function (t) { var on = tab === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="btab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+      return head + (tab === 'save' ? budSave() : tab === 'debt' ? budDebt() : budSpend(ym));
+    },
+    // add or change one recurring expense: name, icon, amount, how often, when it's due
+    recur: function () {
+      var f = U.form || {}, freq = f.freq || 'monthly', editing = !!f.id;
+      var icons = ICON_PICKS.map(function (ic) { return '<button type="button" class="icpick' + (f.icon === ic ? ' on' : '') + '" data-a="recuricon" data-v="' + ic + '" aria-label="Icon ' + ic + '">' + ic + '</button>'; }).join('');
+      var days = ''; for (var d = 1; d <= 31; d++) days += '<option value="' + d + '"' + (+f.day === d ? ' selected' : '') + '>' + ordinal(d) + '</option>';
+      return back('plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">Recurring expense</div><h2>' + (editing ? 'Edit ' + esc(f.name || 'expense') : 'Add a recurring expense') + '</h2><p>Set it up once. It counts every month on its own.</p></div>' +
+        (editing ? '' : '<div class="chips">' + RECUR_SUGGEST.filter(function (x) { return !P.bills.some(function (b) { return F.billMonthly(b) > 0 && String(b.name).toLowerCase() === x[0].toLowerCase(); }); }).map(function (x) { return '<button type="button" class="chip" data-a="recursug" data-v="' + esc(x[0]) + '" data-i="' + x[1] + '">' + x[1] + ' ' + esc(x[0]) + '</button>'; }).join('') + '</div>') +
+        '<div class="card stack" style="padding:16px 18px;gap:14px">' +
+        '<label class="field">Name<input type="text" data-g="name" maxlength="40" value="' + esc(f.name || '') + '" placeholder="Like Rent or Internet"></label>' +
+        '<div class="field">Icon<div class="icgrid">' + icons + '</div></div>' +
+        '<label class="field">Amount each time<input type="number" inputmode="decimal" min="0" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0"></label>' +
+        '<div class="field">How often<div class="seg wrap" role="group">' + [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly']].map(function (o) { var on = freq === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="recurfreq" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
+        (freq === 'monthly' ? '<label class="field">Due on the<select data-g="day">' + days + '</select></label>' : '<label class="field">' + (freq === 'yearly' ? 'Next due date' : 'Next due date (repeats ' + FREQ_LABEL[freq] + ')') + '<input type="date" data-g="due" value="' + esc(f.due || '') + '"></label>') + '</div>' +
+        (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
+        '<div class="push"><button type="button" class="primary" data-a="recursave">' + (editing ? 'Save' : 'Add it') + '</button>' + (editing ? '<button type="button" class="textbtn" style="color:var(--warn)" data-a="recurdel">Remove this expense</button>' : '') + '</div>';
+    },
+    planClassic: function () {
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step;
       var last = step === 1 ? 'Starter Cushion' : step === 2 ? 'Snowball → ' + esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'Future You (investing)';
       var mo = !!U.planMonth, k = mo ? pl.ppm : 1;
@@ -1980,10 +2107,10 @@
       var sc = U.scan; if (!sc) { U.scan = sc = { week: weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
       var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow(), lines = spendLines();
       var pick = function (label, cls) { return '<label class="' + cls + '" style="cursor:pointer;text-align:center">' + label + '<input type="file" accept="image/*" multiple data-file="scan" class="sr"></label>'; };
-      var groups = [['need', 'Needs'], ['want', 'Wants'], ['other', 'Not in my budget']];
+      var groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['other', 'Not in my budget']];
       var select = function (r, i) {
         return '<select data-scan-key="' + i + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
-          var m = lines.filter(function (l) { return l.cat === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
+          var m = lines.filter(function (l) { return l.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
         }).join('') + '</select>';
       };
       var n = sc.rows.filter(function (r) { return r.ok; }).length, open = sc.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
@@ -2006,7 +2133,7 @@
     spendadd: function () {
       var f = U.form || {}, lines = spendLines(), last = f.key;
       var chips = function (cat, title) {
-        var mine = lines.filter(function (l) { return l.cat === cat; }); if (!mine.length) return '';
+        var mine = lines.filter(function (l) { return l.grp === cat; }); if (!mine.length) return '';
         return '<div class="field">' + title + '<div class="chips" style="margin-top:8px">' + mine.map(function (l) {
           var on = last === l.key; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="spendcat" data-v="' + l.key + '">' + esc(l.label) + '</button>'; }).join('') + '</div></div>';
       };
@@ -2014,7 +2141,7 @@
         (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
         '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
-        chips('need', 'Needs') + chips('want', 'Wants') + chips('other', 'Not in my budget') +
+        chips('spend', 'Spending') + chips('bill', 'Recurring') + chips('other', 'Not in my budget') +
         '<label class="field">Date<input type="date" data-g="date" value="' + esc(f.date || F.isoDay(today())) + '"></label></div>' +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button><button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button></div>';
@@ -2098,7 +2225,7 @@
     settings: function () {
       var cal = { weekly: 1, biweekly: 1, semimonthly: 1, monthly: 1 }[P.freq];
       return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
-        '<div class="card">' + [['pay', 'Paycheck and payday'], [itemized() ? 'bills' : 'basics', 'Bills and basics'], ['bills', 'List bills one by one'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['install', 'Add to Home Screen']].map(function (x) {
+        '<div class="card">' + [['pay', 'Paycheck and payday'], ['basics', 'Monthly spending (rough number)'], ['recurring', 'Recurring expenses'], ['debts', 'Debts'], ['savings', 'Emergency savings'], ['safety', 'Safety net size'], ['give', 'Giving'], ['retire', 'Retirement'], ['kids', 'Kids'], ['house', 'Your home'], ['fun', 'Fun money'], ['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         (cal ? '<button type="button" class="outline" data-a="ics">Add payday check-ins to my calendar</button>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
@@ -2887,6 +3014,52 @@
       case 'obnodebt': P.qDebt = ''; P.qMin = ''; save(); obGo('freq'); break;
       case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
       case 'obhome': U.obAfter = false; go('home'); break;
+      case 'btab': U.bTab = v; U.catEdit = null; U.catAdd = false; render(); break;
+      case 'catopen': U.catEdit = v || null; U.catAdd = false; render(); break;
+      case 'catadd': (function () {
+        if (v === 'open') { U.catAdd = true; U.catEdit = null; render(); return; }
+        if (!v) { U.catAdd = false; render(); return; }
+        budgetV2(); var c = { id: uid(), name: v, icon: b.getAttribute('data-i') || '🧾', amount: '' }; cats().push(c); U.catAdd = false; U.catEdit = 'c:' + c.id; save(); track('cat-add'); render();
+        var am = app.querySelector('[data-catamt]'); if (am) am.focus();
+      })(); break;
+      case 'catnew': (function () {
+        var nm = String((app.querySelector('[data-catnew]') || {}).value || '').trim().slice(0, 30); if (!nm) return;
+        budgetV2(); var c = { id: uid(), name: nm, icon: iconFor(nm), amount: '' }; cats().push(c); U.catAdd = false; U.catEdit = 'c:' + c.id; save(); track('cat-add'); render();
+      })(); break;
+      case 'caticon': (function () { var c = cats().filter(function (x) { return 'c:' + x.id === U.catEdit; })[0]; if (c) { c.icon = v; save(); render(); } })(); break;
+      case 'catsave': (function () {
+        budgetV2();
+        var amt = app.querySelector('[data-catamt]'), nmI = app.querySelector('[data-catname]'), val = amt && amt.value !== '' ? Math.max(0, num(amt.value)) : null;
+        // a first amount splits the total; a change to an amount changes the total
+        if (v.indexOf('c:') === 0) { var c = cats().filter(function (x) { return 'c:' + x.id === v; })[0]; if (c) { if (val != null) { if (c.amount !== '') shiftRough(val - num(c.amount)); c.amount = String(round2(val)); } if (nmI && nmI.value.trim()) c.name = nmI.value.trim().slice(0, 30); } }
+        else if (v === 'fun' && val != null) { if (funSet()) shiftRough(val - num(P.fun)); P.fun = String(round2(val)); P.funParts = []; }
+        // everything else: the rough total becomes the details plus this amount
+        else if (v === 'basics' && val != null) { P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly() + val)); }
+        else if (v.indexOf('f:') === 0 && val != null) { var fp = (P.funParts || []).filter(function (x) { return 'f:' + x.id === v; })[0]; if (fp) { shiftRough(val - num(fp.amount)); fp.amount = String(round2(val)); P.fun = String((P.funParts || []).reduce(function (t, x) { return t + num(x.amount); }, 0)); } }
+        U.catEdit = null; save(); render();
+      })(); break;
+      case 'catdel': budgetV2(); cats().forEach(function (x) { if ('c:' + x.id === v) shiftRough(-num(x.amount)); }); P.cats = cats().filter(function (x) { return 'c:' + x.id !== v; }); U.catEdit = null; save(); render(); break;
+      case 'recuropen': (function () {
+        var bl = v ? P.bills.filter(function (x) { return x.id === v; })[0] : null;
+        U.form = bl ? { id: bl.id, name: bl.name, icon: bl.icon || iconFor(bl.name), amount: bl.amount, freq: bl.freq || (bl.per === 'yr' ? 'yearly' : 'monthly'), day: bl.due ? F.fromIso(bl.due).getDate() : 1, due: bl.due || '' } : { name: '', icon: '🧾', amount: '', freq: 'monthly', day: 1, due: '' };
+        U.formErr = ''; go('recur');
+      })(); break;
+      case 'recursug': U.form.name = v; U.form.icon = b.getAttribute('data-i'); render(); break;
+      case 'recuricon': U.form.icon = v; render(); break;
+      case 'recurfreq': U.form.freq = v; if (v !== 'monthly' && !U.form.due) U.form.due = F.isoDay(today()); render(); break;
+      case 'recursave': (function () {
+        var f = U.form, nm = String(f.name || '').trim().slice(0, 40);
+        if (!nm) { U.formErr = 'Give it a name.'; render(); return; }
+        if (!(num(f.amount) > 0)) { U.formErr = 'Add how much it is each time.'; render(); return; }
+        var due = f.freq === 'monthly' ? nextDay(+f.day || 1) : (/^\d{4}-\d{2}-\d{2}$/.test(f.due || '') ? f.due : F.isoDay(today()));
+        budgetV2();
+        var bl = f.id ? P.bills.filter(function (x) { return x.id === f.id; })[0] : null, before = bl ? F.billMonthly(bl) : 0;
+        if (!bl) { bl = { id: uid() }; P.bills.push(bl); }
+        bl.name = nm; bl.icon = f.icon; bl.amount = String(round2(num(f.amount))); bl.freq = f.freq; bl.rep = f.freq; bl.due = due; delete bl.per; bl.group = F.groupFor(nm);
+        if (before > 0) shiftRough(F.billMonthly(bl) - before);
+        save(); track('recurring-save'); U.bTab = 'spend'; go('plan');
+      })(); break;
+      case 'recurdel': budgetV2(); P.bills.forEach(function (x) { if (x.id === U.form.id) shiftRough(-F.billMonthly(x)); }); P.bills = P.bills.filter(function (x) { return x.id !== U.form.id; }); save(); U.bTab = 'spend'; go('plan'); break;
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
@@ -3022,7 +3195,7 @@
       case 'installlater': U.afterSave = false; go('home'); break;
       case 'installok': P.installSeen = true; save(); U.afterSave = false; track('install-seen'); go('home'); break;
       case 'savenudgeoff': P.saveNudgeOff = true; save(); render(); break;
-      case 'edit': U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
+      case 'edit': if (v === 'recurring') { U.bTab = 'spend'; go('plan'); break; } U.wizReturn = U.screen === 'planday' ? 'planday' : U.screen; U.err = ''; go(v); break;
       case 'basicpick': P.basicsAuto = false; P.basics = v; save(); render(); break;
       case 'ladder': U.showLadder = !U.showLadder; render(); break;
       case 'installdone': U.copiedPlan = false; P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
@@ -3337,6 +3510,7 @@
   app.addEventListener('input', function (e) {
     var t = e.target;
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
+    if (t.hasAttribute('data-stepmo')) { P.stepAmt = String(round2(Math.max(0, num(t.value)) / F.FREQS[P.freq].perMonth)); save(); return; }
     if (t.hasAttribute('data-obecho')) { P.nextPay = t.value; var ec = app.querySelector('[data-live=obecho]'); if (ec) ec.innerHTML = payEcho(); }
     if (t.hasAttribute('data-debtlump')) { if (!P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: '', orig: '', min: '', apr: '', lump: true }); P.debts[0][t.getAttribute('data-debtlump')] = t.value; save(); return; }
     if (t.hasAttribute('data-f')) {
@@ -3349,7 +3523,7 @@
         if (fsum > 0) P.fun = String(fsum);
         var ft = app.querySelector('[data-total="fun"]'); if (ft) ft.textContent = money(fsum);
       }
-      else if (t.getAttribute('data-f') !== 'x') P[t.getAttribute('data-f')] = t.value;
+      else if (t.getAttribute('data-f') !== 'x') { if (t.getAttribute('data-f') === 'fun' && funSet()) shiftRough(num(t.value) - num(P.fun)); P[t.getAttribute('data-f')] = t.value; }
       save();
       var sl = app.querySelector('[data-live="savings"]'); if (sl) sl.textContent = savingsNote();
       var qm = app.querySelector('[data-live="qmonth"]'); if (qm) qm.textContent = quickMonthNote();

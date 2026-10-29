@@ -173,6 +173,13 @@ Home is just the countdown and bar to the next win (the cushion in Step 1, the n
 
 The whole app is dark: tokens at the top of styles.css (`--bg`, `--card`, `--ink`, `--hi` for the warm highlight, `--green` for good news) plus a dark-theme block at the end. Buttons are white pills.
 
+## Budget: Spending, Saving, Debt
+The Budget tab has three bubbles.
+- **Spending**: "Left to spend" this month (spending categories minus what was spent) with "$X/day safe to spend · N days left". Each category is a card with an icon, a colored bar and "$167 left / $220". Add categories from suggestions (groceries, gas, eating out, kids, pets...) or your own name; tap one to change its amount, name or icon. "Everything else" is the part of the rough monthly number (from the intro) that no category or recurring expense covers yet. Below that, **Recurring expenses**: set up once with a name, icon, amount, how often (monthly, every 2 weeks, weekly, yearly) and the day of the month or next due date. They show on the calendar and count every month.
+- **Saving**: the cushion (or safety net), the monthly amount to your step with "Give it a job", goals, and a "where your money goes each month" breakdown ending in your extra.
+- **Debt**: debt left, paid so far, debt-free date, and each debt smallest first with a bar and its payoff date.
+Money math: `P.basics` is the rough monthly total. Adding a category or recurring expense splits it (the extra doesn't change); changing or removing one changes the total. Plans from before this (no `P.budgetV2`) keep their old math until they first change the Budget. Recurring expenses are `P.bills` with `freq` (amount each time) and `due`; categories are `P.cats`.
+
 ## Setup carries the rough numbers over
 During setup, the expenses step starts with the monthly expenses from "Find my money" and the debts step is just two boxes, total debt and monthly payments, both carried over (one debt called "My debts"). Each can be changed there; a $0 total means no debt. Listing bills or debts one by one is only in Settings after setup.
 

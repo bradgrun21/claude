@@ -145,6 +145,13 @@ test('Reading plan: every day is open from the start', () => {
   assert.strictEqual(C.planStatus({ id: 'reset7', start: '2026-10-19', done: [0, 1, 2, 3, 4, 5, 6] }, day(10, 30)).state, 'done');
 });
 
+test('Recurring expenses turn into a monthly amount by how often they come due', () => {
+  assert.strictEqual(C.billMonthly({ amount: 1400, freq: 'monthly' }), 1400);
+  assert.strictEqual(C.billMonthly({ amount: 600, freq: 'yearly' }), 50);
+  assert.strictEqual(C.billMonthly({ amount: 60, freq: 'biweekly' }), 130);
+  assert.strictEqual(C.billMonthly({ amount: 30, freq: 'weekly' }), 130);
+  assert.strictEqual(C.billMonthly({ amount: 120, per: 'yr' }), 10);
+});
 test('Bills roll up into budget groups, yearly bills a twelfth a month', () => {
   const g = C.billGroups([{ name: 'Rent', amount: 1200, group: 'home' }, { name: 'Amazon Prime', amount: 139, per: 'yr', group: 'subs' }, { name: 'Gas & transportation', amount: 200 }, { name: 'Electric', amount: 0, group: 'utilities' }]);
   assert.deepStrictEqual(g.map(x => x.id), ['home', 'transport', 'subs']);
