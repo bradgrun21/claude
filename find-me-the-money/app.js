@@ -824,10 +824,10 @@
   // grp: spend | bill | other. cat stays need/want for older code (fun money is the want)
   function spendLines() {
     var out = [];
-    cats().forEach(function (c) { out.push({ key: 'c:' + c.id, label: c.name || 'Category', icon: c.icon || '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: num(c.amount) }); });
-    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
-    else if (funSet()) out.push({ key: 'fun', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
-    out.push({ key: 'basics', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
+    cats().forEach(function (c) { out.push({ key: 'c:' + c.id, type: typeOf(c), label: c.name || 'Category', icon: c.icon || '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: num(c.amount) }); });
+    if (funParts().length) P.funParts.forEach(function (x) { if (num(x.amount) > 0) out.push({ key: 'f:' + x.id, type: 'want', label: x.name || 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(x.amount) }); });
+    else if (funSet()) out.push({ key: 'fun', type: 'want', label: 'Fun money', icon: '\uD83C\uDF89', grp: 'spend', cat: 'want', mon: num(P.fun) });
+    out.push({ key: 'basics', type: 'need', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
     recurring().forEach(function (b) { out.push({ key: 'b:' + b.id, label: b.name || 'Bill', icon: b.icon || iconFor(b.name), grp: 'bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
     out.push({ key: 'other', label: 'Something else', icon: '\u2753', grp: 'other', cat: 'other', mon: 0 });
     return out;
@@ -941,14 +941,24 @@
   var SPEND_SUGGEST = [['Groceries', '🛒'], ['Gas', '⛽'], ['Eating out', '🍔'], ['Shopping', '🛍️'], ['Kids', '🧸'], ['Household', '🧺'], ['Personal care', '💇'], ['Pets', '🐾'], ['Gifts', '🎁'], ['Coffee', '☕'], ['Entertainment', '🎬'], ['Medical', '💊']];
   var RECUR_SUGGEST = [['Rent', '🏠'], ['Mortgage', '🏡'], ['Electricity', '💡'], ['Water', '💧'], ['Internet', '📶'], ['Phone', '📱'], ['Car insurance', '🚗'], ['Health insurance', '🩺'], ['Childcare', '👶'], ['Streaming', '📺'], ['Music', '🎵'], ['Gym', '🏋️'], ['Trash', '🗑️']];
   var ICON_PICKS = ['🛒', '⛽', '🍔', '🛍️', '🧸', '🧺', '💇', '🐾', '🎁', '☕', '🎬', '💊', '🏠', '💡', '💧', '📶', '📱', '🚗', '🩺', '👶', '📺', '🎵', '🏋️', '🎉', '⛪', '📚', '✈️', '🧾'];
-  var CAT_COLORS = ['#7ED9C0', '#FFC97E', '#FF9F7A', '#C8BCF5', '#9AD0F5', '#FFB4D0', '#B5E48C', '#F5D76E'];
+  var CAT_COLORS = ['#7ED9C0', '#FFC97E', '#FF9F7A', '#C8BCF5', '#9AD0F5', '#FFB4D0', '#B5E48C', '#F5D76E', '#FF8A8A', '#8EE3F5'];
+  // what a budget line is for; spending categories and recurring expenses pick one
+  var TYPES = [['need', 'Need'], ['want', 'Want'], ['debt', 'Debt'], ['save', 'Savings / goal']];
+  var WANT_WORDS = /eating out|shopping|gifts|coffee|entertainment|stream|music|gym|fun|subscri/i;
+  function typeOf(x) { return x.type || (WANT_WORDS.test(x.name || '') || x.group === 'subs' ? 'want' : 'need'); }
   // an icon for bills saved before icons existed, by name
   function iconFor(name) {
     var n = String(name || '').toLowerCase(), m = [[/rent|mortgage|home|house/, '🏠'], [/electric|power|light/, '💡'], [/water|sewer/, '💧'], [/internet|wifi/, '📶'], [/phone|cell/, '📱'], [/car|auto|gas|fuel/, '🚗'], [/health|doctor|dental|medical|prescription/, '🩺'], [/child|daycare|kid|school/, '👶'], [/stream|netflix|hulu|disney/, '📺'], [/music|spotify/, '🎵'], [/gym|fitness/, '🏋️'], [/grocer|food/, '🛒'], [/insurance/, '🛡️'], [/pet|vet/, '🐾'], [/trash/, '🗑️'], [/church|tithe|giv/, '⛪']];
     for (var i = 0; i < m.length; i++) if (m[i][0].test(n)) return m[i][1];
     return '🧾';
   }
-  function colorFor(key) { var h = 0; String(key).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 997; }); return CAT_COLORS[h % CAT_COLORS.length]; }
+  // a line's own color if one was picked, else a steady one from its key
+  function colorFor(key) {
+    var k = String(key), own = k.indexOf('c:') === 0 ? (P.cats || []).filter(function (x) { return 'c:' + x.id === k; })[0] : k.indexOf('b:') === 0 ? P.bills.filter(function (x) { return 'b:' + x.id === k; })[0] : null;
+    if (own && own.color) return own.color;
+    return colorAuto(key);
+  }
+  function colorAuto(key) { var h = 0; String(key).split('').forEach(function (c) { h = (h * 31 + c.charCodeAt(0)) % 997; }); return CAT_COLORS[h % CAT_COLORS.length]; }
   function cats() { return P.cats || (P.cats = []); }
   function recurring() { return P.bills.filter(function (b) { return F.billMonthly(b) > 0; }); }
   function recurMonthly() { return recurring().reduce(function (t, b) { return t + F.billMonthly(b); }, 0); }
@@ -983,8 +993,9 @@
       title = l.icon + ' ' + esc(l.label);
       body = (c ? '<label class="field">Name<input type="text" data-catname value="' + esc(c.name) + '" maxlength="30"></label>' : '') +
         '<label class="field">' + (l.key === 'basics' ? 'Everything else, each month' : 'Each month') + '<input type="number" inputmode="decimal" min="0" data-catamt value="' + (l.mon ? Math.round(l.mon) : '') + '" placeholder="$0"></label>' +
-        (l.key === 'basics' ? '<p style="font-size:13px">The part of your rough monthly number that no category or recurring expense covers yet.</p>' : '') +
-        (c ? '<div class="field">Icon<div class="icgrid">' + ICON_PICKS.map(function (x) { return '<button type="button" class="icpick' + (ic === x ? ' on' : '') + '" data-a="caticon" data-v="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' : '') +
+        (c ? '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.map(function (t) { var on = (sh.type || typeOf(c)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="cattype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+          '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (sh.color || c.color || colorAuto(sh.key)) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="catcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
+          '<div class="field">Icon<div class="icgrid">' + ICON_PICKS.map(function (x) { return '<button type="button" class="icpick' + (ic === x ? ' on' : '') + '" data-a="caticon" data-v="' + x + '">' + x + '</button>'; }).join('') + '</div></div>' : '') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="catsave" data-v="' + sh.key + '">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
         (c ? '<button type="button" class="textbtn" style="color:var(--warn)" data-a="catdel" data-v="' + sh.key + '">Remove this category</button>' : '');
     } else if (sh.k === 'recur') {
@@ -997,6 +1008,8 @@
         '<label class="field">Amount each time<input type="number" inputmode="decimal" min="0" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0"></label>' +
         '<div class="field">How often<div class="seg wrap" role="group">' + [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly']].map(function (o) { var on = freq === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="recurfreq" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
         (freq === 'monthly' ? '<label class="field">Due on the<select data-g="day">' + days + '</select></label>' : '<label class="field">Next due date<input type="date" data-g="due" value="' + esc(f.due || '') + '"></label>') +
+        '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.map(function (t) { var on = (f.type || typeOf(f)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="recurtype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+        '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (f.color || colorAuto('b:' + (f.id || 'new'))) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="recurcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="recursave">' + (f.id ? 'Save' : 'Add it') + '</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>' +
         (f.id ? '<button type="button" class="textbtn" style="color:var(--warn)" data-a="recurdel">Remove this expense</button>' : '');
@@ -1013,7 +1026,6 @@
       var pl = F.plan(profile()), o = F.outlook(profile(), today());
       title = 'Each month to ' + (o.step === 1 ? 'your Starter Cushion' : o.step === 2 && o.target ? esc(o.target.name) : 'your step');
       body = '<label class="field">Amount each month<input type="number" inputmode="decimal" min="0" data-stepin value="' + Math.round(pl.toStep * pl.ppm) + '"></label>' +
-        '<p style="font-size:13px">Up to ' + money(Math.max(0, (pl.toStep + pl.unassigned) * pl.ppm)) + ' a month of your extra is free for this.</p>' +
         '<div class="sheetbtns"><button type="button" class="primary" data-a="stepsave">Save</button><button type="button" class="outline" data-a="sheetclose">Cancel</button></div>';
     }
     return '<div class="sheetback" data-a="sheetclose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="' + title.replace(/<[^>]+>/g, '') + '"><div class="sheetgrab" aria-hidden="true"></div><h3>' + title + '</h3><div class="stack" style="gap:14px">' + body + '</div></div>';
@@ -1029,6 +1041,32 @@
     }
     return '<svg class="gauge g-' + (status || 'ok') + '" viewBox="0 0 220 112" aria-hidden="true">' + out + '</svg>';
   }
+  // paydays on a schedule that land in a calendar month
+  function paydaysIn(anchorIso, freq, y, m) {
+    var step = F.FREQS[freq].days, anchor = F.fromIso(anchorIso), first = new Date(y, m, 1), last = new Date(y, m + 1, 0), n = 0;
+    for (var k = Math.floor(F.daysBetween(anchor, first) / step) - 1; k <= Math.ceil(F.daysBetween(anchor, last) / step) + 1; k++) { var d = F.addDays(anchor, k * step); if (d >= first && d <= last) n++; }
+    return n;
+  }
+  // this month's income (pay x paychecks that land in it) and what's left after everything with a job
+  function monthMoney(ym) {
+    var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1, n = paydaysIn(P.nextPay, P.freq, y, m), pl = F.plan(profile()), ppm = pl.ppm;
+    var income = num(P.paycheck) * n + extraIncomes().reduce(function (t, x) { return t + num(x.amount) * paydaysIn(x.nextPay || P.nextPay, x.freq || 'biweekly', y, m); }, 0) + otherMonthly();
+    var by = { need: 0, want: 0, debt: 0, save: 0, give: 0 };
+    recurring().forEach(function (b) { by[typeOf(b)] += F.billMonthly(b); });
+    cats().forEach(function (c) { by[typeOf(c)] += num(c.amount); });
+    by.want += funMonthly(); by.need += elseMonthly();
+    pl.rows.forEach(function (r) { if (r.kind === 'min') by.debt += r.amount * ppm; else if (r.kind === 'give') by.give += r.amount * ppm; else if (r.kind === 'save') by.save += r.amount * ppm; else if (r.kind === 'goal') by.save += r.amount * n; });
+    by.save += pl.toStep * n;
+    var budgeted = by.need + by.want + by.debt + by.save + by.give;
+    return { income: income, paychecks: n, budgeted: budgeted, left: income - budgeted, by: by };
+  }
+  function incomeCard(ym) {
+    var mm = monthMoney(ym), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' });
+    var chips = [['need', 'Needs'], ['want', 'Wants'], ['debt', 'Debt'], ['save', 'Savings'], ['give', 'Giving']].filter(function (t) { return mm.by[t[0]] > 0.5; });
+    return '<div class="card inc-card"><small>Income for ' + mname + '</small><div class="inc-big">' + money(mm.income) + '</div><small class="inc-n">' + plural(mm.paychecks, 'paycheck') + '</small>' +
+      '<div class="inc-left' + (mm.left < -0.5 ? ' over' : Math.abs(mm.left) < 0.5 ? ' zero' : '') + '"><span>Left to budget</span><b>' + (mm.left < -0.5 ? '−' + money(-mm.left) : money(mm.left)) + '</b></div>' +
+      (chips.length ? '<div class="inc-types">' + chips.map(function (t) { return '<span class="t-' + t[0] + '"><i></i>' + t[1] + ' ' + money(mm.by[t[0]]) + '</span>'; }).join('') + '</div>' : '') + '</div>';
+  }
   function budSpend(ym) {
     var m = spentMap(ym), lines = spendLines().filter(function (l) { return l.grp === 'spend'; }), now = today(), isNow = ym === monthOf(F.isoDay(now));
     var budget = lines.reduce(function (t, l) { return t + l.mon; }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
@@ -1042,8 +1080,8 @@
       '<div class="bud-safe">' + (isNow ? (left < -0.5 ? money(-left) + ' over this month. It happens: next month is a fresh start.' : '<b>' + money2(perDay) + '/day</b> safe to spend · ' + plural(dl, 'day') + ' left') : money(spent) + ' of ' + money(budget) + ' budgeted') + '</div></div>';
     var cards = lines.map(function (l) {
       var sp = m[l.key] || 0, lf = l.mon - sp, pct = l.mon ? Math.round(sp / l.mon * 100) : (sp ? 100 : 0);
-      var card = '<button type="button" class="ccard" data-a="catopen" data-v="' + l.key + '">' + icoBox(l.icon, l.key) + '<span class="cmid"><b>' + esc(l.label) + '</b><span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, pct) + '%;background:' + colorFor(l.key) + '"></i></span>' +
-        '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + '</span><span>' + money2(l.mon) + '</span></span>' + (l.key === 'basics' ? '<small>From your rough monthly number. Add categories to break it down.</small>' : '') + '</span></button>';
+      var card = '<button type="button" class="ccard" data-a="catopen" data-v="' + l.key + '">' + icoBox(l.icon, l.key) + '<span class="cmid"><b>' + esc(l.label) + (l.type ? ' <span class="ttag t-' + l.type + '">' + TYPES.filter(function (t) { return t[0] === l.type; })[0][1] + '</span>' : '') + '</b><span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, pct) + '%;background:' + colorFor(l.key) + '"></i></span>' +
+        '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + '</span><span>' + money2(l.mon) + '</span></span>' + '' + '</span></button>';
       return card;
     }).join('');
     var have = {}; lines.forEach(function (l) { have[l.label.toLowerCase()] = 1; });
@@ -1051,13 +1089,13 @@
       '<div class="badd"><input type="text" data-catnew placeholder="Or name your own" maxlength="30" aria-label="Category name"><button type="button" class="sharebtn" data-a="catnew">Add</button></div><button type="button" class="textbtn" data-a="catadd" data-v="">Close</button></div>'
       : '<button type="button" class="outline" data-a="catadd" data-v="open">+ Add a category</button>';
     var rec = recurring().slice().sort(function (x, y) { return (x.due ? F.fromIso(x.due).getDate() : 40) - (y.due ? F.fromIso(y.due).getDate() : 40); });
-    var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b><small>Set up once. Rent, bills, subscriptions.</small></div><span>' + money(recurMonthly()) + '/mo</span></div>' +
+    var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b></div><span>' + money(recurMonthly()) + '/mo</span></div>' +
       (rec.length ? '<div class="card rlist">' + rec.map(function (b) {
         var f = b.freq || 'monthly', nx = b.due ? nextDue(b, now) : null;
-        return '<button type="button" class="rrow" data-a="recuropen" data-v="' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + '</b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
-      }).join('') + '</div>' : '<p style="font-size:14px">None yet. Add rent, utilities, phone and subscriptions once, and they count every month.</p>') +
+        return '<button type="button" class="rrow" data-a="recuropen" data-v="' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + ' <span class="ttag t-' + typeOf(b) + '">' + TYPES.filter(function (t) { return t[0] === typeOf(b); })[0][1] + '</span></b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
+      }).join('') + '</div>' : '') +
       '<button type="button" class="outline" data-a="recuropen" data-v="">+ Add a recurring expense</button>';
-    return top + '<div class="bud-sec"><div><b>Spending</b><small>What you spend each month, by category.</small></div><span>' + money(budget) + '/mo</span></div>' + cards + add +
+    return top + '<div class="bud-sec"><div><b>Spending</b></div><span>' + money(budget) + '/mo</span></div>' + cards + add +
       '<div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button><button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all purchases</button></div>' + recHtml;
   }
   function budSave() {
@@ -1068,26 +1106,25 @@
         return r[1] > 0.5 || r[0] === 'Take-home pay' ? '<div class="row"><span>' + esc(r[0]) + '</span><b>' + r[2] + money(r[1]) + '</b></div>' : ''; }).join('') +
       '<div class="row bud-extra"><span>Your extra</span><b>' + (pl.extra < 0 ? '−' + money(-pl.extra * ppm) : money(pl.extra * ppm)) + '</b></div></div>';
     var stepCard = step <= 3 ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>To ' + where + '</b><div class="row" style="border:0;padding:4px 0"><span>Each month</span><span style="display:flex;gap:10px;align-items:center"><b>' + money(pl.toStep * ppm) + '</b><button type="button" class="sharebtn" data-a="sheetopen" data-v="stepmo">Change</button></span></div>' +
-      (pl.unassigned >= 0.5 ? '<p style="font-size:14px">' + money(pl.unassigned * ppm) + ' a month of your extra has no job yet.</p><button type="button" class="primary" data-a="stepall">Give it a job: put it toward ' + where + '</button>' : pl.tight ? '<p style="font-size:14px;color:var(--warn)">Your paycheck doesn’t cover everything yet. Trim a category or a recurring expense.</p>' : '<p style="font-size:14px">Every dollar has a job. ✓</p>') + '</div>' : '';
+      '</div>' : '';
     var cushion = '<div class="card ccard static">' + icoBox('🛟', 'cushion') + '<span class="cmid"><b>' + gname + '</b><span class="cbar"><i style="width:' + Math.min(100, goal ? sv / goal * 100 : 0) + '%;background:var(--green)"></i></span><span class="crow"><span>' + money(sv) + ' saved</span><span>' + money(goal) + '</span></span></span></div>';
     var goals = P.goals.map(function (g) {
       return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + '</span></span></span></div>'; }).join('');
-    return cushion + stepCard + '<div class="bud-sec"><div><b>Goals</b><small>A trip, a car, Christmas. Each gets a date.</small></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' + flow;
+    return cushion + stepCard + '<div class="bud-sec"><div><b>Goals</b></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' + flow;
   }
   function budDebt() {
     var o = F.outlook(profile(), today()), list = P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).slice().sort(function (a, b) { return (num(a.bal) || 1e12) - (num(b.bal) || 1e12); });
     var total = list.reduce(function (t, d) { return t + num(d.bal); }, 0), orig = list.reduce(function (t, d) { return t + Math.max(num(d.orig), num(d.bal)); }, 0), pays = {};
     (o.payoffs || []).forEach(function (x) { pays[x.id] = x; });
-    if (!list.length) return '<div class="card bud-top"><small>Debt</small><div class="bud-big">$0</div><div class="bud-safe">No debt besides your home. Nice.</div></div><button type="button" class="outline" data-a="edit" data-v="debts">+ Add a debt</button>';
+    if (!list.length) return '<div class="card bud-top"><small>Debt</small><div class="bud-big">$0</div></div><button type="button" class="outline" data-a="edit" data-v="debts">+ Add a debt</button>';
     return '<div class="card bud-top"><small>Debt left</small><div class="bud-big">' + money(total) + '</div><span class="spbar big"><i style="width:' + (orig ? (orig - total) / orig * 100 : 0) + '%;background:var(--green)"></i></span>' +
       '<div class="bud-safe">' + money(orig - total) + ' paid so far · ' + money(total) + ' to go</div></div>' +
-      '<div class="bud-sec"><div><b>Smallest first</b><small>Pay minimums on all. Every extra dollar goes to the top one.</small></div></div>' +
+      '<div class="bud-sec"><div><b>Smallest first</b></div></div>' +
       list.map(function (d, i) {
         var bal = num(d.bal), og = Math.max(num(d.orig), bal), x = pays[d.id], paid = bal <= 0;
         return '<div class="card ccard static' + (i === 0 && !paid ? ' first' : '') + '">' + icoBox(paid ? '✅' : '💳', 'd:' + d.id) + '<span class="cmid"><b>' + esc(d.name || 'Debt') + (i === 0 && !paid ? ' <span class="tag">Up next</span>' : '') + '</b><span class="cbar"><i style="width:' + (og ? (og - bal) / og * 100 : 0) + '%;background:var(--green)"></i></span>' +
           '<span class="crow"><span>' + (paid ? 'Paid off' : money(bal) + ' left · ' + money(num(d.min)) + '/mo') + '</span><span>' + (og ? Math.round((og - bal) / og * 100) + '% paid' : '') + '</span></span></span></div>';
       }).join('') +
-      (list.length === 1 && list[0].lump ? '<p style="font-size:14px">This is your total from the first questions. List each card and loan to see which one goes first.</p>' : '') +
       '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>';
   }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
@@ -1859,9 +1896,8 @@
     plan: function () {
       if (!P.setupDone) return V.planClassic();
       var tab = U.bTab || 'spend', ym = curSpendMonth(), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      var head = '<div class="bud-head"><h2>Budget</h2><div class="bud-month">' + (tab === 'spend' ? '<button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">‹</button>' : '') + '<span>' + mname + '</span>' + (tab === 'spend' ? '<button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">›</button>' : '') + '</div></div>' +
-        '<div class="seg bud-tabs" role="group" aria-label="Budget">' + [['spend', 'Spending'], ['save', 'Saving'], ['debt', 'Debt']].map(function (t) { var on = tab === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="btab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
-      return head + (tab === 'save' ? budSave() : tab === 'debt' ? budDebt() : budSpend(ym));
+      var head = '<div class="bud-head"><h2>Budget</h2><div class="bud-month"><button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">\u2039</button><span>' + mname + '</span><button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">\u203a</button></div></div>';
+      return head + incomeCard(ym) + '<div class="seg bud-tabs" role="group" aria-label="Budget">' + [['spend', 'Spending'], ['save', 'Saving'], ['debt', 'Debt']].map(function (t) { var on = tab === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="btab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + (tab === 'save' ? budSave() : tab === 'debt' ? budDebt() : budSpend(ym));
     },
     // add or change one recurring expense: name, icon, amount, how often, when it's due
     recur: function () {
@@ -3070,19 +3106,21 @@
       case 'catadd': (function () {
         if (v === 'open') { U.catAdd = true; U.sheet = null; render(); return; }
         if (!v) { U.catAdd = false; render(); return; }
-        budgetV2(); var c = { id: uid(), name: v, icon: b.getAttribute('data-i') || '🧾', amount: '' }; cats().push(c); U.catAdd = false; U.sheet = { k: 'cat', key: 'c:' + c.id }; save(); track('cat-add'); render();
+        budgetV2(); var c = { id: uid(), type: WANT_WORDS.test(v) ? 'want' : 'need', name: v, icon: b.getAttribute('data-i') || '🧾', amount: '' }; cats().push(c); U.catAdd = false; U.sheet = { k: 'cat', key: 'c:' + c.id }; save(); track('cat-add'); render();
         var am = app.querySelector('[data-catamt]'); if (am) am.focus();
       })(); break;
       case 'catnew': (function () {
         var nm = String((app.querySelector('[data-catnew]') || {}).value || '').trim().slice(0, 30); if (!nm) return;
-        budgetV2(); var c = { id: uid(), name: nm, icon: iconFor(nm), amount: '' }; cats().push(c); U.catAdd = false; U.sheet = { k: 'cat', key: 'c:' + c.id }; save(); track('cat-add'); render();
+        budgetV2(); var c = { id: uid(), type: WANT_WORDS.test(nm) ? 'want' : 'need', name: nm, icon: iconFor(nm), amount: '' }; cats().push(c); U.catAdd = false; U.sheet = { k: 'cat', key: 'c:' + c.id }; save(); track('cat-add'); render();
       })(); break;
+      case 'cattype': U.sheet.type = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=cattype]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
+      case 'catcolor': U.sheet.color = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=catcolor]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
       case 'caticon': U.sheet.icon = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=caticon]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
       case 'catsave': (function () {
         budgetV2();
         var amt = app.querySelector('[data-catamt]'), nmI = app.querySelector('[data-catname]'), val = amt && amt.value !== '' ? Math.max(0, num(amt.value)) : null;
         // a first amount splits the total; a change to an amount changes the total
-        if (v.indexOf('c:') === 0) { var c = cats().filter(function (x) { return 'c:' + x.id === v; })[0]; if (c) { if (val != null) { if (c.amount !== '') shiftRough(val - num(c.amount)); c.amount = String(round2(val)); } if (nmI && nmI.value.trim()) c.name = nmI.value.trim().slice(0, 30); if (U.sheet && U.sheet.icon) c.icon = U.sheet.icon; } }
+        if (v.indexOf('c:') === 0) { var c = cats().filter(function (x) { return 'c:' + x.id === v; })[0]; if (c) { if (val != null) { if (c.amount !== '') shiftRough(val - num(c.amount)); c.amount = String(round2(val)); } if (nmI && nmI.value.trim()) c.name = nmI.value.trim().slice(0, 30); if (U.sheet && U.sheet.icon) c.icon = U.sheet.icon; if (U.sheet && U.sheet.type) c.type = U.sheet.type; if (U.sheet && U.sheet.color) c.color = U.sheet.color; } }
         else if (v === 'fun' && val != null) { if (funSet()) shiftRough(val - num(P.fun)); P.fun = String(round2(val)); P.funParts = []; }
         // everything else: the rough total becomes the details plus this amount
         else if (v === 'basics' && val != null) { P.basics = String(Math.round(recurMonthly() + catsMonthly() + funMonthly() + val)); }
@@ -3092,11 +3130,13 @@
       case 'catdel': budgetV2(); cats().forEach(function (x) { if ('c:' + x.id === v) shiftRough(-num(x.amount)); }); P.cats = cats().filter(function (x) { return 'c:' + x.id !== v; }); U.sheet = null; save(); render(); break;
       case 'recuropen': (function () {
         var bl = v ? P.bills.filter(function (x) { return x.id === v; })[0] : null;
-        U.form = bl ? { id: bl.id, name: bl.name, icon: bl.icon || iconFor(bl.name), amount: bl.amount, freq: bl.freq || (bl.per === 'yr' ? 'yearly' : 'monthly'), day: bl.due ? F.fromIso(bl.due).getDate() : 1, due: bl.due || '' } : { name: '', icon: '🧾', amount: '', freq: 'monthly', day: 1, due: '' };
+        U.form = bl ? { id: bl.id, name: bl.name, icon: bl.icon || iconFor(bl.name), type: bl.type || typeOf(bl), color: bl.color || '', amount: bl.amount, freq: bl.freq || (bl.per === 'yr' ? 'yearly' : 'monthly'), day: bl.due ? F.fromIso(bl.due).getDate() : 1, due: bl.due || '' } : { name: '', icon: '🧾', amount: '', freq: 'monthly', day: 1, due: '' };
         U.formErr = ''; U.sheet = { k: 'recur' }; render();
       })(); break;
       case 'recursug': U.form.name = v; U.form.icon = b.getAttribute('data-i'); render(); break;
       case 'recuricon': U.form.icon = v; render(); break;
+      case 'recurtype': U.form.type = v; render(); break;
+      case 'recurcolor': U.form.color = v; render(); break;
       case 'recurfreq': U.form.freq = v; if (v !== 'monthly' && !U.form.due) U.form.due = F.isoDay(today()); render(); break;
       case 'recursave': (function () {
         var f = U.form, nm = String(f.name || '').trim().slice(0, 40);
@@ -3106,7 +3146,7 @@
         budgetV2();
         var bl = f.id ? P.bills.filter(function (x) { return x.id === f.id; })[0] : null, before = bl ? F.billMonthly(bl) : 0;
         if (!bl) { bl = { id: uid() }; P.bills.push(bl); }
-        bl.name = nm; bl.icon = f.icon; bl.amount = String(round2(num(f.amount))); bl.freq = f.freq; bl.rep = f.freq; bl.due = due; delete bl.per; bl.group = F.groupFor(nm);
+        bl.name = nm; bl.icon = f.icon; bl.amount = String(round2(num(f.amount))); bl.freq = f.freq; bl.rep = f.freq; bl.due = due; delete bl.per; bl.group = F.groupFor(nm); bl.type = f.type || typeOf({ name: nm }); if (f.color) bl.color = f.color;
         if (before > 0) shiftRough(F.billMonthly(bl) - before);
         save(); track('recurring-save'); U.sheet = null; render();
       })(); break;

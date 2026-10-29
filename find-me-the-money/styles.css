@@ -973,3 +973,24 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .hero .sunbtn { width: 100%; margin-top: 4px; }
 .hmid small { max-width: 180px; }
 .hbig.word { font-size: 42px; }
+/* Budget: income for the month, left to budget, types and colors */
+.inc-card { padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; }
+.inc-card > small { color: var(--muted); font-size: 14px; }
+.inc-big { font-size: 46px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.inc-n { font-size: 12px !important; }
+.inc-left { margin-top: 12px; width: 100%; display: flex; justify-content: space-between; align-items: center; background: var(--card2); border-radius: 16px; padding: 12px 16px; font-weight: 600; }
+.inc-left b { font-size: 20px; color: var(--hi); font-variant-numeric: tabular-nums; }
+.inc-left.zero b { color: #6FDB8E; }
+.inc-left.over b { color: var(--warn); }
+.inc-types { display: flex; flex-wrap: wrap; gap: 6px 12px; justify-content: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.inc-types span { display: inline-flex; align-items: center; gap: 5px; }
+.inc-types i { width: 8px; height: 8px; border-radius: 4px; display: inline-block; }
+.t-need i, .ttag.t-need { background: #7ED9C0; }
+.t-want i, .ttag.t-want { background: #C8BCF5; }
+.t-debt i, .ttag.t-debt { background: #FF9F7A; }
+.t-save i, .ttag.t-save { background: #FFC97E; }
+.t-give i { background: #9AD0F5; }
+.ttag { display: inline-block; font-size: 10px; font-weight: 800; color: #141414; border-radius: 99px; padding: 1px 7px; vertical-align: 2px; margin-left: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.swatch { width: 34px; height: 34px; border-radius: 17px; border: 3px solid transparent; background: var(--c); padding: 0; }
+.swatch.on { border-color: var(--ink); box-shadow: 0 0 0 2px #141414 inset; }
