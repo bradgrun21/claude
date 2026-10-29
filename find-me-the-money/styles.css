@@ -828,3 +828,34 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .caltabs button { min-height: 34px; font-size: 13px; }
 .cday.sp em.spamt { display: block; font-style: normal; font-size: 10px; font-weight: 700; color: var(--hi); min-height: 13px; line-height: 13px; }
 .sunbtn { min-height: 52px; border-radius: 999px; font-size: 16px; font-weight: 700; }
+/* first open: slider, what we heard, 4 numbers, finding, reveal math, first 4 paydays */
+.obslide input[type=range] { width: 100%; height: 40px; accent-color: var(--hi); }
+.obends { display: flex; justify-content: space-between; color: var(--muted); font-size: 15px; font-weight: 600; }
+.obheard { background: var(--card); border-radius: 18px; padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
+.obheard small { color: var(--muted); font-size: 13px; text-transform: lowercase; }
+.obheard b { font-size: 19px; line-height: 1.3; }
+.obheard span { color: var(--hi); font-size: 16px; font-weight: 600; line-height: 1.35; }
+.obfour { display: flex; flex-direction: column; gap: 10px; }
+.obfour div { display: flex; align-items: center; gap: 14px; font-size: 19px; font-weight: 600; }
+.obfour b { width: 34px; height: 34px; border-radius: 17px; background: var(--card2); display: grid; place-items: center; font-size: 15px; color: var(--hi); }
+.obfind { display: flex; flex-direction: column; gap: 14px; }
+.obfind div { display: flex; align-items: center; gap: 12px; font-size: 19px; color: var(--muted); }
+.obfind b { width: 26px; height: 26px; border-radius: 13px; display: grid; place-items: center; background: var(--card2); }
+.obfind b svg { opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .obfind div { animation: obfindon .3s ease forwards; animation-delay: var(--d); }
+  .obfind b { animation: obfindb .3s ease forwards; animation-delay: var(--d); }
+  .obfind b svg { animation: obfindsvg .3s ease forwards; animation-delay: var(--d); }
+}
+@media (prefers-reduced-motion: reduce) { .obfind div { color: var(--ink); } .obfind b { background: var(--green); } .obfind b svg { opacity: 1; } }
+@keyframes obfindon { to { color: var(--ink); } }
+@keyframes obfindb { to { background: var(--green); } }
+@keyframes obfindsvg { to { opacity: 1; } }
+.obmath { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; background: var(--card); border-radius: 14px; padding: 10px 14px; margin: 0; }
+.obconf { position: relative; height: 0; align-self: center; width: 0; top: 60px; }
+.obfirst4 { display: flex; flex-direction: column; gap: 8px; }
+.obfirst4 div { background: var(--card); border-radius: 16px; padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; opacity: 0; animation: obstepin .45s ease forwards; animation-delay: var(--d); }
+.obfirst4 div.win b { color: var(--hi); }
+.obfirst4 small { color: var(--muted); font-size: 13px; }
+.obfirst4 b { font-size: 18px; }
+@media (prefers-reduced-motion: reduce) { .obfirst4 div { animation: none; opacity: 1; } }

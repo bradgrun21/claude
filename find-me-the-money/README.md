@@ -159,7 +159,17 @@ Run `supabase/people.sql` once. Then, in Supabase, Table Editor -> schema `admin
 - `email_list`: first name and email of everyone who said yes. Export as CSV for your email tool. Every marketing email needs an unsubscribe link and a mailing address (CAN-SPAM).
 
 ## First open and the dark look
-New people see a one-question-per-screen intro (`ob` in app.js, list `OB`): two "tap to continue" story screens, first name, "alright Brad, let's find your money", take-home pay, how often, next payday, monthly spending, total debt + payments, savings, then "we found $X a month" (with the free community link), then save with email and code. After sign-in (or "Having trouble? Continue for now" after two codes) the 7-step path animates to their step ("You're here"), then Home. The intro's numbers become the plan: rough expenses, one debt called "My debts", savings. Everything else (safety net, retirement, kids, home, giving, listing bills or debts) lives in Settings.
+New people see a one-question-per-screen intro (`ob` in app.js, list `OB`), about 90 seconds to the reveal:
+- two "tap to continue" story screens, then first name
+- three one-tap questions: how money feels (slider), what they'd do first with found money, what's in the way (saved in `P.intro`)
+- "Here's what we heard": where they want to go, where they are now, what's in the way plus one line on how the app helps (no statistic until Brad has a real, cited one)
+- "Let's find your money · 4 numbers": monthly take-home, monthly bills, total debt, debt payments; then how often they're paid and the next payday, echoed as a sentence ("Every other Friday, so your next payday plan starts Friday, Nov 6.")
+- a 2-second "finding your money" checklist, then the reveal: found money = pay − bills − debt payments, with confetti and the math line ($4,200 − $2,610 bills − $748 debt payments = $842/mo) and the free community link. Zero or below shows the Make room message instead, no confetti.
+- "Your first 4 paydays" built from their numbers (demo: $389 to your cushion, cushion at $778, $1,000 cushion done, snowball starts), then "Start payday 1"
+- save with email and code, the 7-step path, then Home. Their first-open answer picks which lesson is up next on the Journey map.
+Each screen sends a GoatCounter event `fo-<number>-<screen>`, plus `reveal-reached`, `journey-saved` and `payday-2-checkin`. No answers or amounts are sent.
+
+Home is just the countdown and bar to the next win (the cushion in Step 1, the next debt payoff in Step 2), a check-in button when a payday check-in is due, the community card, and the calendar with two tabs: Due & wins, and Spending (what was spent each day).
 
 The whole app is dark: tokens at the top of styles.css (`--bg`, `--card`, `--ink`, `--hi` for the warm highlight, `--green` for good news) plus a dark-theme block at the end. Buttons are white pills.
 

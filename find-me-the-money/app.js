@@ -101,7 +101,7 @@
       debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', payVaries: false, payHist: [], payBasis: 'low', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, weeks: {}, merchantMem: {}, payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, weeks: {}, merchantMem: {}, intro: {}, qPayMonth: '', payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
@@ -261,7 +261,7 @@
     peopleLoad().then(function () { peopleSave(); actFlush(); });
     if (U.joinMode) { U.screen = 'account'; return cloudWho().then(function () { render(); var c = app.querySelector('[data-cjoin]'); if (c) c.focus(); }); }
     return cloudPull(true).then(function () {
-      if (U.obAfter && U.screen !== 'cloudpick') { if (!P.setupDone) finishSetup(); U.obAfter = false; U.toast = null; peopleSave(); go('steps'); return; }
+      if (U.obAfter && U.screen !== 'cloudpick') { if (!P.setupDone) finishSetup(); U.obAfter = false; U.toast = null; peopleSave(); track('journey-saved'); go('steps'); return; }
       if (U.afterSave && U.screen !== 'cloudpick' && !standalone()) { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; }
       if (U.afterSave && U.screen !== 'cloudpick') { U.toast = ['Saved to your account.', 'Your plan is safe now.', true]; go('saveinstall'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home' && !P.setupDone) { U.joinOpen = true; go('account'); return; } if (U.screen !== 'cloudpick' && U.screen !== 'home') { U.toast = ['You’re signed in.', 'Your plan now saves to your account and follows you to any phone.', true]; go(P.setupDone ? 'home' : 'welcome'); } else if (U.screen === 'home') { U.toast = ['You’re signed in.', 'Your plan came with you.', true]; render(); } });
   }
@@ -835,12 +835,39 @@
     U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
   }
   // ---------- the intro: one question per screen, then sign in, then the 7-step path ----------
-  var OB = ['story1', 'story2', 'name', 'hello', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'savings', 'found', 'save'];
-  var OB_ASK = ['pay', 'freq', 'nextpay', 'exp', 'debt', 'savings'];
+  var OB = ['story1', 'story2', 'name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'exp', 'debt', 'mins', 'freq', 'nextpay', 'finding', 'found', 'first4', 'save'];
+  var OB_ASK = ['name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'exp', 'debt', 'mins', 'freq', 'nextpay'];
+  // the one-tap answers: [key, what they tap, where they want to go]
+  var OB_FIRST = [['cushion', 'Build a cushion', 'A cushion, so a surprise doesn\u2019t become debt.'], ['debt', 'Pay off debt', 'Out of debt, one payoff at a time.'], ['payday', 'Stop running out before payday', 'Making it to payday with money left.'], ['same', 'Get on the same page', 'On the same page about money.']];
+  // [key, what they tap, what the app does about it]
+  var OB_WAY = [['where', 'I don\u2019t know where it goes', 'your weekly purchases show exactly where it goes.'], ['payments', 'Debt payments', 'the snowball pays off the smallest first and rolls each payment into the next.'], ['oneincome', 'One income', 'your payday plan gives every dollar a job, so one income goes further.'], ['talk', 'We don\u2019t talk about it', 'a 20-minute monthly money date makes it easy to start.']];
+  // "Every other Friday, so your next payday plan starts Friday, Nov 6."
+  function payEcho() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) return '';
+    var d = F.fromIso(P.nextPay), wd = d.toLocaleDateString('en-US', { weekday: 'long' }), when = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    var how = P.freq === 'weekly' ? 'Every ' + wd : P.freq === 'biweekly' ? 'Every other ' + wd : P.freq === 'semimonthly' ? 'Twice a month' : 'Once a month, on the ' + ordinal(d.getDate());
+    return how + ', so your next payday plan starts ' + hi(when) + '.';
+  }
+  function communityLink() { return CONFIG.communityUrl ? '<div class="freecomm"><a href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community \u2192</a><small>Share your win, get your questions answered, and do the monthly challenge.</small></div>' : ''; }
+  // the first 4 paydays if the found money goes to the plan: cushion first, then the snowball
+  function firstPaydays() {
+    var q = quickMath(), ppm = F.FREQS[P.freq].perMonth, per = Math.round(q.noJob / ppm), rows = [], d = P.nextPay, cush = 0, done = false, debt = num(P.qDebt);
+    var day = function (iso) { return F.fromIso(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); };
+    if (!(per > 0)) return { room: true, per: 0, rows: [['Payday 1 \u00b7 ' + day(d), 'Needs vs wants: a 1-minute lesson'], ['Payday 2 \u00b7 ' + day(F.nextAfter(d, P.freq)), 'Set a fun-money limit'], ['Payday 3 \u00b7 ' + day(F.nextAfter(F.nextAfter(d, P.freq), P.freq)), 'Cancel one subscription'], ['Payday 4 \u00b7 ' + day(F.nextAfter(F.nextAfter(F.nextAfter(d, P.freq), P.freq), P.freq)), 'Your $1,000 cushion starts']] };
+    for (var n = 1; n <= 4; n++) {
+      var label = 'Payday ' + n + ' \u00b7 ' + day(d), text;
+      if (!done) { cush += per; if (cush >= F.CUSHION) { done = true; text = '$1,000 cushion done'; } else text = n === 1 ? money(per) + ' to your cushion' : 'Cushion at ' + money(cush); }
+      else text = rows.some(function (r) { return /snowball starts|safety net/.test(r[1]); }) ? (debt > 0 ? money(per) + ' more at your smallest debt' : 'Your safety net keeps growing') : (debt > 0 ? 'Your debt snowball starts' : 'Your full safety net starts');
+      rows.push([label, text]); d = F.nextAfter(d, P.freq);
+    }
+    return { room: false, per: per, rows: rows };
+  }
   function obAt() { var i = OB.indexOf(U.ob); return i < 0 ? 0 : i; }
   function obGo(k) { U.ob = k; U.err = ''; render(); window.scrollTo(0, 0); var f = app.querySelector('.ob input:not([type=checkbox])'); if (f && k !== 'save') setTimeout(function () { try { f.focus(); } catch (e) {} }, 60); }
   // the numbers from the intro become the plan: rough expenses, one total for debt, savings
   function obApply() {
+    // keep cents, so the monthly number comes back exactly (4,200 a month stays 4,200)
+    if (num(P.qPayMonth) > 0) P.paycheck = String(Math.round(num(P.qPayMonth) / F.FREQS[P.freq].perMonth * 100) / 100);
     quickApply();
     P.basics = String(Math.round(num(P.qExp))); P.basicsAuto = false;
     var d = num(P.qDebt), m = num(P.qMin);
@@ -1273,49 +1300,77 @@
   var V = {
     welcome: function () { return V.ob(); },
     ob: function () {
-      var k = OB[obAt()], i = obAt(), name = firstName(), err = U.err ? '<p class="oberr" role="alert">' + esc(U.err) + '</p>' : '';
-      var top = i > 0 ? '<div class="obtop"><button type="button" class="obback" data-a="obback" aria-label="Back">‹</button>' + (OB_ASK.indexOf(k) >= 0 ? '<div class="obbar"><i style="width:' + Math.round((OB_ASK.indexOf(k) + 1) / OB_ASK.length * 100) + '%"></i></div>' : '') + '</div>' : '';
+      var k = OB[obAt()], i = obAt(), name = firstName(), who = esc(name || 'friend'), err = U.err ? '<p class="oberr" role="alert">' + esc(U.err) + '</p>' : '', it = P.intro || {};
+      // one screen-view event per screen, so drop-off shows step by step (no answers or numbers are sent)
+      U.obSeen = U.obSeen || {}; if (!U.obSeen[k]) { U.obSeen[k] = 1; track('fo-' + (i + 1) + '-' + k); }
+      var top = i > 0 ? '<div class="obtop"><button type="button" class="obback" data-a="obback" aria-label="Back">\u2039</button>' + (OB_ASK.indexOf(k) >= 0 ? '<div class="obbar"><i style="width:' + Math.round((OB_ASK.indexOf(k) + 1) / OB_ASK.length * 100) + '%"></i></div>' : '') + '</div>' : '';
       var wrap = function (body, foot) { return '<div class="ob ob-' + k + '">' + top + '<div class="obbody">' + body + '</div><div class="obfoot">' + err + foot + '</div></div>'; };
       var tap = '<button type="button" class="obtap" data-a="obnext">Tap to continue ' + obArrow() + '</button>';
+      var pick = function (key, opts) { return '<div class="obopts">' + opts.map(function (o) { return '<button type="button" class="obopt' + (it[key] === o[0] ? ' on' : '') + '" data-a="obpick" data-k="' + key + '" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>'; };
       if (k === 'story1') return wrap('<h1 class="obbig">ever wonder where your ' + hi('paycheck') + ' goes?</h1>' +
-          '<p class="obline">payday hits<br>a week later<br>' + hi('it’s already gone') + '</p>' +
+          '<p class="obline">payday hits<br>a week later<br>' + hi('it\u2019s already gone') + '</p>' +
           '<p class="obline">coffee, takeout, a few clicks online<br>it ' + hi('adds up fast') + '</p>' +
-          '<p class="obline">you’re not bad with money<br>you just ' + hi('don’t have a plan') + ' yet</p>',
+          '<p class="obline">you\u2019re not bad with money<br>you just ' + hi('don\u2019t have a plan') + ' yet</p>',
         tap + (trashed() ? '<button type="button" class="oblink" data-a="untrash">Bring back the plan you deleted</button>' : '') +
         (cloudOn() && !S ? '<button type="button" class="oblink" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
         (standalone() ? '<button type="button" class="oblink" data-a="go" data-v="restore">Started in Safari? Bring your plan over</button>' : '') +
-        (storageOk ? '' : '<p class="oberr">This browser is blocking saved data (private browsing?), so your plan won’t be kept. Open it in a regular tab.</p>'));
+        (storageOk ? '' : '<p class="oberr">This browser is blocking saved data (private browsing?), so your plan won\u2019t be kept. Open it in a regular tab.</p>'));
       if (k === 'story2') return wrap('<h1 class="obbig">your money needs ' + hi('a plan') + '<br>not more willpower</h1>' +
           '<p class="obline">Find Me the Money gives every dollar ' + hi('a job') + '</p>' +
           '<p class="obline">finds the money ' + hi('slipping away') + '</p>' +
           '<p class="obline">and walks you ' + hi('7 steps') + ' from stressed to free</p>', tap);
       if (k === 'name') return wrap('<p class="obkicker">first things first</p><h1 class="obq">What should we call you?</h1>' +
           '<label class="obin"><input type="text" autocomplete="given-name" autocapitalize="words" data-obname value="' + esc(name) + '" placeholder="First name" maxlength="40"></label>', obBtn('Continue', 'obnext'));
-      if (k === 'hello') return wrap('<div class="obface" aria-hidden="true">' + ICON.logo + '</div><h1 class="obbig">alright ' + hi(esc(name || 'friend')) + ',<br>let’s find your money.</h1>' +
-          '<p class="obline">a few quick questions. Rough numbers are fine, and you can change anything later.</p>', obBtn('Start', 'obnext'));
-      if (k === 'pay') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">How much is your take-home pay?</h1>' + obInput('paycheck', '0', '$') +
-          '<p class="obhint">What lands in your account each payday, after taxes.</p>', obBtn('Continue', 'obnext'));
-      if (k === 'freq') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">How often do you get paid?</h1><div class="obopts">' + Object.keys(F.FREQS).map(function (f) {
-          return '<button type="button" class="obopt' + (P.freq === f ? ' on' : '') + '" data-a="obfreq" data-v="' + f + '">' + F.FREQS[f].label + '</button>'; }).join('') + '</div>', '');
-      if (k === 'nextpay') return wrap('<p class="obkicker">your paycheck</p><h1 class="obq">When’s your next payday?</h1>' +
-          '<label class="obin"><input type="date" data-f="nextPay" value="' + esc(P.nextPay) + '"></label><p class="obhint">Your countdown and check-ins line up with it.</p>', obBtn('Continue', 'obnext'));
-      if (k === 'exp') return wrap('<p class="obkicker">your spending</p><h1 class="obq">About how much do you spend a month?</h1>' + obInput('qExp', '0', '$') +
-          '<p class="obhint">Rent, bills, groceries, gas, eating out, shopping. Everything except debt payments.</p>', obBtn('Continue', 'obnext'));
-      if (k === 'debt') return wrap('<p class="obkicker">your debt</p><h1 class="obq">Any debt, besides your home?</h1>' + obInput('qDebt', '0', '$') +
-          '<p class="obhint">Credit cards, car, student loans, buy now pay later, medical. One rough total.</p>' +
-          '<p class="obkicker" style="margin-top:22px">payments, all together</p>' + obInput('qMin', '0', '$') + '<p class="obhint">Your minimum payments each month.</p>',
-        obBtn('Continue', 'obnext') + '<button type="button" class="oblink" data-a="obnodebt">I don’t have any debt</button>');
-      if (k === 'savings') return wrap('<p class="obkicker">your savings</p><h1 class="obq">How much do you have saved?</h1>' + obInput('savings', '0', '$') +
-          '<p class="obhint">Checking cushion and savings you could use in an emergency.</p>', obBtn('Continue', 'obnext') + '<button type="button" class="oblink" data-a="obnosave">Nothing saved yet</button>');
+      if (k === 'feel') { var fv = it.feel == null ? 50 : it.feel;
+        return wrap('<p class="obkicker">about you</p><h1 class="obq">' + who + ', how does money feel right now?</h1>' +
+          '<div class="obslide"><input type="range" min="0" max="100" step="1" value="' + fv + '" data-obfeel aria-label="How money feels, calm to stressed"><div class="obends"><span>calm</span><span>stressed</span></div></div>', obBtn('Continue', 'obnext')); }
+      if (k === 'first') return wrap('<p class="obkicker">about you</p><h1 class="obq">What would you do first with found money?</h1>' + pick('first', OB_FIRST), '');
+      if (k === 'way') return wrap('<p class="obkicker">about you</p><h1 class="obq">What\u2019s in the way?</h1>' + pick('way', OB_WAY), '');
+      if (k === 'heard') {
+        var f0 = OB_FIRST.filter(function (x) { return x[0] === it.first; })[0], w0 = OB_WAY.filter(function (x) { return x[0] === it.way; })[0], fe = it.feel == null ? 50 : it.feel;
+        // TODO: a "you're not alone" line goes here only with a real, cited statistic from Brad. Never make one up.
+        return wrap('<p class="obkicker">here\u2019s what we heard</p>' +
+          '<div class="obheard"><small>where you want to go</small><b>' + (f0 ? f0[2] : 'A plan that works') + '</b></div>' +
+          '<div class="obheard"><small>where you are now</small><b>' + (fe < 34 ? 'Pretty calm, and ready to make it better.' : fe < 67 ? 'Some days fine, some days tight.' : 'Stressed, and tired of it.') + '</b></div>' +
+          '<div class="obheard"><small>what\u2019s in the way</small><b>' + (w0 ? w0[1] : 'Not sure yet') + '</b>' + (w0 ? '<span>\u2192 ' + w0[2] + '</span>' : '') + '</div>', obBtn('Continue', 'obnext'));
+      }
+      if (k === 'four') return wrap('<h1 class="obbig">let\u2019s find your ' + hi('money') + '</h1><p class="obline">4 numbers \u00b7 about 60 seconds</p>' +
+          '<div class="obfour">' + ['Take-home pay', 'Monthly bills', 'Total debt', 'Debt payments'].map(function (t, n) { return '<div><b>' + (n + 1) + '</b>' + t + '</div>'; }).join('') + '</div>' +
+          '<p class="obhint" style="margin-top:0">A rough guess is fine. Your progress saves as you go.</p>', obBtn('Let\u2019s go', 'obnext'));
+      if (k === 'pay') return wrap('<p class="obkicker">your numbers \u00b7 1 of 4</p><h1 class="obq">How much do you bring home a month?</h1>' + obInput('qPayMonth', '0', '$') +
+          '<p class="obhint">After taxes, from every paycheck in the month. A rough guess is fine.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'exp') return wrap('<p class="obkicker">your numbers \u00b7 2 of 4</p><h1 class="obq">About how much are your monthly bills?</h1>' + obInput('qExp', '0', '$') +
+          '<p class="obhint">Rent, utilities, groceries, gas, phone, everything you spend except debt payments.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'debt') return wrap('<p class="obkicker">your numbers \u00b7 3 of 4</p><h1 class="obq">How much debt do you have, besides your home?</h1>' + obInput('qDebt', '0', '$') +
+          '<p class="obhint">Credit cards, car, student loans, buy now pay later, medical. One rough total.</p>',
+        obBtn('Continue', 'obnext') + '<button type="button" class="oblink" data-a="obnodebt">I don\u2019t have any debt</button>');
+      if (k === 'mins') return wrap('<p class="obkicker">your numbers \u00b7 4 of 4</p><h1 class="obq">What are your debt payments each month?</h1>' + obInput('qMin', '0', '$') +
+          '<p class="obhint">All your minimum payments added together.</p>', obBtn('Continue', 'obnext'));
+      if (k === 'freq') return wrap('<p class="obkicker">your paydays</p><h1 class="obq">How often are you paid?</h1><div class="obopts">' + [['weekly', 'Every week'], ['biweekly', 'Every other week'], ['semimonthly', 'Twice a month'], ['monthly', 'Once a month']].map(function (f) {
+          return '<button type="button" class="obopt' + (P.freq === f[0] ? ' on' : '') + '" data-a="obfreq" data-v="' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div>', '');
+      if (k === 'nextpay') return wrap('<p class="obkicker">your paydays</p><h1 class="obq">When\u2019s your next payday?</h1>' +
+          '<label class="obin"><input type="date" data-f="nextPay" data-obecho value="' + esc(P.nextPay) + '"></label><p class="obline obecho" data-live="obecho" style="font-size:18px">' + payEcho() + '</p>', obBtn('Continue', 'obnext'));
+      if (k === 'finding') {
+        // a short "finding your money" moment: real steps, then the reveal
+        clearTimeout(U.obTimer); U.obTimer = setTimeout(function () { if (U.screen === 'welcome' && OB[obAt()] === 'finding') obGo('found'); }, 2100);
+        return wrap('<h1 class="obbig" style="font-size:32px">finding your ' + hi('money') + '\u2026</h1><div class="obfind">' + ['adding up your bills', 'setting aside debt payments', 'finding what\u2019s left'].map(function (t, n) {
+          return '<div style="--d:' + (0.25 + n * 0.55).toFixed(2) + 's"><b>' + ICON.check('#141414', 14) + '</b>' + t + '</div>'; }).join('') + '</div>', '');
+      }
       if (k === 'found') {
-        var q = quickMath(), gap = q.noJob < 0 && q.total <= 0;
-        return wrap('<p class="obkicker">alright ' + esc(name || 'friend') + ', ' + (gap ? 'here’s the gap' : 'we found') + '</p><div class="obfound">' + money(gap ? -q.noJob : q.total) + '<span>a month</span></div>' +
-          '<h1 class="obbig" style="font-size:30px">' + (gap ? 'to find, so every bill is ' + hi('covered') + '.' : 'That’s ' + hi(money(q.total * 12)) + ' a year.') + '</h1>' +
-          (q.min > 0 ? '<p class="obline">' + hi(money(q.min) + '/mo') + ' in debt payments you keep once you’re debt-free</p>' : '') +
-          (q.noJob > 0 ? '<p class="obline">' + hi(money(q.noJob) + '/mo') + ' with no job yet. Money without a plan usually disappears.</p>' : '') +
-          (gap ? '<p class="obline">your expenses and payments are more than your pay. ' + hi('Let’s close that gap.') + '</p>' : ''),
-          obBtn(gap ? 'Find my money' : 'Reclaim my money', 'obnext') +
-          (CONFIG.communityUrl ? '<div class="freecomm"><a href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community →</a><small>Share your win, get your questions answered, and do the monthly challenge.</small></div>' : ''));
+        var q = quickMath(), fm = q.noJob, math = money(q.pay) + ' \u2212 ' + money(q.exp) + ' bills' + (q.min > 0 ? ' \u2212 ' + money(q.min) + ' debt payments' : '') + ' = ' + (fm < 0 ? '\u2212' + money(-fm) : money(fm)) + '/mo';
+        if (fm <= 0) return wrap('<p class="obkicker">' + who + ', here\u2019s where you are</p><h1 class="obbig" style="font-size:32px">your bills and payments use up ' + hi(fm < 0 ? 'more than' : 'all of') + ' your paycheck right now.</h1>' +
+            '<p class="obmath">' + math + '</p><p class="obline">That\u2019s more common than you think, and it\u2019s exactly where the plan starts. First we ' + hi('make room') + ': a short lesson on needs and wants, a fun-money limit, and one canceled subscription.</p>',
+          obBtn('Show me how', 'obnext') + communityLink());
+        return wrap('<div class="obconf" aria-hidden="true">' + confetti(26, 0) + '</div><p class="obkicker">' + who + ', we found</p><div class="obfound">' + money(fm) + '<span>a month</span></div>' +
+            '<h1 class="obbig" style="font-size:30px">That\u2019s ' + hi(money(fm * 12)) + ' a year.</h1><p class="obmath">' + math + '</p>' +
+            (q.min > 0 ? '<p class="obline" style="font-size:17px">Plus ' + hi(money(q.min) + '/mo') + ' more once you\u2019re debt-free.</p>' : ''),
+          obBtn('Reclaim my money', 'obnext') + communityLink());
+      }
+      if (k === 'first4') {
+        var plan4 = firstPaydays();
+        return wrap('<p class="obkicker">' + who + ', your first 4 paydays</p><h1 class="obq">' + (plan4.room ? 'First, we make room.' : 'Here\u2019s how it starts.') + '</h1>' +
+          (plan4.per ? '<p class="obhint" style="margin-top:-6px">If ' + money(plan4.per) + ' of your extra goes to the plan each payday:</p>' : '') +
+          '<div class="obfirst4">' + plan4.rows.map(function (r, n) { return '<div class="' + (/done|starts/.test(r[1]) ? 'win' : '') + '" style="--d:' + (0.15 + n * 0.25).toFixed(2) + 's"><small>' + r[0] + '</small><b>' + r[1] + '</b></div>'; }).join('') + '</div>', obBtn('Start payday 1', 'obnext'));
       }
       // save: email, then the code
       var st = U.cloudStep, m = me();
@@ -1324,7 +1379,7 @@
           '<label class="obin"><input type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" data-ccode placeholder="Code"></label>' +
           '<div class="oblinks"><button type="button" class="oblink" data-a="csend">Send a new code</button><button type="button" class="oblink" data-a="creset">Use a different email</button></div>',
         obBtn('Sign in', 'cverify') + ((U.codeTries || 0) >= 2 ? '<button type="button" class="oblink" data-a="obskip">Having trouble? Continue for now</button>' : ''));
-      return wrap('<p class="obkicker">last step</p><h1 class="obq">Save your plan</h1><p class="obline" style="font-size:17px">So it’s ' + hi('safe') + ' if you lose your phone or get a new one. Free, and no password: we email you a code.</p>' +
+      return wrap('<p class="obkicker">last step</p><h1 class="obq">Save your plan</h1><p class="obline" style="font-size:17px">So it\u2019s ' + hi('safe') + ' if you lose your phone or get a new one. Free, and no password: we email you a code.</p>' +
           '<label class="obin"><input type="email" inputmode="email" autocomplete="email" data-cemail value="' + esc(st && st.email || '') + '" placeholder="you@example.com"></label>' +
           '<label class="optin"><input type="checkbox" data-coptin' + (m.optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad. Unsubscribe anytime.</span></label>',
         obBtn('Email me a code', 'csend') + ((U.codeTries || 0) >= 2 ? '<button type="button" class="oblink" data-a="obskip">Having trouble? Continue for now</button>' : ''));
@@ -1714,7 +1769,7 @@
       var paydayStrip = due ? '<button type="button" class="sunbtn" data-a="checkin">' + (sv.count ? 'It\u2019s payday! Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'It\u2019s payday! Check in') + '</button>' : '';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
-      var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.floor(pl.unassigned) : 0;
+      var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.round(pl.unassigned) : 0;
       if (nojob > 0) return homeTop(toast) + '<div class="dark stack" style="gap:14px;border-radius:24px;padding:22px"><div class="sub" style="font-weight:500">Step ' + step + ' \u00b7 ' + F.STEPS[step - 1][0] + '</div>' +
         '<div style="font-family:var(--display);font-size:34px;line-height:1.1;color:var(--sun-soft)">' + money(nojob) + ' of extra each paycheck has no job yet.</div>' +
         '<div style="font-size:15px;color:rgba(255,255,255,.88)">Give it a job and your countdown starts.</div>' +
@@ -2274,7 +2329,7 @@
       '<button type="button" class="textbtn" data-a="coachlater">Maybe later</button></div>';
   }
   // the found money from "Find my money": monthly, can be $0 (or below, when there's a gap)
-  function foundMonthly() { var q = quickMath(); return q.total > 0 ? q.total : q.noJob; }
+  function foundMonthly() { return quickMath().noJob; }
   function starsCard(r) {
     if (!r || !r.stars) return '';
     var n = r.stars.filter(function (x) { return x === true; }).length;
@@ -2286,7 +2341,7 @@
     try {
       var k = 'fmtm.ci', sent = JSON.parse(localStorage.getItem(k) || '[]');
       if (n < 1 || n > 52 || sent.indexOf(n) >= 0) return;
-      track('checkin-' + n); sent.push(n); localStorage.setItem(k, JSON.stringify(sent));
+      track('checkin-' + n); if (n === 2) track('payday-2-checkin'); sent.push(n); localStorage.setItem(k, JSON.stringify(sent));
     } catch (e) {}
   }
   // remembers where things stood, so the next check-in can count what changed
@@ -2525,10 +2580,11 @@
     };
     var lessonNodes = function (set, lock) {
       // all lessons stay open (go at your own pace) and can be read again; the next one is highlighted
-      var firstOpen = view === cur;
+      // the first-open answer picks which lesson is up next; after that, the next one not done
+      var pref = { 1: { cushion: 'C1', debt: 'C1', payday: 'C4', same: 'C4' }, 2: { cushion: 'D1', debt: 'D1', payday: 'D3', same: 'D2' } }[view] || {}, want = pref[(P.intro || {}).first];
+      var nextId = view !== cur || lock ? null : want && !lessonDone(want) && set.some(function (x) { return x[0] === want; }) ? want : (set.filter(function (x) { return !lessonDone(x[0]); })[0] || [])[0];
       set.forEach(function (x) {
-        var id = x[0], l = lessonFor(id), dn = lessonDone(id), next = !dn && !lock && firstOpen;
-        if (next) firstOpen = false;
+        var id = x[0], l = lessonFor(id), dn = lessonDone(id), next = id === nextId;
         add({ icon: bk, t: l.title, s: dn ? 'Lesson done · read again' : lock ? 'Opens after Make room' : next ? 'Up next · 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, again: true, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
       });
     };
@@ -2812,22 +2868,23 @@
         U.billOpen[v] = !U.billOpen[v];
       })(); render(); break;
       case 'guidestep': (function () { var k = b.getAttribute('data-k'); U.gStep = U.gStep || {}; U.gPaused = U.gPaused || {}; U.gStep[k] = +v; U.gPaused[k] = true; clearInterval(csvTimer); csvTimer = null; var el = app.querySelector('[data-guide="' + k + '"]'); if (el) el.innerHTML = guideScene(k, U.gStep[k]); })(); break;
-      case 'obback': (function () { var i = obAt(); if (i > 0) { if (OB[i] === 'save' && U.cloudStep && U.cloudStep.sent) { U.cloudStep = null; render(); return; } obGo(OB[i - 1]); } })(); break;
+      case 'obback': (function () { var i = obAt(); if (i > 0) { if (OB[i] === 'save' && U.cloudStep && U.cloudStep.sent) { U.cloudStep = null; render(); return; } var to = OB[i - 1] === 'finding' ? 'nextpay' : OB[i - 1]; obGo(to); } })(); break;
       case 'obnext': (function () {
-        var k = OB[obAt()];
+        var k = OB[obAt()], it = P.intro = P.intro || {};
         if (k === 'name') { var nv = String((app.querySelector('[data-obname]') || {}).value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (!nv) { U.err = 'Add your first name.'; render(); return; } setMe({ name: nv }); }
-        if (k === 'pay' && !(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); return; }
-        if (k === 'nextpay' && !/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) { U.err = 'Pick your next payday.'; render(); return; }
-        if (k === 'exp' && !(num(P.qExp) > 0)) { U.err = 'Enter about how much you spend a month. A rough number is fine.'; render(); return; }
-        if (k === 'debt' && num(P.qDebt) > 0 && !(num(P.qMin) > 0)) { U.err = 'Add your monthly debt payments. A rough number is fine.'; render(); return; }
-        if (k === 'savings') { obApply(); track('quick-done'); }
-        if (k === 'found') { track('claim'); U.obAfter = true; U.afterSave = false; U.cloudStep = null; }
+        if (k === 'feel') { var fr = app.querySelector('[data-obfeel]'); it.feel = fr ? +fr.value : 50; save(); }
+        if (k === 'pay' && !(num(P.qPayMonth) > 0)) { U.err = 'Enter about how much you bring home a month. A rough guess is fine.'; render(); return; }
+        if (k === 'exp' && !(num(P.qExp) > 0)) { U.err = 'Enter about how much your bills are a month. A rough guess is fine.'; render(); return; }
+        if (k === 'mins' && num(P.qDebt) > 0 && !(num(P.qMin) > 0)) { U.err = 'Add your monthly debt payments. A rough guess is fine.'; render(); return; }
+        if (k === 'nextpay') { if (!/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) { U.err = 'Pick your next payday.'; render(); return; } obApply(); track('quick-done'); }
+        if (k === 'found') track('reveal-reached');
+        if (k === 'first4') { track('claim'); U.obAfter = true; U.afterSave = false; U.cloudStep = null; }
         if (k === 'story1') track('setup-start');
         obGo(OB[Math.min(obAt() + 1, OB.length - 1)]);
       })(); break;
+      case 'obpick': (function () { var it = P.intro = P.intro || {}; it[b.getAttribute('data-k')] = v; save(); obGo(OB[obAt() + 1]); })(); break;
       case 'obfreq': P.freq = v; save(); obGo('nextpay'); break;
-      case 'obnodebt': P.qDebt = ''; P.qMin = ''; save(); obGo('savings'); break;
-      case 'obnosave': P.savings = '0'; save(); obApply(); track('quick-done'); obGo('found'); break;
+      case 'obnodebt': P.qDebt = ''; P.qMin = ''; save(); obGo('freq'); break;
       case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
       case 'obhome': U.obAfter = false; go('home'); break;
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
@@ -3280,6 +3337,7 @@
   app.addEventListener('input', function (e) {
     var t = e.target;
     if (U.err) { U.err = ''; var al = app.querySelector('[role=alert]'); if (al) al.remove(); }
+    if (t.hasAttribute('data-obecho')) { P.nextPay = t.value; var ec = app.querySelector('[data-live=obecho]'); if (ec) ec.innerHTML = payEcho(); }
     if (t.hasAttribute('data-debtlump')) { if (!P.debts.length) P.debts.push({ id: uid(), name: 'My debts', bal: '', orig: '', min: '', apr: '', lump: true }); P.debts[0][t.getAttribute('data-debtlump')] = t.value; save(); return; }
     if (t.hasAttribute('data-f')) {
       if (t.hasAttribute('data-list')) P[t.getAttribute('data-list')][+t.getAttribute('data-i')][t.getAttribute('data-k')] = t.value;
