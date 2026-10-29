@@ -2,6 +2,8 @@
 (function () {
   'use strict';
   var F = window.FMTM;
+  // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
+  var APP_VERSION = '10-30d';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -2320,7 +2322,7 @@
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
         (CONFIG.feedbackUrl ? '<a class="outline" style="text-decoration:none;color:var(--ink)" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener">Send feedback</a>' : '') +
         '<a class="textbtn" style="text-align:center;text-decoration:none;display:block;padding-top:12px" href="privacy.html">Privacy</a>' +
-        '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta.</p>';
+        '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta \u00b7 version ' + APP_VERSION + '</p>';
     },
     saveinstall: function () {
       var ios = isIOS();
