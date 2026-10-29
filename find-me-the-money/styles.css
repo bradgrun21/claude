@@ -916,3 +916,14 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .rbar { display: block; height: 8px; border-radius: 4px; background: rgba(59,29,14,.15); overflow: hidden; }
 .rbar i { display: block; height: 100%; border-radius: 4px; background: var(--sun-deep); }
 .recap-share { margin-top: 14px; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: rgba(59,29,14,.12); color: var(--sun-deep); font-weight: 700; font-size: 14px; }
+/* edit sheets: slide up, nothing changes until Save */
+.sheetback { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.6); animation: sheetfade .2s ease; }
+.sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; transform: translateX(-50%); width: min(430px, 100%); max-height: 88vh; max-height: 88dvh; overflow-y: auto; background: #1C1C1C; border-radius: 26px 26px 0 0; border: 1px solid var(--edge); border-bottom: 0;
+  padding: 10px 20px max(20px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; animation: sheetup .25s ease; }
+.sheet h3 { font-size: 20px; }
+.sheetgrab { width: 40px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.2); align-self: center; }
+.sheetbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sheetbtns .primary, .sheetbtns .outline { min-height: 52px; }
+@keyframes sheetup { from { transform: translate(-50%, 40px); opacity: .4; } to { transform: translate(-50%, 0); opacity: 1; } }
+@keyframes sheetfade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet, .sheetback { animation: none; } }

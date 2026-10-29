@@ -182,6 +182,7 @@ The Budget tab has three bubbles.
 - **Saving**: the cushion (or safety net), the monthly amount to your step with "Give it a job", goals, and a "where your money goes each month" breakdown ending in your extra.
 - **Debt**: debt left, paid so far, debt-free date, and each debt smallest first with a bar and its payoff date.
 Purchases can also be typed in one line on the weekly purchases screen ("coffee 5, gas $50 yesterday, Kroger 84.20 monday"): `FMTMScan.parseTyped` in scan.js reads the amount, the words and a date word (today, yesterday, a weekday, 10/24, Oct 24), and the rows join the same checked list as scanned ones with a category guess. No AI, nothing sent anywhere.
+Editing in the Budget happens in a pop-up sheet (`U.sheet`, `sheetHtml()`): tap a category, a recurring expense or the monthly step amount, change it, and nothing is saved until Save. Cancel or tapping outside throws the change away; Remove takes two taps.
 Money math: `P.basics` is the rough monthly total. Adding a category or recurring expense splits it (the extra doesn't change); changing or removing one changes the total. Plans from before this (no `P.budgetV2`) keep their old math until they first change the Budget. Recurring expenses are `P.bills` with `freq` (amount each time) and `due`; categories are `P.cats`.
 
 ## Setup carries the rough numbers over
