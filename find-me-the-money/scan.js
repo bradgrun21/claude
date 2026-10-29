@@ -219,6 +219,34 @@
     return step('loading the reader', worker()).then(function (w) { return step('reading the text', Promise.resolve(w.recognize(cv))); }).then(function (out) { return { text: out.data.text.trim(), ms: Date.now() - t0 }; });
   }
 
-  var api = { describe: describe, selfTest: selfTest, parseLines: parseLines, findAmounts: findAmounts, findDate: findDate, cleanName: cleanName, rowKey: rowKey, dedupe: dedupe, prepare: prepare, readImage: readImage, worker: worker };
+  // ---------- typed in one line: "coffee 5, gas $50 yesterday" ----------
+  var DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  function parseTyped(text, today) {
+    var t = today || new Date(), out = [];
+    String(text || '').split(/[;\n]+|,(?!\d{3}\b)/).forEach(function (part) {
+      var s = part.trim(); if (!s) return;
+      var m = /\$?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?(?!\s*\/)/.exec(s.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, function (x) { return x.replace(/\d/g, '#'); }));
+      if (!m) return;
+      var amount = +((m[1].replace(/,/g, '')) + '.' + ((m[2] || '0') + '0').slice(0, 2));
+      if (!(amount > 0)) return;
+      var rest = s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length), date = null;
+      var dt = findDate(rest, t);
+      if (dt) { date = dt.iso; rest = rest.replace(dt.raw, ' '); }
+      else {
+        var w = new RegExp('\\b(?:last\\s+)?(' + DAYS.join('|') + '|sun|mon|tues?|wed|thur?s?|fri|sat)\\b', 'i').exec(rest);
+        if (w) {
+          var k = DAYS.findIndex(function (d) { return d.indexOf(w[1].toLowerCase().slice(0, 3)) === 0; });
+          var back = (t.getDay() - k + 7) % 7, d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - back);
+          date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); rest = rest.replace(w[0], ' ');
+        }
+      }
+      rest = rest.replace(/\b(at|on|for|spent|paid|bought)\b/gi, ' ').replace(/[$]/g, ' ').replace(/\s+/g, ' ').trim();
+      var merchant = rest ? rest.split(' ').map(function (x) { return x.length > 2 || /[A-Z]/.test(x) ? x.charAt(0).toUpperCase() + x.slice(1) : x; }).join(' ').slice(0, 40) : 'Purchase';
+      out.push({ merchant: merchant, raw: s, amount: amount, date: date || (t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate())), confidence: 100, low: false, flag: '', skip: false, typed: true });
+    });
+    return out;
+  }
+
+  var api = { parseTyped: parseTyped, describe: describe, selfTest: selfTest, parseLines: parseLines, findAmounts: findAmounts, findDate: findDate, cleanName: cleanName, rowKey: rowKey, dedupe: dedupe, prepare: prepare, readImage: readImage, worker: worker };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.FMTMScan = api;
 })(this);

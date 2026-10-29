@@ -87,6 +87,13 @@ test('pieces of one row read separately are joined left to right', () => {
   assert.deepStrictEqual(rows.map((r) => r.merchant + ' ' + r.amount), ['Target 14.26', 'Corner Market 29']);
 });
 
+test('purchases typed in one line', () => {
+  const r = S.parseTyped('coffee 5, gas $50 yesterday; Target 23.40 on Friday\nH-E-B $61.15 10/24, kids shoes 1,200', today);
+  assert.deepStrictEqual(r.map((x) => [x.merchant, x.amount, x.date]), [
+    ['Coffee', 5, '2026-10-25'], ['Gas', 50, '2026-10-24'], ['Target', 23.4, '2026-10-23'], ['H-E-B', 61.15, '2026-10-24'], ['Kids Shoes', 1200, '2026-10-25']]);
+  assert.deepStrictEqual(S.parseTyped('just words, , 0', today), []);
+});
+
 test('low-confidence rows are flagged', () => {
   const rows = S.parseLines([{ text: 'Coffee Bar -$6.25', confidence: 48 }], { today });
   assert.strictEqual(rows[0].low, true);

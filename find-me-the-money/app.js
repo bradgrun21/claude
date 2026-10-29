@@ -2120,7 +2120,8 @@
           '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, i) + '</div></div>';
       }).join('');
       return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add this week’s purchases</h2>' +
-        '<p>Scan screenshots of your bank app’s transaction list. They’re read on this phone, never uploaded or saved.</p></div>' +
+        '<p>Scan screenshots of your bank app’s transaction list, or type them in. Everything stays on this phone.</p></div>' +
+        '<div class="typeit"><input type="text" data-typed autocomplete="off" placeholder="Type it: coffee 5, gas $50 yesterday" aria-label="Type purchases"><button type="button" class="sharebtn" data-a="typedadd">Add</button></div>' +
         (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'screenshot ' + sc.reading + ' of ' + sc.total : 'your screenshot') + '…</b><small>A few seconds each. The first one takes longer.</small></div>' : '') +
         (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
         (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
@@ -3063,6 +3064,17 @@
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
+      case 'typedadd': (function () {
+        var inp = app.querySelector('[data-typed]'), sc = U.scan, txt = inp ? inp.value : '';
+        if (!sc || !window.FMTMScan || !txt.trim()) return;
+        var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMScan.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); });
+        var found = FMTMScan.parseTyped(txt, today());
+        if (!found.length) { sc.err = 'Add an amount, like “coffee 5” or “gas $50 yesterday”.'; render(); return; }
+        // typed rows join the same list as scanned ones, checked, with a category guess
+        FMTMScan.dedupe(sc.rows.concat(found), seen).slice(sc.rows.length).forEach(function (row) { var g = suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = true; sc.rows.push(row); });
+        sc.err = ''; track('typed-add'); render();
+        var again = app.querySelector('[data-typed]'); if (again) again.focus();
+      })(); break;
       case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
       case 'scansave': (function () {
         var sc = U.scan, keep = sc.rows.filter(function (r) { return r.ok; }), miss = keep.filter(function (r) { return !r.key; })[0];
@@ -3502,8 +3514,9 @@
   });
 
   // typing updates the saved data in place, so the keyboard never loses its place
-  // the return key moves the intro along
+  // the return key moves the intro along, and adds a typed purchase
   app.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.hasAttribute && e.target.hasAttribute('data-typed')) { e.preventDefault(); var ta = app.querySelector('[data-a=typedadd]'); if (ta) ta.click(); return; }
     if (e.key !== 'Enter' || !e.target.closest || !e.target.closest('.ob')) return;
     var bt = app.querySelector('.ob .obbtn'); if (bt) { e.preventDefault(); bt.click(); }
   });
