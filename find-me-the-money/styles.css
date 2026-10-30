@@ -1396,3 +1396,6 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .mm-gitem.done .mm-em, .mm-gitem.done .mm-c { opacity: .5; }
 .mm-gx { flex: none; width: 44px; border: 0; background: none; color: var(--muted); font-size: 14px; cursor: pointer; border-left: 1px solid rgba(255,255,255,.06); }
 .mm-gclear { width: 100%; margin-top: 10px; color: var(--muted); }
+/* Meal Math: sides */
+.mm-sides { display: block; font-size: 12px; font-weight: 700; color: var(--ink); opacity: .8; margin-top: 1px; }
+.mm-kind { margin: 2px 0 12px; }
