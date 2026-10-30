@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30o';
+  var APP_VERSION = '10-30p';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -108,10 +108,10 @@
       efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], storeLine: {}, weeks: {}, merchantMem: {}, intro: {}, qPayMonth: '', payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
-  var storageOk = true;
+  var storageOk = true, firstOpen = false;
   function load() {
     try {
-      var raw = localStorage.getItem(CONFIG.storageKey); if (!raw) return blank();
+      var raw = localStorage.getItem(CONFIG.storageKey); if (!raw) { firstOpen = true; return blank(); }
       var d = JSON.parse(raw); delete d.x; delete d.moneyDate; delete d.moneyDates; if (d.remind) d.remind.payday = false;
       // plans saved before features unlocked gradually keep everything they already had
       if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
@@ -501,7 +501,7 @@
   function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
 
   // ---------- screen state (not saved) ----------
-  var U = { screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
+  var U = { front: firstOpen && !P.setupDone, screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
   var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['settings', 'Settings', 'gear']];
@@ -528,6 +528,7 @@
       }).join('') + '</nav>' + (U.plusOpen ? plusSheet() : '');
     }
     app.innerHTML = html;
+    var front = U.screen === 'welcome' && U.front; document.body.classList.toggle('is-front', front); if (front) frontInit(); else clearInterval(wf.timer);
     csvAutoplay();
     document.body.classList.toggle('has-tabs', tabbed);
   }
@@ -755,6 +756,108 @@
     snapshot(); save(); track('setup-done');
     U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
   }
+  // ---------- the front page: first open only, before the intro ----------
+  // Three app screens drawn at phone size (375 x 812) and scaled into a CSS iPhone. Demo numbers:
+  // $2,100 twice a month = $4,200; 4,200 - 2,610 - 748 = $842 a month, $10,104 a year, $421 a payday.
+  var WF_CAPS = [['Find it', 'See the money you didn’t know you had', 'Four numbers and you’ll know what you can take back each month.'],
+    ['Plan it', 'Give every dollar a job', 'Know what’s safe to spend today, all the way to payday.'],
+    ['Live it', 'One payday at a time', 'Small weekly steps toward your first $1,000, then debt-free.']];
+  function wfGauge(lit, big) {
+    var out = '';
+    for (var i = 0; i < 22; i++) { var a = Math.PI - i / 21 * Math.PI; out += '<line x1="' + (110 + 74 * Math.cos(a)).toFixed(1) + '" y1="' + (104 - 74 * Math.sin(a)).toFixed(1) + '" x2="' + (110 + 96 * Math.cos(a)).toFixed(1) + '" y2="' + (104 - 96 * Math.sin(a)).toFixed(1) + '"' + (i < lit ? ' class="on"' : '') + '/>'; }
+    return '<svg class="wf-gauge' + (big ? ' big' : '') + '" viewBox="0 0 220 112" aria-hidden="true">' + out + '</svg>';
+  }
+  function wfTabs(on) {
+    var ic = { Home: '<path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>', Budget: '<path d="M4 7a2 2 0 012-2h11v4"/><path d="M4 7v11a2 2 0 002 2h13a1 1 0 001-1V10a1 1 0 00-1-1H6a2 2 0 01-2-2z"/>',
+      Journey: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', Settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/>' };
+    var svg = function (d, w) { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
+    return '<div class="wf-tabs">' + ['Home', 'Budget', '', 'Journey', 'Settings'].map(function (t) {
+      return t ? '<div' + (t === on ? ' class="on"' : '') + '>' + svg(ic[t]) + '<span>' + t + '</span></div>' : '<div class="wf-fab">' + svg('<path d="M12 5v14M5 12h14"/>', 2.6) + '</div>';
+    }).join('') + '</div>';
+  }
+  function wfSlides() {
+    var arrow = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+    var check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+    var cols = ['#FFC97E', '#FFAD8C', '#7ED9C0', '#9A8BD3', '#2A6B66', '#FF9F7A'];
+    var conf = [[208, 8, 20], [236, 30, -35], [262, 4, 60], [290, 40, 15], [318, 18, -20], [340, 58, 45], [300, 92, -60], [330, 118, 25], [268, 132, -15], [226, 112, 70], [196, 60, -40], [352, 150, 10], [248, 74, 35], [284, 160, -50], [214, 150, 20], [322, 84, -30]].map(function (c, i) {
+      return '<i style="left:' + c[0] + 'px;top:' + c[1] + 'px;transform:rotate(' + c[2] + 'deg);background:' + cols[i % cols.length] + '"></i>'; }).join('');
+    var reveal = '<div class="wf-back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F4F3EF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></div>' +
+      '<div class="wf-conf">' + conf + '</div>' +
+      '<div class="wf-rv"><div class="wf-mut" style="font-size:17px">Maya, we found</div><div class="wf-big">$842<small>a month</small></div>' +
+      '<div class="wf-yr">That’s <span class="wf-hi">$10,104</span> a year.</div><div class="wf-eq">$4,200 − $2,610 bills − $748 debt payments = $842/mo</div>' +
+      '<div style="font-size:18px;line-height:1.35">Plus <b class="wf-hi">$748/mo</b> more once you’re debt-free.</div></div>' +
+      '<div class="wf-rvb"><div class="wf-btn"><span>Reclaim my money</span>' + arrow + '</div><div class="wf-hi" style="font-weight:700;font-size:16px">Join the free community →</div></div>';
+    var budget = '<div class="wf-bh"><b>Budget</b><div class="wf-mo"><i>‹</i>November 2026<i>›</i></div></div>' +
+      '<div class="wf-card wf-inc"><div class="wf-edit">Edit</div><div class="wf-mut" style="font-size:15px">Income for November</div><div class="wf-amt">$4,200</div><div class="wf-mut" style="font-size:13px">2 paychecks</div>' +
+      '<div class="wf-ltb"><span>Left to budget</span><b>$842</b></div><div class="wf-leg"><span style="--c:#7ED9C0">Needs $2,610</span><span style="--c:#FFAD8C">Debt $748</span></div></div>' +
+      '<div class="wf-seg"><div class="on">Spending</div><div>Saving</div><div>Debt</div></div>' +
+      '<div class="wf-card wf-spend"><div class="wf-ok">On track</div><div class="wf-gw">' + wfGauge(12) + '<div class="wf-gm"><div class="wf-mut" style="font-size:15px">Left to spend</div><div class="wf-v">$1,370.00</div></div></div>' +
+      '<div class="wf-safe"><b>$91.33/day</b> safe to spend · 15 days left</div></div>' + wfTabs('Budget');
+    var journey = '<div class="wf-jh"><div class="wf-mut" style="font-size:13px">Step 1 of 7</div><b class="wf-jt">$1,000 Emergency Fund</b>' +
+      '<div class="wf-gw">' + wfGauge(9, true) + '<div class="wf-gm"><div class="wf-v" style="font-size:44px">$579</div></div></div>' +
+      '<div class="wf-mut" style="font-size:13px;text-align:center;margin-top:6px">left to your $1,000 Emergency Fund</div>' +
+      '<div class="wf-jstat"><span>$421 saved</span><b>42%</b><span>$1,000 goal</span></div></div>' +
+      '<div class="wf-card wf-streak"><div class="wf-sh"><div class="wf-fl"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC97E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.9-3-6.4-4.2-9.4-.8 2-2 3-3.3 3.6.3-2.6-.6-5-2.5-6.6C9.6 6.8 5 9.5 5 15.4 5 19.3 8 22 12 22z"/></svg></div>' +
+      '<div><b>Weekly streak</b><span class="wf-mut" style="font-size:13px;display:block">Nov 15–21</span></div></div>' +
+      '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Categorize transactions</span><em>Done</em></div>' +
+      '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Update balances</span><em>Done</em></div>' +
+      '<div class="wf-tsk"><i></i><span>Read your weekly recap</span><u>Go</u></div></div>' +
+      '<div class="wf-chips"><div class="on">Map</div><div>Challenges</div><div>Milestones</div></div>' + wfTabs('Journey');
+    var labels = ['1 of 3: Maya found $842 a month', '2 of 3: November budget, $1,370 left to spend', '3 of 3: Journey, $421 saved toward $1,000'];
+    return [reveal, budget, journey].map(function (h, i) { return '<div class="wf-slide" role="group" aria-roledescription="slide" aria-label="' + labels[i] + '"><div class="wf-cv">' + h + '</div></div>'; }).join('');
+  }
+  function frontPage() {
+    if (!U.frontSeen) { U.frontSeen = true; track('welcome-view'); }
+    var bars = '<svg width="18" height="12" viewBox="0 0 18 12" fill="#F4F3EF"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>' +
+      '<svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#F4F3EF" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 4.2a9.6 9.6 0 0113 0M4 7a6 6 0 018 0"/><circle cx="8" cy="10" r="1.3" fill="#F4F3EF" stroke="none"/></svg>' +
+      '<svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x=".5" y=".5" width="22" height="11" rx="3.2" stroke="#F4F3EF" opacity=".45"/><rect x="2.3" y="2.3" width="16" height="7.4" rx="1.8" fill="#F4F3EF"/><rect x="24" y="4" width="1.6" height="4" rx=".8" fill="#F4F3EF" opacity=".45"/></svg>';
+    var chev = function (d) { return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>'; };
+    return '<div class="wf">' +
+      '<section class="wf-copy"><div class="wf-brand"><img src="icons/icon.svg" alt="" width="30" height="30">Find Me the Money</div>' +
+      '<h1>find the <span class="wf-hi">money</span> you didn’t know you had</h1>' +
+      '<p class="wf-sub">A calm plan for your paycheck. Four numbers, about a minute, and you’ll see where it’s been slipping away.</p></section>' +
+      '<section class="wf-stage" aria-label="A look inside the app"><div class="wf-glow" aria-hidden="true"></div>' +
+      '<div class="wf-phone"><div class="wf-screen"><div class="wf-track" tabindex="0" aria-roledescription="carousel" aria-label="App screens, swipe to see more">' + wfSlides() + '</div>' +
+      '<div class="wf-cv wf-over" aria-hidden="true"><div class="wf-sb"><span>9:41</span><span class="wf-ic">' + bars + '</span></div><div class="wf-island"></div><div class="wf-home"></div></div></div></div>' +
+      '<div class="wf-cap" aria-live="polite"><div class="wf-eb"></div><div class="wf-ct"></div><div class="wf-cd"></div></div>' +
+      '<div class="wf-ctrl"><button type="button" class="wf-arrow" data-wf="-1" aria-label="Previous screen">' + chev('M15 5l-7 7 7 7') + '</button><div class="wf-dots">' +
+      WF_CAPS.map(function (c, i) { return '<button type="button" class="wf-dot" data-wfdot="' + i + '" aria-label="Show screen ' + (i + 1) + ': ' + c[0] + '"></button>'; }).join('') +
+      '</div><button type="button" class="wf-arrow" data-wf="1" aria-label="Next screen">' + chev('M9 5l7 7-7 7') + '</button></div></section>' +
+      '<section class="wf-act">' + obBtn('Find my money', 'frontstart') +
+      '<div class="wf-trust"><span>Free</span><span>No bank login</span><span>Made by a certified financial coach</span></div>' +
+      (cloudOn() ? '<div class="wf-signin">Already have an account? <button type="button" class="wf-link" data-a="go" data-v="account">Sign in</button></div>' : '') + '</section></div>';
+  }
+  // the carousel runs on its own (no re-render): swipe, drag, arrows, dots, keys, and auto-advance until first touch
+  var wf = { timer: null, cur: 0, swiped: false };
+  function frontInit() {
+    clearInterval(wf.timer);
+    var root = app.querySelector('.wf'); if (!root) return;
+    var screen = root.querySelector('.wf-screen'), trk = root.querySelector('.wf-track'), n = WF_CAPS.length, dots = root.querySelectorAll('.wf-dot');
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var fit = function () { screen.style.setProperty('--s', (screen.clientWidth / 375).toFixed(4)); };
+    fit(); if (window.ResizeObserver) new ResizeObserver(fit).observe(screen); else window.addEventListener('resize', fit);
+    var paint = function (i) {
+      wf.cur = i;
+      Array.prototype.forEach.call(dots, function (d, k) { d.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+      root.querySelector('.wf-eb').textContent = (i + 1) + ' of 3 · ' + WF_CAPS[i][0]; root.querySelector('.wf-ct').textContent = WF_CAPS[i][1]; root.querySelector('.wf-cd').textContent = WF_CAPS[i][2];
+    };
+    var go = function (i) { i = (i + n) % n; trk.scrollTo({ left: i * trk.clientWidth, behavior: reduce ? 'auto' : 'smooth' }); paint(i); };
+    var touched = function () { clearInterval(wf.timer); if (!wf.swiped) { wf.swiped = true; track('welcome-swipe'); } };
+    var raf; trk.addEventListener('scroll', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { var i = Math.round(trk.scrollLeft / trk.clientWidth); if (i !== wf.cur && i >= 0 && i < n) paint(i); }); }, { passive: true });
+    ['pointerdown', 'wheel', 'touchstart'].forEach(function (e) { trk.addEventListener(e, touched, { passive: true }); });
+    root.querySelectorAll('[data-wf]').forEach(function (b) { b.addEventListener('click', function () { touched(); go(wf.cur + +b.getAttribute('data-wf')); }); });
+    Array.prototype.forEach.call(dots, function (d, i) { d.addEventListener('click', function () { touched(); go(i); }); });
+    // mouse drag on desktop (touch swipes natively)
+    var down = false, x0 = 0, s0 = 0, moved = 0;
+    trk.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'mouse') return; down = true; x0 = e.clientX; s0 = trk.scrollLeft; moved = 0; trk.classList.add('dragging'); try { trk.setPointerCapture(e.pointerId); } catch (er) {} });
+    trk.addEventListener('pointermove', function (e) { if (down) { moved = e.clientX - x0; trk.scrollLeft = s0 - moved; } });
+    var up = function () { if (!down) return; down = false; trk.classList.remove('dragging'); var w = trk.clientWidth, t = Math.round(s0 / w); if (moved < -w * 0.12) t++; else if (moved > w * 0.12) t--; go(Math.max(0, Math.min(n - 1, t))); };
+    trk.addEventListener('pointerup', up); trk.addEventListener('pointercancel', up);
+    wf.key = function (e) { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { if (/input|textarea|select/i.test((e.target || {}).tagName || '')) return; e.preventDefault(); touched(); go(wf.cur + (e.key === 'ArrowRight' ? 1 : -1)); } };
+    paint(wf.cur); if (wf.cur) trk.scrollLeft = wf.cur * trk.clientWidth;
+    if (!reduce && !wf.swiped) wf.timer = setInterval(function () { if (!document.hidden && app.contains(trk)) go(wf.cur + 1); else if (!app.contains(trk)) clearInterval(wf.timer); }, 5000);
+  }
+  document.addEventListener('keydown', function (e) { if (U.front && U.screen === 'welcome' && wf.key) wf.key(e); });
   // ---------- the intro: one question per screen, then sign in, then the 7-step path ----------
   var OB = ['story1', 'story2', 'name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'mins', 'finding', 'found', 'first4', 'save'];
   var OB_ASK = ['name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'mins'];
@@ -1380,7 +1483,7 @@
   }
 
   var V = {
-    welcome: function () { return V.ob(); },
+    welcome: function () { return U.front ? frontPage() : V.ob(); },
     ob: function () {
       var k = OB[obAt()], i = obAt(), name = firstName(), who = esc(name || 'friend'), err = U.err ? '<p class="oberr" role="alert">' + esc(U.err) + '</p>' : '', it = P.intro || {};
       // one screen-view event per screen, so drop-off shows step by step (no answers or numbers are sent)
@@ -2595,6 +2698,7 @@
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
+      case 'frontstart': U.front = false; clearInterval(wf.timer); track('welcome-start'); U.ob = OB[0]; render(); window.scrollTo(0, 0); break;
       case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
       case 'recapdone': U.recapCoach = !coachSeen() && !!CONFIG.communityUrl && !Object.keys(P.wk || {}).some(function (k) { return P.wk[k].done; }); wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
       case 'fundopen': (function () {
