@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30r';
+  var APP_VERSION = '10-30s';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -529,6 +529,7 @@
     }
     app.innerHTML = html;
     var front = U.screen === 'welcome' && U.front; document.body.classList.toggle('is-front', front); if (front) frontInit(); else clearInterval(wf.timer);
+    tourMaybe();
     csvAutoplay();
     document.body.classList.toggle('has-tabs', tabbed);
   }
@@ -755,6 +756,132 @@
     if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
     snapshot(); save(); track('setup-done');
     U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
+  }
+  // ---------- the guided tour: once per page, a spotlight on each feature with one short line ----------
+  // Seen pages are kept on this phone (fmtm.tour), not in the plan, so a spouse sharing the budget gets their own.
+  var TOUR_KEY = 'fmtm.tour';
+  function tourSeen() { try { return JSON.parse(localStorage.getItem(TOUR_KEY) || '{}'); } catch (e) { return {}; } }
+  function tourMark(k) { try { var t = tourSeen(); t[k] = F.isoDay(today()); localStorage.setItem(TOUR_KEY, JSON.stringify(t)); } catch (e) {} }
+  // a Budget section or a card, found by its heading
+  // a section is its heading plus everything under it up to the next heading
+  function bySec(title) {
+    return function () {
+      var b = Array.prototype.filter.call(app.querySelectorAll('.bud-sec b'), function (x) { return x.textContent === title; })[0], h = b && b.closest('.bud-sec'); if (!h) return null;
+      var span = [h]; for (var n = h.nextElementSibling; n && !n.classList.contains('bud-sec') && !n.classList.contains('tabbar'); n = n.nextElementSibling) { span.push(n); if (n.classList.contains('outline')) break; }
+      h.tourSpan = span; return h;
+    };
+  }
+  function tourRect(el) {
+    var list = el.tourSpan || [el], r = { top: 1e9, left: 1e9, right: -1e9, bottom: -1e9 };
+    list.forEach(function (x) { var q = x.getBoundingClientRect(); if (!q.height) return; r.top = Math.min(r.top, q.top); r.left = Math.min(r.left, q.left); r.right = Math.max(r.right, q.right); r.bottom = Math.max(r.bottom, q.bottom); });
+    r.width = r.right - r.left; r.height = r.bottom - r.top; return r;
+  }
+  function byCard(title) { return function () { var b = Array.prototype.filter.call(app.querySelectorAll('.card b, .card .eyebrow'), function (x) { return x.textContent === title; })[0]; return b && b.closest('.card'); }; }
+  function budTab(t) { return function () { if (U.bTab !== t) { U.bTab = t; render(); } }; }
+  // [where, title, one line, what to switch to first]
+  var TOUR = {
+    home: [
+      ['.hero', 'Your next goal', 'How much is left on the step you’re on. It fills as you save and pay down debt.'],
+      [function () { var h = app.querySelector('.hero'), n = h && h.nextElementSibling; return n && n.querySelector('[data-a=chquit]') ? n : null; }, 'Your challenge', 'A challenge you started. Log your progress right here.'],
+      ['.commcard', 'Your community', 'Free help from people on the same path, plus coaching if you want it.'],
+      ['.cal', 'Your month', 'Paydays, bills coming up and your wins. Tap a day to see it.'],
+      ['.fab', 'Add anything', 'Add purchases, update balances or set a goal.']
+    ],
+    plan: [
+      ['.inc-card', 'This month’s money', 'Your pay this month and what still needs a job. Tap Edit to change your income.', budTab('spend')],
+      ['.bud-tabs', 'Three tabs', 'Spending, Saving and Debt. Everything about your money lives here.'],
+      ['.bud-top', 'Left to spend', 'What’s left this month, and a safe amount for each day.'],
+      [bySec('Spending'), 'Spending categories', 'Tap a card to change its amount, name, color or type.'],
+      [bySec('Recurring expenses'), 'Recurring expenses', 'Bills that repeat. They show on your calendar, and a fund can pay them.'],
+      ['[data-a=sheetopen][data-v=bal]', 'Update balances', 'Type what your bank shows. Debt paid and money saved add up as you go.', budTab('save')],
+      [bySec('Saving funds'), 'Saving funds', 'Set money aside each week for bills that come later, like car insurance.'],
+      [bySec('Goals'), 'Goals', 'Save for something with a date. Each paycheck puts a little toward it.'],
+      ['.bud-top', 'Your debt', 'What’s left and how much you’ve paid off.', budTab('debt')],
+      [bySec('Smallest first'), 'Smallest first', 'Pay the smallest debt first, then roll that payment into the next one.']
+    ],
+    journey: [
+      ['.jhead', 'Your step', 'Where you are on the 7 steps, and how close you are to the next one.'],
+      ['.wkcard', 'Your week', 'Three steps each week: categorize, update balances, read your recap. Do all three to keep your streak.'],
+      ['.tabchips', 'Map, challenges, milestones', 'Lessons for your step, challenges to try, and the wins you’ve earned.'],
+      ['.mpath', 'Your map', 'Short lessons and checkpoints. Tap one to start.']
+    ],
+    settings: [
+      [byCard('Reminders'), 'Reminders', 'A short note the day before a bill is due.'],
+      ['.linkrow[data-v=install]', 'Home Screen', 'Add the app to your Home Screen so it’s one tap away.'],
+      [byCard('Your data'), 'Your data', 'Save a backup, bring a plan over, or start fresh.']
+    ]
+  };
+  var tourNow = null;
+  // a step shows on the tab set by the nearest switch at or before it (so Back lands on the right Budget tab)
+  function tourTab(steps, k) { for (var j = k; j >= 0; j--) if (steps[j][3]) { steps[j][3](); return; } }
+  function tourFind(sel) {
+    var el = typeof sel === 'function' ? sel() : app.querySelector(sel) || document.querySelector(sel);
+    return el && el.getBoundingClientRect().height > 0 ? el : null;
+  }
+  function tourStart(page) {
+    if (!TOUR[page] || tourNow) return;
+    // which steps this person's page has (checked on every Budget tab before anything shows, so the count holds steady)
+    var steps = TOUR[page], avail = [];
+    steps.forEach(function (x, k) { tourTab(steps, k); if (tourFind(x[0])) avail.push(k); });
+    if (!avail.length) { tourMark(page); return; }
+    tourNow = { page: page, avail: avail, pos: -1 }; track('tour-' + page + '-start'); tourStep(1);
+  }
+  function tourEnd(how) {
+    var t = tourNow; if (!t) return; tourNow = null; tourMark(t.page); track('tour-' + t.page + '-' + how);
+    var el = document.getElementById('tour'); if (el) el.remove(); document.removeEventListener('keydown', tourKey);
+    if (t.page === 'plan' && U.screen === 'plan' && U.bTab !== 'spend') { U.bTab = 'spend'; render(); }
+    window.scrollTo(0, 0);
+  }
+  function tourKey(e) { if (!tourNow) return; if (e.key === 'Escape') tourEnd('skip'); else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); tourStep(1); } else if (e.key === 'ArrowLeft') tourStep(-1); }
+  function tourStep(dir) {
+    var t = tourNow; if (!t) return;
+    // only the steps this person's page has (no challenge running, reminders not set up, ...)
+    var steps = TOUR[t.page], pos = t.pos + dir;
+    if (pos < 0) return;
+    if (pos >= t.avail.length) { tourEnd('done'); return; }
+    var i = t.avail[pos]; tourTab(steps, i);
+    var el = tourFind(steps[i][0]); if (!el) { t.pos = pos; tourStep(dir); return; }
+    t.pos = pos;
+    var root = document.getElementById('tour');
+    if (!root) {
+      root = document.createElement('div'); root.id = 'tour'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Tour');
+      root.innerHTML = '<div class="tour-spot" aria-hidden="true"></div><div class="tour-card"><small class="tour-n"></small><b class="tour-t"></b><p class="tour-p"></p><div class="tour-btns"><button type="button" class="tour-skip">Skip</button><span><button type="button" class="tour-back" aria-label="Back">‹</button><button type="button" class="tour-next">Next</button></span></div></div>';
+      document.body.appendChild(root);
+      root.querySelector('.tour-skip').onclick = function () { tourEnd('skip'); };
+      root.querySelector('.tour-next').onclick = function () { tourStep(1); };
+      root.querySelector('.tour-back').onclick = function () { tourStep(-1); };
+      document.addEventListener('keydown', tourKey);
+    }
+    var last = pos === t.avail.length - 1;
+    root.querySelector('.tour-n').textContent = (pos + 1) + ' of ' + t.avail.length;
+    root.querySelector('.tour-t').textContent = steps[i][1];
+    root.querySelector('.tour-p').textContent = steps[i][2];
+    root.querySelector('.tour-next').textContent = last ? 'Done' : 'Next';
+    root.querySelector('.tour-back').style.visibility = pos > 0 ? 'visible' : 'hidden';
+    // bring the feature into view, then the spotlight on it and the card above or below
+    var fixed = !!el.closest('.tabbar');
+    if (!fixed) { var r0 = tourRect(el), room = window.innerHeight - 250; window.scrollTo(0, Math.max(0, window.scrollY + r0.top - (r0.height < room ? Math.max(70, (room - r0.height) / 2) : 70))); }
+    t.el = el; tourPlace(el);
+    root.querySelector('.tour-next').focus({ preventScroll: true });
+  }
+  function tourPlace(el) {
+    var root = document.getElementById('tour'); if (!root || !el) return;
+    var r = tourRect(el), pad = 8, spot = root.querySelector('.tour-spot'), card = root.querySelector('.tour-card'), round = el.classList.contains('fab');
+    var ch0 = card.offsetHeight || 190, top = Math.max(6, r.top - pad), h = Math.min(r.height + pad * 2, window.innerHeight - 12);
+    // a tall section: light up its top part and leave room for the card under it
+    if (top + h + 12 + ch0 > window.innerHeight - 8 && top - 12 - ch0 < 8) h = Math.max(80, window.innerHeight - 8 - ch0 - 12 - top);
+    spot.style.cssText = 'top:' + top + 'px;left:' + Math.max(6, r.left - pad) + 'px;width:' + Math.min(r.width + pad * 2, window.innerWidth - 12) + 'px;height:' + h + 'px;border-radius:' + (round ? '50%' : '22px');
+    var ch = card.offsetHeight || 150, below = top + h + 12, above = top - 12 - ch;
+    card.style.top = (below + ch <= window.innerHeight - 8 ? below : above >= 8 ? above : Math.max(8, window.innerHeight - ch - 8)) + 'px';
+  }
+  window.addEventListener('resize', function () { if (tourNow && tourNow.el) tourPlace(tourNow.el); });
+  window.addEventListener('scroll', function () { if (tourNow && tourNow.el) tourPlace(tourNow.el); }, { passive: true });
+  // after a page draws: its tour the first time it's seen
+  function tourMaybe() {
+    if (tourNow || !P.setupDone || U.sheet || U.plusOpen || U.coachTest != null) return;
+    var page = U.screen; if (!TOUR[page] || tourSeen()[page]) return;
+    if (page === 'journey' && U.jTab && U.jTab !== 'map') return;
+    setTimeout(function () { if (U.screen === page && !tourNow && !tourSeen()[page] && !U.sheet && !U.plusOpen) tourStart(page); }, 450);
   }
   // ---------- the front page: first open only, before the intro ----------
   // Three app screens drawn at phone size (375 x 812) and scaled into a CSS iPhone. Demo numbers:
@@ -2033,8 +2160,8 @@
     },
     settings: function () {
       return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
-        '<div class="card">' + [['install', 'Add to Home Screen']].map(function (x) {
-          return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
+        '<div class="card">' + [['install', 'Add to Home Screen', 'edit'], ['', 'Show me around again', 'tourreplay']].map(function (x) {
+          return '<button type="button" class="row linkrow" data-a="' + x[2] + '" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
         '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Sign in</b>, then <b>Have a backup file instead?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
@@ -2703,6 +2830,7 @@
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
+      case 'tourreplay': try { localStorage.removeItem(TOUR_KEY); } catch (e) {} track('tour-replay'); U.bTab = 'spend'; U.jTab = 'map'; go('home'); break;
       case 'frontstart': U.front = false; clearInterval(wf.timer); track('welcome-start'); U.ob = OB[0]; render(); window.scrollTo(0, 0); break;
       case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
       case 'recapdone': U.recapCoach = !coachSeen() && !!CONFIG.communityUrl && !Object.keys(P.wk || {}).some(function (k) { return P.wk[k].done; }); wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
