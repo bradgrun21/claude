@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30s';
+  var APP_VERSION = '10-30t';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -504,7 +504,7 @@
   var U = { front: firstOpen && !P.setupDone, screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['settings', 'Settings', 'gear']];
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['meals', 'Meals', 'menu']];
   function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
   function render() {
     autoColorMap = null; ensureIds();
@@ -512,7 +512,7 @@
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
     var tabs = TABS;
-    var tabbed = P.setupDone && U.screen !== 'wins' && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
+    var tabbed = P.setupDone && U.screen !== 'wins' && !(U.screen === 'meals' && mmSt().view === 'edit') && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
     if (U.screen === 'plans' || U.screen === 'planday' || U.screen === 'journey' || U.screen === 'lesson') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
     if (U.sheet) html += sheetHtml();
@@ -532,6 +532,9 @@
     tourMaybe();
     csvAutoplay();
     document.body.classList.toggle('has-tabs', tabbed);
+    document.body.classList.toggle('mm-editing', U.screen === 'meals' && mmSt().view === 'edit');
+    if (U.screen !== 'recap') U.recapWk = null;
+    if (U.screen !== 'meals' && mmSt().sheet && mmSt().sheet.type !== 'plan') mmClose();
   }
   // ---------- Add to Home Screen how-to: short animated scenes on a drawn phone ----------
   var HS_ICON = '<img class="ph-icon" src="icons/icon-192.png" alt="">';
@@ -593,7 +596,7 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Scan or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
+    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Scan or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
       return '<button type="button" role="menuitem" data-a="' + x[0] + '"><span class="plusic" aria-hidden="true">' + x[1] + '</span><span class="plustx"><b>' + x[2] + '</b><small>' + x[3] + '</small></span></button>'; }).join('') + '</div>';
   }
@@ -603,6 +606,7 @@
     back: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
     logo: '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.2" cy="10.2" r="6.3" fill="#3A554D" stroke="#FFC27E" stroke-width="2.4"/><path d="M14.6 14.6l4.6 4.6" stroke="#FF9A76" stroke-width="3.4" stroke-linecap="round"/><text x="10.2" y="10.6" text-anchor="middle" dominant-baseline="middle" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="8.6" fill="#FFD08A">$</text></svg>',
     gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>',
+    menu: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
     file: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
     info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
     flame: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 002.5 2.5z"/></svg>',
@@ -757,6 +761,369 @@
     snapshot(); save(); track('setup-done');
     U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
   }
+  // ---------- Meal Math: what home-cooked meals cost, a week of breakfasts, lunches and dinners, and what eating
+  // at home saved. Prices are the family's own (no price lookups). Data lives in the plan, so backups and sync carry it:
+  //   P.pantryItems: { id, name, emoji, price|null, packageAmount, unit, updatedAt }
+  //   P.meals: { id, name, emoji, color, plates, eatingOutCost|null, photo, items: [{ pantryItemId, amountUsed, alreadyHave }], createdAt }
+  //   P.planEntries: { id, date, slot: breakfast|lunch|dinner, type: meal|leftovers|eatOut, mealId, budget, createdAt }
+  // No suggestion buttons in this feature: it shows what was saved, never what to do with it.
+  var MM_UNITS = ['servings', 'lb', 'oz', 'count', 'cups'];
+  var MM_COLORS = [['Mint', '#7ED9C0'], ['Sunset', '#FF9F6E'], ['Gold', '#FFC97E'], ['Coral', '#FF8C8C'], ['Berry', '#E58BC8'], ['Lavender', '#B39DFF'], ['Sky', '#7EB6FF'], ['Lime', '#B8E07E']];
+  var MM_MEAL_EMO = '🍛 🌮 🍝 🥞 🍲 🥗 🍕 🍔 🌯 🥪 🍜 🍳 🍗 🥩 🐟 🍤 🥘 🍱 🥙 🫔 🍚 🥣 🧆 🍽️'.split(' ');
+  var MM_ING_EMO = '🍚 🍗 🥩 🥓 🐟 🍤 🥚 🧀 🥛 🧈 🍞 🌮 🍝 🥞 🥦 🥬 🍅 🧅 🧄 🥔 🥕 🌽 🫑 🌶️ 🥑 🍄 🥒 🫘 🍋 🍎 🍌 🍓 🥫 🍯 🧂 🛒'.split(' ');
+  var MM_GUESS = [[/rice/, '🍚'], [/chicken|turkey/, '🍗'], [/bacon/, '🥓'], [/beef|steak|pork|sausage/, '🥩'], [/fish|salmon|tuna|tilapia/, '🐟'], [/shrimp/, '🍤'], [/egg/, '🥚'], [/cheese|parm/, '🧀'], [/milk|cream/, '🥛'], [/butter/, '🧈'], [/bread|bun/, '🍞'], [/tortilla|taco/, '🌮'], [/pasta|spaghetti|noodle/, '🍝'], [/pancake|waffle|flour/, '🥞'], [/broccoli/, '🥦'], [/lettuce|spinach|greens/, '🥬'], [/tomato|salsa/, '🍅'], [/onion/, '🧅'], [/garlic/, '🧄'], [/potato/, '🥔'], [/carrot/, '🥕'], [/corn/, '🌽'], [/bell pepper/, '🫑'], [/jalape|chili|pepper/, '🌶️'], [/avocado|guac/, '🥑'], [/mushroom/, '🍄'], [/bean/, '🫘'], [/lemon|lime/, '🍋'], [/apple/, '🍎'], [/banana/, '🍌'], [/berr/, '🍓'], [/syrup|honey/, '🍯'], [/salt|season|spice/, '🧂'], [/sauce|soup|can/, '🥫']];
+  var MM_SLOTS = [['breakfast', 'Breakfast', '🌅'], ['lunch', 'Lunch', '☀️'], ['dinner', 'Dinner', '🌙']];
+  function mmGuess(n) { n = String(n || '').toLowerCase(); for (var i = 0; i < MM_GUESS.length; i++) if (MM_GUESS[i][0].test(n)) return MM_GUESS[i][1]; return '🛒'; }
+  function mmSlot(k) { return MM_SLOTS.filter(function (s) { return s[0] === k; })[0] || MM_SLOTS[2]; }
+  // a number from a field, or null when blank or not a number (so nothing ever shows NaN)
+  function mmNum(v) { if (v === '' || v == null) return null; var n = +v; return isFinite(n) ? n : null; }
+  function mmR2(x) { return Math.round((x + Number.EPSILON) * 100) / 100; }
+  function mm$(x) { return x == null || !isFinite(x) ? '—' : '$' + mmR2(x).toFixed(2); }
+  function mmW(x) { x = mmNum(x) || 0; return Number.isInteger(x) ? '$' + x : mm$(x); }
+  function mmTint(hex) { return (hex || '#7ED9C0') + '38'; }
+  function mmPantry() { return P.pantryItems || (P.pantryItems = []); }
+  function mmMeals() { return P.meals || (P.meals = []); }
+  function mmPlan() { return P.planEntries || (P.planEntries = []); }
+  function mmItem(id) { return mmPantry().filter(function (p) { return p.id === id; })[0]; }
+  function mmMeal(id) { return mmMeals().filter(function (m) { return m.id === id; })[0]; }
+  function mmTile(m) { return m.photo ? '<img src="' + m.photo + '" alt="">' : esc(m.emoji || '🍽️'); }
+  function mmUnitOne(u) { return { servings: 'serving', lb: 'lb', oz: 'oz', count: 'item', cups: 'cup' }[u] || u; }
+  function mmPkgText(p) { return mm$(p.price) + ' for ' + (+p.packageAmount) + (p.unit === 'count' ? '' : ' ' + p.unit); }
+  // Brad's formula: store price / amount in the package x amount the recipe uses, to the cent
+  function mmLine(price, pkg, uses, have) {
+    price = mmNum(price); pkg = mmNum(pkg); uses = mmNum(uses);
+    if (have || price == null || !pkg || !uses) return 0;
+    return mmR2(price / pkg * uses);
+  }
+  // a meal's total is the sum of its rounded lines; per plate and saves round to the cent too
+  function mmTotals(lines, plates, out) {
+    var total = 0, skipped = 0, skippedVal = 0;
+    lines.forEach(function (it) {
+      total += mmLine(it.price, it.packageAmount, it.amountUsed, it.alreadyHave);
+      if (it.alreadyHave || mmNum(it.price) == null) { skipped++; skippedVal += mmLine(it.price, it.packageAmount, it.amountUsed, false); }
+    });
+    total = mmR2(total); out = mmNum(out); plates = mmNum(plates);
+    return { total: total, plate: plates > 0 ? mmR2(total / plates) : null, saves: out != null ? mmR2(out - total) : null, skipped: skipped, skippedVal: mmR2(skippedVal) };
+  }
+  // a saved meal's lines, with the pantry's current prices (so a price change updates every meal)
+  function mmLines(m) {
+    return (m.items || []).map(function (it) { var p = mmItem(it.pantryItemId) || {}; return { pantryItemId: it.pantryItemId, name: p.name || '', emoji: p.emoji || mmGuess(p.name), price: p.price, packageAmount: p.packageAmount, unit: p.unit || 'servings', amountUsed: it.amountUsed, alreadyHave: !!it.alreadyHave }; });
+  }
+  function mmCalc(m) { return mmTotals(mmLines(m), m.plates, m.eatingOutCost); }
+  // dates (local, Sunday to Saturday)
+  function mmToday() { return F.isoDay(today()); }
+  function mmAdd(s, n) { return F.isoDay(F.addDays(F.fromIso(s), n)); }
+  function mmWeek(s) { var d = F.fromIso(s); return F.isoDay(F.addDays(d, -d.getDay())); }
+  function mmDay(s) { return F.fromIso(s).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+  function mmWeekLabel(ws) { return weekLabel({ start: ws, end: mmAdd(ws, 6) }); }
+  // what a stretch of days added up to: entries dated today or earlier count as eaten; later ones are planned
+  function mmStats(from, to) {
+    var s = { home: 0, cooked: 0, left: 0, cost: 0, saved: 0, out: 0, outBudget: 0, planned: 0, byMeal: {} }, td = mmToday();
+    mmPlan().forEach(function (e) {
+      if (e.date < from || e.date > to) return;
+      if (e.date > td) { s.planned++; return; }
+      if (e.type === 'meal') { var m = mmMeal(e.mealId); if (!m) return; var c = mmCalc(m); s.home++; s.cooked++; s.cost += c.total; if (c.saves > 0) s.saved += c.saves; s.byMeal[m.id] = (s.byMeal[m.id] || 0) + 1; }
+      else if (e.type === 'leftovers') { s.home++; s.left++; }
+      else if (e.type === 'eatOut') { s.out++; s.outBudget += mmNum(e.budget) || 0; }
+    });
+    s.cost = mmR2(s.cost); s.saved = mmR2(s.saved); s.outBudget = mmR2(s.outBudget); return s;
+  }
+  function mmEntry(date, slot) { return mmPlan().filter(function (e) { return e.date === date && e.slot === slot; })[0]; }
+  function mmSt() { return U.mm || (U.mm = { view: 'week', wk: mmWeek(mmToday()), sort: 'plate', draft: null, backTo: 'meals', sheet: null }); }
+  function mmGear() { return '<button type="button" class="back gearbtn" data-a="go" data-v="settings" aria-label="Settings">' + ICON.gear + '</button>'; }
+
+  // ----- screens -----
+  function mmWeekNav(wk, attr) {
+    var cur = mmWeek(mmToday());
+    return '<div class="mm-weeknav"><button type="button" class="mm-nav" ' + attr + '="-7" aria-label="Previous week">‹</button><div><b>' + mmWeekLabel(wk) + '</b><div class="mm-wk">' + (wk === cur ? 'This week' : wk < cur ? 'Past week' : 'Coming up') + '</div></div><button type="button" class="mm-nav" ' + attr + '="7" aria-label="Next week">›</button></div>';
+  }
+  function mmHead(active) {
+    return '<div class="mm-top"><div><div class="mm-crumb">Meals</div><h2 class="mm-h1">Meal Math</h2></div><div class="mm-topr">' + (active === 'meals' ? '<button type="button" class="mm-pill" data-mm-go="pantry">🧺 Prices</button>' : '') + mmGear() + '</div></div>' +
+      '<div class="mm-seg" role="group" aria-label="Meal Math"><button type="button" data-mm-go="week" aria-pressed="' + (active === 'week') + '">📅 Week</button><button type="button" data-mm-go="meals" aria-pressed="' + (active === 'meals') + '">🍲 Meals</button></div>';
+  }
+  function mmEntryRow(e) {
+    var em, name, sub, bg = '', s = mmSlot(e.slot);
+    if (e.type === 'meal') { var m = mmMeal(e.mealId); if (!m) return ''; var c = mmCalc(m); em = mmTile(m); bg = 'background:' + mmTint(m.color); name = esc(m.name); sub = mm$(c.plate) + ' a plate' + (c.saves > 0 ? ' · <b>saves ' + mm$(c.saves) + '</b>' : ''); }
+    else if (e.type === 'leftovers') { em = '🥡'; name = 'Leftovers'; sub = 'Already paid for'; }
+    else { em = '🍔'; name = 'Eat out'; sub = mmW(e.budget) + ' budget'; }
+    return '<button type="button" class="mm-entry" data-mm-slot="' + e.date + '|' + e.slot + '"><span class="mm-sl">' + s[2] + ' ' + s[1] + '</span><span class="mm-em" style="' + bg + '">' + em + '</span><span class="mm-mid"><span class="mm-n">' + name + '</span><span class="mm-s">' + sub + '</span></span><span class="mm-chev">›</span></button>';
+  }
+  function mmWeekView() {
+    var st = mmSt(), wk = st.wk, s = mmStats(wk, mmAdd(wk, 6)), td = mmToday(), days = [];
+    for (var i = 0; i < 7; i++) days.push(mmAdd(wk, i));
+    return mmHead('week') + mmWeekNav(wk, 'data-mm-wk') +
+      '<div class="mm-strip"><span>🏠 <b>' + s.home + '</b> at home</span><span>💵 <b class="t">' + mm$(s.saved) + '</b> saved</span><span>🍔 <b>' + s.out + '</b> out</span></div>' +
+      '<div class="mm-days">' + days.map(function (d) {
+        var filled = MM_SLOTS.map(function (x) { return mmEntry(d, x[0]); }).filter(Boolean), empty = MM_SLOTS.filter(function (x) { return !mmEntry(d, x[0]); });
+        return '<div class="mm-day' + (d < td ? ' past' : '') + '"><div class="mm-dhead"><b>' + mmDay(d) + '</b>' + (d === td ? '<span class="mm-today">Today</span>' : '') + '</div>' + filled.map(mmEntryRow).join('') +
+          (empty.length ? '<div class="mm-empties">' + empty.map(function (x) { return '<button type="button" class="mm-emp" data-mm-slot="' + d + '|' + x[0] + '">+ ' + x[2] + ' ' + x[1] + '</button>'; }).join('') + '</div>' : '') + '</div>';
+      }).join('') + '</div>';
+  }
+  function mmMealsView() {
+    var st = mmSt(), rows = mmMeals().map(function (m) { return { m: m, c: mmCalc(m) }; });
+    var big = function (x) { return x == null ? 1e12 : x; };
+    if (st.sort === 'plate') rows.sort(function (a, b) { return big(a.c.plate) - big(b.c.plate); });
+    if (st.sort === 'saved') rows.sort(function (a, b) { return (b.c.saves == null ? -1e12 : b.c.saves) - (a.c.saves == null ? -1e12 : a.c.saves); });
+    if (st.sort === 'new') rows.sort(function (a, b) { return (b.m.createdAt || '') < (a.m.createdAt || '') ? -1 : 1; });
+    return mmHead('meals') + '<div class="mm-chips" role="group" aria-label="Sort meals">' + [['plate', 'Cheapest per plate'], ['saved', 'Most saved'], ['new', 'Newest']].map(function (o) { return '<button type="button" class="mm-chip" data-mm-sort="' + o[0] + '" aria-pressed="' + (st.sort === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="mm-meals">' + (rows.length ? rows.map(function (r, i) {
+        return '<button type="button" class="mm-meal" data-mm-open="' + r.m.id + '"><div class="mm-tile" style="background:' + mmTint(r.m.color) + '">' + mmTile(r.m) + '</div><div class="mm-mid">' + (st.sort === 'plate' && i === 0 && rows.length > 1 ? '<div class="mm-rank">🏆 Cheapest meal</div>' : '') +
+          '<div class="mm-name">' + esc(r.m.name) + '</div><div class="mm-meta">' + mm$(r.c.total) + ' · feeds ' + r.m.plates + (r.c.saves != null ? ' · <b>saves ' + mm$(r.c.saves) + '</b>' : '') + '</div></div><div class="mm-pp"><div class="v">' + mm$(r.c.plate) + '</div><div class="u">per plate</div></div></button>';
+      }).join('') : '<div class="mm-empty">🍲 Add a meal you cook to see what it costs a plate.</div>') + '</div>' +
+      '<button type="button" class="mm-addbtn" data-mm-new><span class="mm-plus">+</span> New meal</button>';
+  }
+  function mmPantryView() {
+    var used = function (id) { return mmMeals().filter(function (m) { return (m.items || []).some(function (i) { return i.pantryItemId === id; }); }).length; };
+    var items = mmPantry().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return '<div class="mm-top"><button type="button" class="mm-back" data-mm-go="meals">‹ Meals</button>' + mmGear() + '</div><h2 class="mm-h1">🧺 Pantry prices</h2>' +
+      '<div class="mm-list">' + (items.length ? items.map(function (p) {
+        var u = used(p.id), priced = p.price != null && p.packageAmount;
+        return '<button type="button" class="mm-row" data-mm-pedit="' + p.id + '"><span class="mm-em">' + esc(p.emoji || mmGuess(p.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(p.name) + '</span><span class="mm-s">' + (priced ? mmPkgText(p) + ' · ' : '') + 'used in ' + plural(u, 'meal') + '</span></span><span class="mm-r">' + (priced ? mm$(p.price / p.packageAmount) + '/' + mmUnitOne(p.unit) : '—') + '</span></button>';
+      }).join('') : '<div class="mm-empty">Ingredients you add to meals show up here.</div>') + '</div>';
+  }
+  function mmIrow(it) {
+    var blank = mmNum(it.price) == null, c = mmLine(it.price, it.packageAmount, it.amountUsed, it.alreadyHave);
+    var sub = it.alreadyHave ? '<span class="mm-s have">🧺 Already have it</span>' : blank ? '<span class="mm-s">No price · not counted</span>' :
+      mmNum(it.packageAmount) && mmNum(it.amountUsed) ? '<span class="mm-s">' + (+it.amountUsed) + ' of ' + (+it.packageAmount) + (it.unit === 'count' ? '' : ' ' + it.unit) + '</span>' : '<span class="mm-s">Tap to finish</span>';
+    return '<button type="button" class="mm-irow" data-mm-iedit="' + it.key + '"><span class="mm-em">' + esc(it.emoji || mmGuess(it.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(it.name) + '</span>' + sub + '</span><span class="mm-c">' + (it.alreadyHave || blank ? '—' : mm$(c)) + '</span><span class="mm-chev">›</span></button>';
+  }
+  function mmEditView() {
+    var d = mmSt().draft;
+    return '<button type="button" class="mm-back" data-mm-back>‹ Back</button>' +
+      '<button type="button" class="mm-hero" data-mm-look style="background:' + mmTint(d.color) + '">' + (d.photo ? '<img src="' + d.photo + '" alt="Meal photo">' : esc(d.emoji)) + '<span class="mm-edit">🎨 Change look</span></button>' +
+      '<input class="mm-title" data-mm-f="name" placeholder="Name this meal" value="' + esc(d.name) + '" aria-label="Meal name">' +
+      '<div class="mm-row2"><div class="mm-field"><span class="mm-lab">🍽️ Plates</span><div class="mm-stepper"><button type="button" data-mm-plates="-1" aria-label="Fewer plates">−</button><input data-mm-f="plates" inputmode="numeric" value="' + esc(d.plates) + '" aria-label="Plates"><button type="button" data-mm-plates="1" aria-label="More plates">+</button></div></div>' +
+      '<label class="mm-field"><span class="mm-lab">🍔 Same meal eating out</span><span class="mm-money"><span>$</span><input class="mm-in" data-mm-f="eatingOutCost" inputmode="decimal" value="' + esc(d.eatingOutCost == null ? '' : d.eatingOutCost) + '" placeholder="optional"></span></label></div>' +
+      '<div class="mm-h2">Ingredients' + (d.items.length ? ' · ' + d.items.length : '') + '</div>' +
+      '<div class="mm-ings">' + (d.items.length ? d.items.map(mmIrow).join('') : '<div class="mm-empty">Tap + to add your first ingredient</div>') + '</div>' +
+      '<button type="button" class="mm-addbtn" data-mm-addi><span class="mm-plus">+</span> Add ingredient</button>' +
+      (d.id ? '<button type="button" class="mm-del" data-mm-del>Delete meal</button>' : '') +
+      '<div class="mm-bar" id="mmbar">' + mmBarHtml() + '</div>';
+  }
+  function mmBarHtml() {
+    var d = mmSt().draft, c = mmTotals(d.items, d.plates, d.eatingOutCost);
+    var note = c.skipped ? '🧺 ' + plural(c.skipped, 'item') + ' you already have, not counted' + (c.skippedVal ? ' (' + mm$(c.skippedVal) + ')' : '') : '';
+    return '<div class="mm-bar-in">' + (note ? '<div class="mm-note">' + note + '</div>' : '') +
+      '<div><div class="k">Meal total</div><div class="v">' + mm$(c.total) + '</div></div><div><div class="k">Per plate</div><div class="v">' + mm$(c.plate) + '</div></div>' +
+      '<div><div class="k">Saves</div><div class="v t">' + mm$(c.saves) + '</div></div><button type="button" class="mm-save" data-mm-save>Save</button></div>';
+  }
+  function mealsScreen() {
+    var st = mmSt();
+    if (st.view === 'edit' && !st.draft) st.view = 'meals';
+    return '<div class="mm">' + (st.view === 'edit' ? mmEditView() : st.view === 'meals' ? mmMealsView() : st.view === 'pantry' ? mmPantryView() : mmWeekView()) + '</div>';
+  }
+  // the weekly recap's "Meals at home" section
+  function mmRecap(ws) {
+    if (!mmMeals().length && !mmPlan().length) return '';
+    var s = mmStats(ws, mmAdd(ws, 6)), a = mmStats('0000-01-01', mmToday()), cur = mmWeek(mmToday());
+    var cooked = Object.keys(s.byMeal).map(function (id) { return { m: mmMeal(id), n: s.byMeal[id] }; }).filter(function (x) { return x.m; }).sort(function (x, y) { return y.n - x.n; });
+    return '<div class="card stack" style="padding:16px 18px;gap:10px"><b>🍽️ Meals at home</b>' +
+      '<div class="mm-saved"><div class="lbl">🏠 Saved by eating at home' + (ws === cur ? ' so far this week' : ' this week') + '</div><div class="big">' + mm$(s.saved) + '</div><div class="sub">compared with eating the same meals out</div></div>' +
+      '<div class="mm-stats"><div class="mm-stat"><div class="e">🍽️</div><div class="v">' + s.home + '</div><div class="k">meals at home</div></div><div class="mm-stat"><div class="e">🥡</div><div class="v">' + s.left + '</div><div class="k">leftover meals</div></div>' +
+      '<div class="mm-stat"><div class="e">🛒</div><div class="v">' + mm$(s.cost) + '</div><div class="k">spent cooking ' + plural(s.cooked, 'meal') + '</div></div><div class="mm-stat"><div class="e">🍔</div><div class="v">' + s.out + '</div><div class="k">eating out' + (s.out ? ' · ' + mmW(s.outBudget) + ' budget' : '') + '</div></div></div>' +
+      '<div class="mm-since"><div><div class="k">Since you started</div><div class="v">' + mm$(a.saved) + '</div></div><div class="s">saved by eating at home<br>' + plural(a.home, 'meal') + ' at home</div></div>' +
+      (cooked.length ? '<div class="mm-h2" style="margin:6px 0 0">Cooked this week</div><div class="mm-list">' + cooked.map(function (x) { var c = mmCalc(x.m); return '<div class="mm-row"><span class="mm-em" style="background:' + mmTint(x.m.color) + '">' + mmTile(x.m) + '</span><span class="mm-mid"><span class="mm-n">' + esc(x.m.name) + (x.n > 1 ? ' ×' + x.n : '') + '</span><span class="mm-s">' + mm$(c.plate) + ' a plate</span></span><span class="mm-r t">' + (c.saves > 0 ? '+' + mm$(c.saves * x.n) : '') + '</span></div>'; }).join('') + '</div>' : '') +
+      (s.planned ? '<div class="mm-s" style="margin-top:2px">📅 ' + plural(s.planned, 'more meal') + ' planned this week</div>' : '') + '</div>';
+  }
+
+  // ----- pop-ups (drawn over the app; nothing here re-draws the page under it until it's done) -----
+  function mmOpen(sheet) { mmSt().sheet = sheet; mmSheetDraw(); }
+  function mmClose(redraw) { var st = mmSt(); st.sheet = null; var el = document.getElementById('mmsheet'); if (el) el.remove(); document.body.classList.remove('mm-lock'); if (redraw) render(); }
+  function mmSheetDraw() {
+    var st = mmSt(), sh = st.sheet; if (!sh) return;
+    var el = document.getElementById('mmsheet');
+    if (!el) { el = document.createElement('div'); el.id = 'mmsheet'; el.className = 'mm-scrim'; el.innerHTML = '<div class="mm-panel" role="dialog" aria-modal="true"></div>'; document.body.appendChild(el); document.body.classList.add('mm-lock'); }
+    el.firstChild.innerHTML = { plan: mmPlanSheet, pick: mmPickSheet, item: mmItemSheet, look: mmLookSheet }[sh.type]();
+    if (sh.type === 'item') mmCalcLive();
+  }
+  function mmSheetHead(t) { return '<div class="mm-grab"></div><div class="mm-shtitle"><b>' + t + '</b><button type="button" class="mm-close" data-mm-close aria-label="Close">✕</button></div>'; }
+  function mmPlanSheet() {
+    var p = mmSt().sheet, cur = mmEntry(p.date, p.slot), td = mmToday();
+    var meals = mmMeals().map(function (m) { return { m: m, c: mmCalc(m) }; }).sort(function (a, b) { return (a.c.plate == null ? 1e12 : a.c.plate) - (b.c.plate == null ? 1e12 : b.c.plate); });
+    var on = function (type, id) { return !!(cur && cur.type === type && (type !== 'meal' || cur.mealId === id)); };
+    return mmSheetHead('📅 Plan a meal') +
+      '<div class="mm-daterow"><button type="button" class="mm-nav" data-mm-pd="-1" aria-label="Previous day">‹</button><b>' + mmDay(p.date) + (p.date === td ? ' · Today' : '') + '</b><button type="button" class="mm-nav" data-mm-pd="1" aria-label="Next day">›</button></div>' +
+      '<div class="mm-slots" role="group" aria-label="Meal">' + MM_SLOTS.map(function (x) { return '<button type="button" class="mm-chip" data-mm-ps="' + x[0] + '" aria-pressed="' + (x[0] === p.slot) + '">' + x[2] + ' ' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="mm-h2">Your meals</div><div class="mm-list">' + (meals.length ? meals.map(function (x) {
+        return '<button type="button" class="mm-row" data-mm-pm="' + x.m.id + '" aria-pressed="' + on('meal', x.m.id) + '"><span class="mm-em" style="background:' + mmTint(x.m.color) + '">' + mmTile(x.m) + '</span><span class="mm-mid"><span class="mm-n">' + esc(x.m.name) + '</span><span class="mm-s">' + mm$(x.c.plate) + ' a plate' + (x.c.saves > 0 ? ' · saves ' + mm$(x.c.saves) : '') + '</span></span><span class="mm-r">' + (on('meal', x.m.id) ? '✓' : '') + '</span></button>';
+      }).join('') : '<div class="mm-empty">No meals yet. Add one from 🍲 Meals.</div>') + '</div>' +
+      '<div class="mm-h2">Or</div><div class="mm-list">' +
+      '<button type="button" class="mm-row" data-mm-left aria-pressed="' + on('leftovers') + '"><span class="mm-em">🥡</span><span class="mm-mid"><span class="mm-n">Leftovers</span><span class="mm-s">Counts as a meal at home</span></span><span class="mm-r">' + (on('leftovers') ? '✓' : '') + '</span></button>' +
+      '<button type="button" class="mm-row" data-mm-out aria-pressed="' + on('eatOut') + '"><span class="mm-em">🍔</span><span class="mm-mid"><span class="mm-n">Eat out</span><span class="mm-s">' + (on('eatOut') ? mmW(cur.budget) + ' budget' : 'Set a dollar budget') + '</span></span><span class="mm-r">' + (on('eatOut') ? '✓' : '') + '</span></button></div>' +
+      (p.outOpen ? '<div class="mm-outbox"><label class="mm-lab" for="mmOut">🍔 Eating out budget</label><span class="mm-money"><span>$</span><input class="mm-in" id="mmOut" inputmode="decimal" value="' + esc(p.budget == null ? '' : p.budget) + '" placeholder="0"></span><button type="button" class="mm-btn gold" data-mm-saveout>Save</button></div>' : '') +
+      (cur ? '<div class="mm-acts"><button type="button" class="mm-btn ghost" data-mm-clear>Clear ' + mmSlot(p.slot)[1].toLowerCase() + '</button></div>' : '');
+  }
+  function mmSetEntry(fields) {
+    var p = mmSt().sheet, st = mmSt();
+    P.planEntries = mmPlan().filter(function (e) { return !(e.date === p.date && e.slot === p.slot); });
+    var e = { id: uid(), date: p.date, slot: p.slot, type: fields.type, mealId: fields.mealId || null, budget: fields.type === 'eatOut' ? (mmNum(fields.budget) || 0) : null, createdAt: new Date().toISOString() };
+    P.planEntries.push(e); save(); track('meal-plan-' + e.type);
+    var label = e.type === 'meal' ? mmMeal(e.mealId).name : e.type === 'leftovers' ? 'Leftovers' : 'Eat out · ' + mmW(e.budget);
+    mmClose(); st.wk = mmWeek(p.date); st.view = 'week';
+    if (U.screen !== 'meals') go('meals'); else render();
+    mmToast('📅 ' + label + ' · ' + F.fromIso(p.date).toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + mmSlot(p.slot)[1].toLowerCase());
+    setTimeout(function () { var el = app.querySelector('[data-mm-slot="' + p.date + '|' + p.slot + '"]'); if (el) el.scrollIntoView({ block: 'center' }); }, 60);
+  }
+  function mmPickList() {
+    var sh = mmSt().sheet, q = String(sh.q || '').trim().toLowerCase(), d = mmSt().draft;
+    var inMeal = {}; d.items.forEach(function (i) { inMeal[String(i.name || '').toLowerCase()] = 1; });
+    var list = mmPantry().filter(function (p) { return !q || p.name.toLowerCase().indexOf(q) >= 0; }).sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return '<button type="button" class="mm-row new" data-mm-newing><span class="mm-em">+</span><span class="mm-mid"><span class="mm-n">' + (q ? 'New: “' + esc(String(sh.q).trim()) + '”' : 'New ingredient') + '</span><span class="mm-s">Something you haven’t priced yet</span></span><span></span></button>' +
+      list.map(function (p) {
+        var has = inMeal[p.name.toLowerCase()], priced = p.price != null && p.packageAmount;
+        return '<button type="button" class="mm-row" data-mm-pick="' + p.id + '"' + (has ? ' disabled' : '') + '><span class="mm-em">' + esc(p.emoji || mmGuess(p.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(p.name) + '</span><span class="mm-s">' + (has ? 'Already in this meal' : priced ? mmPkgText(p) : 'No price yet') + '</span></span><span class="mm-r">' + (priced ? mm$(p.price / p.packageAmount) + '/' + mmUnitOne(p.unit) : '') + '</span></button>';
+      }).join('');
+  }
+  function mmPickSheet() { return mmSheetHead('Add an ingredient') + '<input class="mm-in" id="mmQ" placeholder="🔎 Search your pantry" value="' + esc(mmSt().sheet.q || '') + '" autocomplete="off"><div class="mm-list" id="mmPickList">' + mmPickList() + '</div>'; }
+  function mmItemSheet() {
+    var sh = mmSt().sheet, f = sh.f, pantry = sh.mode === 'pantry';
+    return mmSheetHead(pantry ? 'Edit price' : sh.key ? 'Edit ingredient' : 'Add to meal') +
+      '<div class="mm-namerow"><button type="button" class="mm-emobtn" data-mm-emotoggle aria-label="Pick an icon">' + esc(f.emoji) + '</button><input class="mm-in" id="mmName" placeholder="Ingredient name" value="' + esc(f.name) + '" autocomplete="off"></div>' +
+      '<div class="mm-grid" id="mmEmoGrid" hidden>' + MM_ING_EMO.map(function (e) { return '<button type="button" data-mm-ie="' + e + '" aria-pressed="' + (e === f.emoji) + '">' + e + '</button>'; }).join('') + '</div>' +
+      '<div class="mm-sect"><span class="mm-lab">🛒 At the store</span><div class="mm-row2"><label class="mm-field"><span class="mm-lab">Price</span><span class="mm-money"><span>$</span><input class="mm-in" id="mmPrice" inputmode="decimal" value="' + esc(f.price) + '" placeholder="0.00"></span></label>' +
+      '<label class="mm-field"><span class="mm-lab">How many in the package</span><input class="mm-in" id="mmPkg" inputmode="decimal" value="' + esc(f.packageAmount) + '"></label></div>' +
+      '<div class="mm-units" role="group" aria-label="Unit">' + MM_UNITS.map(function (u) { return '<button type="button" class="mm-chip" data-mm-unit="' + u + '" aria-pressed="' + (u === f.unit) + '">' + u + '</button>'; }).join('') + '</div></div>' +
+      (pantry ? '' : '<div class="mm-sect"><span class="mm-lab">🥄 This recipe uses</span><div class="mm-stepper"><button type="button" data-mm-uses="-1" aria-label="Less">−</button><input id="mmUses" inputmode="decimal" value="' + esc(f.amountUsed) + '" aria-label="Amount used"><span class="unit" id="mmUnit">' + f.unit + '</span><button type="button" data-mm-uses="1" aria-label="More">+</button></div>' +
+        '<button type="button" class="mm-toggle" data-mm-have aria-pressed="' + !!f.alreadyHave + '">🧺 Already have it</button></div>') +
+      '<div class="mm-calc"><span class="f" id="mmFormula"></span><span class="v" id="mmCost"></span></div>' +
+      '<div class="mm-acts">' + (sh.key ? '<button type="button" class="mm-btn ghost warn" data-mm-iremove>Remove</button>' : '') + '<button type="button" class="mm-btn gold" data-mm-isave>' + (pantry ? 'Save price' : sh.key ? 'Done' : 'Add to meal') + '</button></div>';
+  }
+  function mmCalcLive() {
+    var sh = mmSt().sheet; if (!sh || sh.type !== 'item') return; var f = sh.f, fe = document.getElementById('mmFormula'), ce = document.getElementById('mmCost'); if (!fe) return;
+    var price = mmNum(f.price), pkg = mmNum(f.packageAmount), uses = mmNum(f.amountUsed);
+    if (sh.mode === 'pantry') { if (price != null && pkg) { fe.textContent = mm$(price) + ' ÷ ' + pkg + ' ' + f.unit; ce.textContent = mm$(price / pkg) + '/' + mmUnitOne(f.unit); } else { fe.textContent = 'Add a price and package size'; ce.textContent = '—'; } return; }
+    if (f.alreadyHave) { fe.textContent = 'Already have it · not counted'; ce.textContent = '$0.00'; }
+    else if (price == null) { fe.textContent = 'No price yet · not counted'; ce.textContent = '—'; }
+    else if (pkg && uses) { fe.textContent = mm$(price) + ' ÷ ' + pkg + ' × ' + uses; ce.textContent = mm$(mmLine(price, pkg, uses, false)); }
+    else { fe.textContent = 'Add package size and amount'; ce.textContent = '—'; }
+  }
+  function mmLookSheet() {
+    var d = mmSt().draft;
+    return mmSheetHead('🎨 Make it yours') + '<span class="mm-lab">Icon</span><div class="mm-grid">' + MM_MEAL_EMO.map(function (e) { return '<button type="button" data-mm-me="' + e + '" aria-pressed="' + (!d.photo && e === d.emoji) + '">' + e + '</button>'; }).join('') + '</div>' +
+      '<div class="mm-sect"><span class="mm-lab">Color</span><div class="mm-swatches">' + MM_COLORS.map(function (c) { return '<button type="button" class="mm-sw" data-mm-color="' + c[1] + '" aria-label="' + c[0] + '" aria-pressed="' + (c[1] === d.color) + '" style="background:' + c[1] + '"></button>'; }).join('') + '</div></div>' +
+      '<div class="mm-sect"><span class="mm-lab">Photo</span><div class="mm-acts" style="margin-top:0"><label class="mm-btn ghost">📷 ' + (d.photo ? 'Change photo' : 'Add a photo') + '<input type="file" accept="image/*" data-mm-photo class="sr"></label>' + (d.photo ? '<button type="button" class="mm-btn ghost" data-mm-nophoto>Use icon instead</button>' : '') + '</div></div>' +
+      '<div class="mm-acts"><button type="button" class="mm-btn gold" data-mm-close>Done</button></div>';
+  }
+  function mmOpenItem(mode, src, key) {
+    mmOpen({ type: 'item', mode: mode, key: key || null, pid: src.pantryItemId || src.id || null, picked: false,
+      f: { emoji: src.emoji || mmGuess(src.name), name: src.name || '', price: src.price == null ? '' : src.price, packageAmount: src.packageAmount == null ? '' : src.packageAmount, unit: src.unit || 'servings', amountUsed: src.amountUsed == null ? '' : src.amountUsed, alreadyHave: !!src.alreadyHave } });
+    var focus = mode === 'pantry' ? 'mmPrice' : !src.name ? 'mmName' : mmNum(src.price) == null && !src.alreadyHave ? 'mmPrice' : 'mmUses';
+    setTimeout(function () { var el = document.getElementById(focus); if (el) el.focus(); }, 60);
+  }
+  function mmSaveItem() {
+    var st = mmSt(), sh = st.sheet, f = sh.f, name = String(f.name || '').trim();
+    if (!name) { var n = document.getElementById('mmName'); if (n) n.focus(); return; }
+    if (sh.mode === 'pantry') {
+      var p = mmItem(sh.pid); if (!p) return mmClose(true);
+      var clash = mmPantry().some(function (x) { return x.id !== p.id && x.name.toLowerCase() === name.toLowerCase(); });
+      if (!clash) p.name = name;
+      p.emoji = f.emoji; p.price = mmNum(f.price); p.packageAmount = mmNum(f.packageAmount); p.unit = f.unit; p.updatedAt = new Date().toISOString();
+      save(); track('meal-price'); mmClose(true); mmToast('✓ ' + p.name + ' updated in every meal'); return;
+    }
+    var item = { name: name, emoji: f.emoji, price: f.price, packageAmount: f.packageAmount, unit: f.unit, amountUsed: f.amountUsed, alreadyHave: !!f.alreadyHave };
+    if (sh.key) { var it = st.draft.items.filter(function (i) { return i.key === sh.key; })[0]; if (it) for (var k in item) it[k] = item[k]; }
+    else { item.key = uid(); item.pantryItemId = sh.pid; st.draft.items.push(item); }
+    mmClose(true);
+  }
+  function mmStartEdit(id, from) {
+    var st = mmSt(), m = id ? mmMeal(id) : null; st.backTo = from || 'meals';
+    st.draft = m ? { id: m.id, name: m.name, emoji: m.emoji, color: m.color, plates: m.plates, eatingOutCost: m.eatingOutCost, photo: m.photo || null, items: mmLines(m).map(function (x) { x.key = uid(); return x; }) }
+      : { id: null, name: '', emoji: '🍲', color: MM_COLORS[mmMeals().length % MM_COLORS.length][1], plates: 4, eatingOutCost: null, photo: null, items: [] };
+    st.view = 'edit'; if (U.screen !== 'meals') go('meals'); else render(); window.scrollTo(0, 0);
+  }
+  function mmSaveDraft() {
+    var st = mmSt(), d = st.draft, items = [], now = new Date().toISOString();
+    d.items.forEach(function (it) {
+      var name = String(it.name || '').trim(); if (!name) return;
+      // one pantry item per name: its price lives there, so every meal that uses it updates
+      var p = mmPantry().filter(function (x) { return x.name.toLowerCase() === name.toLowerCase(); })[0];
+      if (!p) { p = { id: uid(), name: name }; mmPantry().push(p); }
+      p.emoji = it.emoji || mmGuess(name); p.price = mmNum(it.price); p.packageAmount = mmNum(it.packageAmount); p.unit = it.unit || 'servings'; p.updatedAt = now;
+      items.push({ pantryItemId: p.id, amountUsed: mmNum(it.amountUsed) || 0, alreadyHave: !!it.alreadyHave });
+    });
+    var m = { name: String(d.name || '').trim() || 'Untitled meal', emoji: d.emoji, color: d.color, plates: Math.max(1, parseInt(d.plates, 10) || 1), eatingOutCost: mmNum(d.eatingOutCost), photo: d.photo || null, items: items };
+    var meal = d.id ? mmMeal(d.id) : null;
+    if (meal) { for (var k in m) meal[k] = m[k]; } else { meal = m; meal.id = uid(); meal.createdAt = now; mmMeals().push(meal); track('meal-new'); }
+    var c = mmCalc(meal); save(); st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); window.scrollTo(0, 0);
+    mmToast('🎉 Saved · ' + mm$(c.plate) + ' a plate');
+  }
+  // a photo, shrunk to about 700px on its long side and kept as a JPEG in the plan
+  function mmPhoto(file) {
+    if (!file) return;
+    var rd = new FileReader();
+    rd.onload = function () { var img = new Image(); img.onload = function () {
+      var s = Math.min(1, 700 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); mmSt().draft.photo = c.toDataURL('image/jpeg', 0.78); render(); mmSheetDraw();
+    }; img.src = rd.result; };
+    rd.readAsDataURL(file);
+  }
+  var mmToastTimer;
+  function mmToast(msg) { var t = document.getElementById('mmtoast'); if (!t) { t = document.createElement('div'); t.id = 'mmtoast'; t.className = 'mm-toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(mmToastTimer); mmToastTimer = setTimeout(function () { t.hidden = true; }, 2200); }
+  function mmOpenPlan(date, slot) { mmOpen({ type: 'plan', date: date || mmToday(), slot: slot || 'dinner' }); }
+
+  // ----- taps and typing inside Meal Math (separate from the app's data-a buttons) -----
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('button'); if (!t || t.disabled) return;
+    var inMM = t.closest('.mm, #mmsheet'); if (!inMM) return;
+    var st = mmSt(), sh = st.sheet, d = st.draft, a = function (k) { return t.getAttribute('data-mm-' + k); }, has = function (k) { return t.hasAttribute('data-mm-' + k); };
+    if (has('close')) { mmClose(true); return; }
+    if (a('go')) { st.view = a('go'); render(); window.scrollTo(0, 0); return; }
+    if (a('wk')) { st.wk = mmAdd(st.wk, +a('wk')); render(); return; }
+    if (a('sort')) { st.sort = a('sort'); render(); return; }
+    if (a('open')) { mmStartEdit(a('open'), 'meals'); return; }
+    if (has('new')) { mmStartEdit(null, 'meals'); return; }
+    if (a('slot')) { var ds = a('slot').split('|'); mmOpenPlan(ds[0], ds[1]); return; }
+    if (a('pd')) { sh.date = mmAdd(sh.date, +a('pd')); sh.outOpen = false; mmSheetDraw(); return; }
+    if (a('ps')) { sh.slot = a('ps'); sh.outOpen = false; mmSheetDraw(); return; }
+    if (a('pm')) { mmSetEntry({ type: 'meal', mealId: a('pm') }); return; }
+    if (has('left')) { mmSetEntry({ type: 'leftovers' }); return; }
+    if (has('out')) { var cur = mmEntry(sh.date, sh.slot); sh.outOpen = true; sh.budget = cur && cur.type === 'eatOut' ? cur.budget : ''; mmSheetDraw(); setTimeout(function () { var el = document.getElementById('mmOut'); if (el) el.focus(); }, 40); return; }
+    if (has('saveout')) { mmSetEntry({ type: 'eatOut', budget: sh.budget }); return; }
+    if (has('clear')) { var p = sh; P.planEntries = mmPlan().filter(function (x) { return !(x.date === p.date && x.slot === p.slot); }); save(); mmClose(true); mmToast('Cleared ' + mmSlot(p.slot)[1].toLowerCase()); return; }
+    if (has('back')) { st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); return; }
+    if (has('save')) { mmSaveDraft(); return; }
+    if (has('del')) {
+      if (t.getAttribute('data-sure')) { var id = d.id; P.meals = mmMeals().filter(function (m) { return m.id !== id; }); P.planEntries = mmPlan().filter(function (x) { return x.mealId !== id; }); save(); st.draft = null; st.view = 'meals'; render(); mmToast('Meal deleted'); }
+      else { t.setAttribute('data-sure', '1'); t.textContent = 'Tap again to delete'; }
+      return;
+    }
+    if (a('plates')) { d.plates = Math.max(1, (parseInt(d.plates, 10) || 1) + (+a('plates'))); var pi = app.querySelector('[data-mm-f=plates]'); if (pi) pi.value = d.plates; mmBar(); return; }
+    if (has('look')) { mmOpen({ type: 'look' }); return; }
+    if (a('me')) { d.emoji = a('me'); d.photo = null; render(); mmSheetDraw(); return; }
+    if (a('color')) { d.color = a('color'); render(); mmSheetDraw(); return; }
+    if (has('nophoto')) { d.photo = null; render(); mmSheetDraw(); return; }
+    if (has('addi')) { mmOpen({ type: 'pick', q: '' }); setTimeout(function () { var q = document.getElementById('mmQ'); if (q) q.focus(); }, 60); return; }
+    if (has('newing')) { var qq = String(sh.q || '').trim(); qq = qq.charAt(0).toUpperCase() + qq.slice(1); mmOpenItem('meal', { name: qq, emoji: mmGuess(qq) }); return; }
+    if (a('pick')) { var pp = mmItem(a('pick')); mmOpenItem('meal', { pantryItemId: pp.id, name: pp.name, emoji: pp.emoji, price: pp.price, packageAmount: pp.packageAmount, unit: pp.unit, amountUsed: '', alreadyHave: pp.price == null }); return; }
+    if (a('iedit')) { var it = d.items.filter(function (i) { return i.key === a('iedit'); })[0]; if (it) mmOpenItem('meal', it, it.key); return; }
+    if (a('pedit')) { mmOpenItem('pantry', mmItem(a('pedit'))); return; }
+    if (has('emotoggle')) { var g = document.getElementById('mmEmoGrid'); g.hidden = !g.hidden; return; }
+    if (a('ie')) { sh.f.emoji = a('ie'); sh.picked = true; document.querySelector('[data-mm-emotoggle]').textContent = a('ie'); Array.prototype.forEach.call(document.querySelectorAll('[data-mm-ie]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mm-ie') === a('ie')); }); document.getElementById('mmEmoGrid').hidden = true; return; }
+    if (a('unit')) { sh.f.unit = a('unit'); Array.prototype.forEach.call(document.querySelectorAll('[data-mm-unit]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mm-unit') === a('unit')); }); var u = document.getElementById('mmUnit'); if (u) u.textContent = a('unit'); mmCalcLive(); return; }
+    if (a('uses')) { var step = sh.f.unit === 'lb' || sh.f.unit === 'cups' ? 0.5 : 1, v = Math.max(0, mmR2((mmNum(sh.f.amountUsed) || 0) + step * (+a('uses')))); sh.f.amountUsed = v; document.getElementById('mmUses').value = v; mmCalcLive(); return; }
+    if (has('have')) { sh.f.alreadyHave = !sh.f.alreadyHave; t.setAttribute('aria-pressed', sh.f.alreadyHave); mmCalcLive(); return; }
+    if (has('isave')) { mmSaveItem(); return; }
+    if (has('iremove')) { d.items = d.items.filter(function (i) { return i.key !== sh.key; }); mmClose(true); return; }
+  });
+  document.addEventListener('click', function (e) { if (e.target.id === 'mmsheet') mmClose(true); });
+  document.addEventListener('keydown', function (e) {
+    var sh = mmSt().sheet; if (!sh) return;
+    if (e.key === 'Escape') mmClose(true);
+    if (e.key === 'Enter' && e.target.id === 'mmOut') { e.preventDefault(); mmSetEntry({ type: 'eatOut', budget: sh.budget }); }
+  });
+  document.addEventListener('change', function (e) { if (e.target.hasAttribute && e.target.hasAttribute('data-mm-photo')) { mmPhoto(e.target.files && e.target.files[0]); e.target.value = ''; } });
+  function mmBar() { var b = document.getElementById('mmbar'); if (b) b.innerHTML = mmBarHtml(); }
+  document.addEventListener('input', function (e) {
+    var t = e.target, st = mmSt(), sh = st.sheet;
+    if (t.hasAttribute && t.hasAttribute('data-mm-f') && st.draft) { st.draft[t.getAttribute('data-mm-f')] = t.value; mmBar(); return; }
+    if (!sh) return;
+    if (t.id === 'mmOut') { sh.budget = t.value; return; }
+    if (t.id === 'mmQ') { sh.q = t.value; document.getElementById('mmPickList').innerHTML = mmPickList(); return; }
+    if (t.id === 'mmName') { sh.f.name = t.value; if (!sh.key && sh.mode === 'meal' && !sh.picked) { var g = mmGuess(t.value); sh.f.emoji = g; var b = document.querySelector('[data-mm-emotoggle]'); if (b) b.textContent = g; } return; }
+    if (t.id === 'mmPrice') { sh.f.price = t.value; if (t.value !== '' && sh.f.alreadyHave) { sh.f.alreadyHave = false; var h = document.querySelector('[data-mm-have]'); if (h) h.setAttribute('aria-pressed', 'false'); } mmCalcLive(); return; }
+    if (t.id === 'mmPkg') { sh.f.packageAmount = t.value; mmCalcLive(); return; }
+    if (t.id === 'mmUses') { sh.f.amountUsed = t.value; mmCalcLive(); return; }
+  });
   // ---------- the guided tour: once per page, a spotlight on each feature with one short line ----------
   // Seen pages are kept on this phone (fmtm.tour), not in the plan, so a spouse sharing the budget gets their own.
   var TOUR_KEY = 'fmtm.tour';
@@ -783,6 +1150,7 @@
     home: [
       ['.hero', 'Your next goal', 'How much is left on the step you’re on. It fills as you save and pay down debt.'],
       [function () { var h = app.querySelector('.hero'), n = h && h.nextElementSibling; return n && n.querySelector('[data-a=chquit]') ? n : null; }, 'Your challenge', 'A challenge you started. Log your progress right here.'],
+      ['.recaprow', 'Weekly recap', 'Your week at a glance: spending, balances and meals at home.'],
       ['.commcard', 'Your community', 'Free help from people on the same path, plus coaching if you want it.'],
       ['.cal', 'Your month', 'Paydays, bills coming up and your wins. Tap a day to see it.'],
       ['.fab', 'Add anything', 'Add purchases, update balances or set a goal.']
@@ -804,6 +1172,12 @@
       ['.wkcard', 'Your week', 'Three steps each week: categorize, update balances, read your recap. Do all three to keep your streak.'],
       ['.tabchips', 'Map, challenges, milestones', 'Lessons for your step, challenges to try, and the wins you’ve earned.'],
       ['.mpath', 'Your map', 'Short lessons and checkpoints. Tap one to start.']
+    ],
+    meals: [
+      ['.mm-seg', 'Week and meals', 'Plan the week, or price out the meals you cook.'],
+      ['.mm-strip', 'This week', 'Meals at home, what eating at home saved, and meals out.'],
+      ['.mm-day', 'Plan a day', 'Tap a meal slot to pick a meal, leftovers or eating out.'],
+      ['.gearbtn', 'Settings', 'Your account, reminders and data live here now.']
     ],
     settings: [
       [byCard('Reminders'), 'Reminders', 'A short note the day before a bill is due.'],
@@ -1619,6 +1993,7 @@
 
   var V = {
     welcome: function () { return U.front ? frontPage() : V.ob(); },
+    meals: function () { return mealsScreen(); },
     ob: function () {
       var k = OB[obAt()], i = obAt(), name = firstName(), who = esc(name || 'friend'), err = U.err ? '<p class="oberr" role="alert">' + esc(U.err) + '</p>' : '', it = P.intro || {};
       // one screen-view event per screen, so drop-off shows step by step (no answers or numbers are sent)
@@ -1887,7 +2262,7 @@
 
     plan: function () {
       var tab = U.bTab || 'spend', ym = curSpendMonth(), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      var head = '<div class="bud-head"><h2>Budget</h2><div class="bud-month"><button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">\u2039</button><span>' + mname + '</span><button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">\u203a</button></div></div>';
+      var head = '<div class="bud-head"><h2>Budget</h2>' + mmGear() + '<div class="bud-month"><button type="button" class="mnav" data-a="spendmonth" data-v="-1" aria-label="Previous month">\u2039</button><span>' + mname + '</span><button type="button" class="mnav" data-a="spendmonth" data-v="1" aria-label="Next month">\u203a</button></div></div>';
       return head + incomeCard(ym) + '<div class="seg bud-tabs" role="group" aria-label="Budget">' + [['spend', 'Spending'], ['save', 'Saving'], ['debt', 'Debt']].map(function (t) { var on = tab === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="btab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + (tab === 'save' ? budSave() : tab === 'debt' ? budDebt() : budSpend(ym));
     },
     // add or change one recurring expense: name, icon, amount, how often, when it's due
@@ -1911,11 +2286,12 @@
       var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
       // one big number: dollars left to the current goal (no dates: paydays can bring more or less)
       var hero = '<div class="hero">' + stepChip + progGauge(o, p) + '</div>';
-      return homeTop(toast) + hero + activeChallenges() + homeRest();
+      return homeTop(toast) + hero + activeChallenges() + '<button type="button" class="card recaprow" data-a="recapopen"><span>\uD83D\uDCCA</span><b>Weekly recap</b><small>' + weekLabel({ start: weekOf(today())[0], end: weekOf(today())[1] }) + '</small><i aria-hidden="true">\u203a</i></button>' + homeRest();
     },
 
     recap: function () {
-      var wk = weekOf(today()), ws = wk[0], we = wk[1], r = wkRec(ws), by = weekSpend(ws, we), lines = {};
+      // the recap's week: this one, or an earlier/later one with the arrows (the steps and balances belong to this week)
+      var thisWk = weekOf(today())[0], ws = U.recapWk || thisWk, we = mmAdd(ws, 6), isNow = ws === thisWk, r = wkRec(ws), by = weekSpend(ws, we), lines = {};
       spendLines().forEach(function (l) { lines[l.key] = l; });
       var rows = Object.keys(by).map(function (k) { var l = lines[k] || { label: 'Removed category', icon: '\uD83E\uDDFE' }; return { k: k, label: l.label, icon: l.icon, v: by[k], c: colorFor(k) }; }).sort(function (a, b) { return b.v - a.v; });
       var tot = rows.reduce(function (t, x) { return t + x.v; }, 0), top = rows.slice(0, 5), rest = rows.slice(5).reduce(function (t, x) { return t + x.v; }, 0);
@@ -1936,11 +2312,12 @@
         funds().map(function (f) { return balRow(f.icon || '\uD83D\uDCB0', f.name || 'Fund', now.funds[f.id], was && was.funds ? was.funds[f.id] : null, 'up'); }).join('') +
         P.goals.map(function (g) { return balRow('\uD83C\uDFAF', g.name, now.goals[g.id], was && was.goals ? was.goals[g.id] : null, 'up'); }).join('') +
         (P.debts.length ? balRow('\uD83D\uDCB3', 'Debt', now.debt, was && was.debt, 'down') : '') + '</div>';
-      return back(U.recapBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Weekly recap \u00b7 ' + weekLabel({ start: ws, end: we }) + '</div><h2>Your week</h2></div>' +
+      return back(U.recapBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Weekly recap</div><h2>Your week</h2></div>' +
+        '<div class="mm-weeknav"><button type="button" class="mm-nav" data-a="recapwk" data-v="-7" aria-label="Previous week">\u2039</button><div><b>' + weekLabel({ start: ws, end: we }) + '</b><div class="mm-wk">' + (isNow ? 'This week' : ws < thisWk ? 'Past week' : 'Coming up') + '</div></div><button type="button" class="mm-nav" data-a="recapwk" data-v="7" aria-label="Next week">\u203a</button></div>' +
         (U.recapToast ? (function () { var t = U.recapToast; U.recapToast = null; return '<div class="toast pop win" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + t + '</b></div>'; })() : '') +
-        (U.recapCoach && !coachSeen() ? coachCard(foundMonthly()) : '') + spendCard + budCard + balCard +
+        (U.recapCoach && !coachSeen() ? coachCard(foundMonthly()) : '') + spendCard + budCard + mmRecap(ws) + (isNow ? balCard +
         '<div class="card stack" style="padding:14px 18px;gap:6px">' + wkCheck(!!r.cat, 'Categorize transactions', 'recapgo', 'cat') + wkCheck(!!r.bal, 'Update balances', 'recapgo', 'bal') + wkCheck(!!r.done, 'Read your weekly recap') + '</div>' +
-        (r.done ? '' : '<div class="push"><button type="button" class="primary" data-a="recapdone">Mark recap complete</button></div>');
+        (r.done ? '' : '<div class="push"><button type="button" class="primary" data-a="recapdone">Mark recap complete</button></div>') : '');
     },
     wins: function () {
       var r = U.result; if (!r) { go('home'); return ''; }
@@ -2650,7 +3027,7 @@
     else if (st === 1) { pct = j.sv / F.CUSHION; l1 = money(j.sv) + ' saved'; l2 = 'of $1,000'; }
     else if (st === 2) { var orig = 0, bal = 0; P.debts.forEach(function (d) { orig += Math.max(num(d.orig), num(d.bal)); bal += num(d.bal); }); pct = orig ? 1 - bal / orig : 0; l1 = money(orig - bal) + ' paid'; l2 = money(bal) + ' left'; }
     else { pct = stepProgress(j.o); l1 = 'Step ' + st; l2 = ''; }
-    return '<div class="jhead"><div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + (wkStreak() ? plural(wkStreak(), 'week') + ' in a row' : '') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
+    return '<div class="jhead">' + mmGear() + '<div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + (wkStreak() ? plural(wkStreak(), 'week') + ' in a row' : '') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
       (j.makeRoom ? '<div class="pbar jbar"><i style="width:' + Math.max(2, Math.min(100, pct * 100)) + '%"></i></div><div class="jsub"><span>' + l1 + '</span><span>' + l2 + '</span></div>' : '<div class="jgauge">' + progGauge(j.o, profile()) + '</div>') +
       (j.makeRoom ? '<div class="jrow"><div class="chips"><span class="chip" style="min-height:30px;font-size:13px">Make room first</span></div></div>' : '') + '</div>';
   }
@@ -2830,6 +3207,10 @@
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
+      case 'mmplan': U.plusOpen = false; render(); mmOpenPlan(mmToday(), 'dinner'); break;
+      case 'mmnew': U.plusOpen = false; mmStartEdit(null, 'meals'); break;
+      case 'recapwk': U.recapWk = mmAdd(U.recapWk || weekOf(today())[0], +v); render(); break;
+      case 'recapopen': U.recapBack = U.screen; U.recapWk = null; go('recap'); break;
       case 'tourreplay': try { localStorage.removeItem(TOUR_KEY); } catch (e) {} track('tour-replay'); U.bTab = 'spend'; U.jTab = 'map'; go('home'); break;
       case 'frontstart': U.front = false; clearInterval(wf.timer); track('welcome-start'); U.ob = OB[0]; render(); window.scrollTo(0, 0); break;
       case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
