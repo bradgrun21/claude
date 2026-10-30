@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30l';
+  var APP_VERSION = '10-30m';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -651,11 +651,6 @@
   }
   // A single purchase can override its store (a Target run can be groceries or decor).
   function bucketOf(x) { return x.b || P.sorted[x.merchant] || 'unsorted'; }
-  function splitHtml(t) {
-    var keys = ['need', 'want', 'unsorted'].filter(function (k) { return t[k] > 0; }), all = t.need + t.want + t.unsorted || 1;
-    return '<span class="split" role="img" aria-label="Needs ' + Math.round(t.need / all * 100) + '%, wants ' + Math.round(t.want / all * 100) + '%' + (t.unsorted ? ', not sorted ' + Math.round(t.unsorted / all * 100) + '%' : '') + '">' +
-      keys.map(function (k) { return '<i class="c-' + (k === 'unsorted' ? 'uns' : k) + '" style="flex:' + t[k] + '"></i>'; }).join('') + '</span>';
-  }
   function ladderHtml(current) {
     return '<div class="ladder">' + F.STEPS.map(function (st, i) {
       var n = i + 1, cls = n < current ? ' done' : n === current ? ' now' : '';
@@ -1475,18 +1470,13 @@
         obBtn('Email me a code', 'csend') + ((U.codeTries || 0) >= 2 ? '<button type="button" class="oblink" data-a="obskip">Having trouble? Continue for now</button>' : ''));
     },
     // right after sign-in: the 7-step path, filling up to the person's step
-    quick: function () {
-      return back('welcome') + '<div class="stack" style="gap:8px;margin-top:4px"><div class="eyebrow">30 seconds \u00b7 rough numbers are fine</div><h2>Let\u2019s find your money</h2>' +
-        '<p>We\u2019ll show you how much is slipping away.</p></div>' +
-        '<div class="card stack" style="padding:16px 18px;gap:14px">' + field('Take-home pay per paycheck', 'paycheck', { ph: '1000', min: 0 }) +
-        '<div class="field" style="margin-top:-4px">How often?<div class="seg wrap" role="group" aria-label="How often you\u2019re paid">' + Object.keys(F.FREQS).map(function (k) {
-          return '<button type="button" class="' + (P.freq === k ? 'on' : '') + '" aria-pressed="' + (P.freq === k) + '" data-a="freq" data-v="' + k + '">' + F.FREQS[k].label + '</button>'; }).join('') + '</div></div>' +
-        (P.incomes && P.incomes.length ? incomeCards(true) : '') +
-        field('Monthly expenses', 'qExp', { ph: '2400', min: 0 }) + '<small class="qhint">Everything except debt payments.</small>' +
-        '<div class="grid2">' + field('Total debt', 'qDebt', { ph: '0', min: 0 }) + field('Debt payments / mo', 'qMin', { ph: '0', min: 0 }) + '</div>' +
-        '<small class="qhint">Everything except your home.</small></div>' +
-        (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.err + '</p>' : '') +
-        '<div class="push"><button type="button" class="primary" data-a="quickgo">Show me</button></div>';
+    steps: function () {
+      var o = F.outlook(profile(), today()), cur = Math.min(o.step, 7), name = firstName();
+      return '<div class="ob ob-steps"><div class="obbody"><p class="obkicker">' + (name ? esc(name) + ', here’s your path' : 'here’s your path') + '</p><h1 class="obbig" style="font-size:32px">7 steps from ' + hi('stressed') + ' to ' + hi('free') + '</h1>' +
+        '<div class="obpath">' + F.STEPS.map(function (stp, i) {
+          var n = i + 1, cls = n < cur ? 'done' : n === cur ? 'now' : '';
+          return '<div class="obstep ' + cls + '" style="--d:' + (0.2 + i * 0.32).toFixed(2) + 's"><b>' + (n < cur ? ICON.check('#141414', 16) : n) + '</b><div><div class="t">' + stp[0] + (n === cur ? ' <span class="obhere">You’re here</span>' : '') + '</div>' + (n === cur ? '<small>' + STEP_WHY[i] + '</small>' : '') + '</div></div>';
+        }).join('') + '</div></div><div class="obfoot">' + obBtn('Take me home', 'obhome') + '</div></div>';
     },
     pay: function () {
       var two = P.household === 'shared' || (P.incomes || []).length > 0;
@@ -1685,9 +1675,7 @@
       var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
       // one big number: dollars left to the current goal (no dates: paydays can bring more or less)
       var hero = '<div class="hero">' + stepChip + progGauge(o, p) + '</div>';
-      var snow = snow0(o, step);
-      var nw = nwCard();
-      return homeTop(toast) + hero + activeChallenges() + homeRest(o, step, snow, nw);
+      return homeTop(toast) + hero + activeChallenges() + homeRest();
     },
 
     recap: function () {
@@ -1971,7 +1959,7 @@
     account: function () {
       if (S && !P.setupDone) return back('welcome') + '<div class="stack" style="gap:8px"><div class="eyebrow">\u2713 Signed in as ' + esc(S.email || '') + '</div><h2>Let\u2019s get your plan going</h2><p>Joining your spouse\u2019s budget? Enter the code they sent you. Starting your own? It takes 30 seconds.</p></div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px">' + joinBlock() + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') + '</div>' +
-        '<div class="push"><button type="button" class="outline" data-a="go" data-v="quick">Start my own plan</button></div>';
+        '<div class="push"><button type="button" class="outline" data-a="go" data-v="welcome">Start my own plan</button></div>';
       return back(P.setupDone ? U.wizReturn || 'settings' : 'welcome') + '<h2>' + (S ? 'Your account' : U.joinMode ? 'Join your spouse\u2019s budget' : 'Sign in') + '</h2>' +
         (S ? '' : U.joinMode ? '<p>First sign in with your own email. Then enter the invite code your spouse sent you.</p>' : '<p>Your plan comes right back. Joining your spouse\u2019s budget? Sign in with your own email, then enter their code.</p>') + accountCard() + (!S ? '<button type="button" class="textbtn" data-a="go" data-v="restore" style="align-self:center;font-size:14px">Have a backup file instead?</button>' : '');
     },
@@ -2184,13 +2172,6 @@
     var extra = d.kind === 'amount' && c.amount ? ['$' + Math.round(c.amount) + ' found'] : [];
     var len = [(d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + '-day challenge')];
     return { eyebrow: 'Challenge complete', title: d.title, sub: d.share, chips: len.concat(extra, streakChips()).slice(0, 3), chipsNoAmt: len.concat(streakChips()).slice(0, 3), caption: 'Challenge complete: ' + d.title + '!' };
-  }
-  function nwCard() {
-      var sp = P.tx.length ? spending() : null;
-      return sp ? '<button type="button" class="card" data-a="' + (sp.unsorted.length ? 'sortstart' : 'go" data-v="spend') + '" style="text-align:left;width:100%;padding:16px 18px;display:flex;flex-direction:column;gap:10px">' +
-          '<span style="display:flex;justify-content:space-between;align-items:center;width:100%"><span style="font-family:var(--display);font-weight:600;font-size:18px">' + (sp.unsorted.length ? 'Finish sorting your spending' : 'Needs vs wants') + '</span><span style="font-size:13px;color:var(--faint)">Open ›</span></span>' + splitHtml(sp.t) +
-          '<span style="font-size:14px;color:var(--muted)">' + (sp.unsorted.length ? plural(sp.unsorted.length, 'store') + ' left to sort' : '<span class="key c-need"></span>Needs ' + money(sp.monthly.need) + '/mo &nbsp;<span class="key c-want"></span>Wants ' + money(sp.monthly.want) + '/mo') + '</span></button>'
-        : '';
   }
   // ---------- Journey: lessons ----------
   var LESSONS = null;
@@ -2467,16 +2448,8 @@
         : '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (P.communityJoined ? 'Open the community' : 'Join the FREE community') + '</a>') +
       '</div>';
   }
-  function homeRest(o, step, snow, nw) {
+  function homeRest() {
     return communityCard() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
-  }
-  function snow0(o, step) {
-    return o.state.debts.length ? '<div class="card"><div class="row" style="border:0;padding-bottom:2px"><h3>Debt snowball</h3><span style="font-size:13px;color:var(--faint)">smallest first</span></div>' +
-        o.state.debts.slice().sort(function (a, b) { return a.bal - b.bal; }).sort(function (a, b) { return (a.bal <= 0) - (b.bal <= 0); }).map(function (d) {
-          var d0 = P.debts.filter(function (x) { return x.id === d.id; })[0], orig = Math.max(num(d0.orig), d.bal) || 1, paid = d.bal <= 0, isT = o.target && o.target.id === d.id && step === 2;
-          return '<div class="debt' + (paid ? ' paid' : '') + '"><div class="top"><span>' + esc(d.name) + (isT ? '<span class="target">Snowball target</span>' : '') + '</span><b>' + (paid ? 'Paid off' : money(d.bal)) + '</b></div>' +
-            '<div class="bar" style="flex:none"><i style="width:' + Math.max(paid ? 100 : 1, (orig - d.bal) / orig * 100) + '%"></i></div></div>';
-        }).join('') + '</div>' : '';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
   // ---------- the weekly recap: a week (Sunday to Saturday) counts when its 3 steps are done ----------
@@ -2564,9 +2537,6 @@
     switch (a) {
       case 'go': if (v === 'journey' && b.closest('.tabbar')) { U.jTab = 'map'; U.jStep = null; U.jAllPast = false; } if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;
-      case 'quickgo':
-        if (!(num(P.paycheck) > 0)) { U.err = 'Enter your take-home pay per paycheck. A rough number is fine.'; render(); break; }
-        U.err = ''; quickApply(); save(); track('quick-done'); go('claim'); break;
       case 'givemode': (function () {
         var inc = monthlyIncome();
         // switching keeps about the same amount
@@ -2619,6 +2589,7 @@
       case 'obpick': (function () { var it = P.intro = P.intro || {}; it[b.getAttribute('data-k')] = v; save(); obGo(OB[obAt() + 1]); })(); break;
       case 'obfreq': P.freq = v; save(); obGo('nextpay'); break;
       case 'obnodebt': P.qDebt = ''; P.qMin = ''; save(); obApply(); track('quick-done'); obGo('finding'); break;
+      case 'obhome': U.obAfter = false; go('home'); break;
       case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
@@ -2824,8 +2795,6 @@
       case 'incfreq': P.incomes[i].freq = v; save(); render(); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
-      case 'bedit': U.bEdit = v; U.bAdd = null; render(); (function () { var inp = app.querySelector('[data-bedit]'); if (inp) { inp.focus(); inp.select(); } })(); break;
-      case 'btoggle': U.bOpen = U.bOpen || {}; U.bOpen[v] = U.bOpen[v] === false; render(); break;
       case 'badd': U.bAdd = v; U.bEdit = null; render(); (function () { var inp = app.querySelector('[data-baddname]'); if (inp) inp.focus(); })(); break;
       case 'wiz':
         var n = +v; U.err = validate(n);
@@ -2835,7 +2804,6 @@
         if (P.setupDone) { snapshot(); save(); go(U.wizReturn || 'settings'); }
         else go(n < WIZ.length ? WIZ[n] : 'reveal');
         break;
-      case 'sortstart': U.sortHist = []; go('sort'); break;
       case 'saveskip': track('save-skip'); U.afterSave = false; U.savePrompt = false; go('home'); break;
       case 'installlater': U.afterSave = false; go('home'); break;
       case 'installok': P.installSeen = true; save(); U.afterSave = false; track('install-seen'); go('home'); break;
@@ -2844,13 +2812,6 @@
       case 'ladder': U.showLadder = !U.showLadder; render(); break;
       case 'installdone': U.copiedPlan = false; P.installSeen = true; save(); go(U.wizReturn || 'home'); break;
       case 'openunlock': markSeen('unlock:' + v); go(v); break;
-      case 'quick':
-        var lst = b.getAttribute('data-l'), key = b.getAttribute('data-k');
-        if (lst) P[lst][i][key] = v; else P[key] = v;
-        save();
-        var inp2 = app.querySelector(lst ? '[data-list="' + lst + '"][data-i="' + i + '"][data-k="' + key + '"]' : '[data-f="' + key + '"]');
-        if (inp2) inp2.value = v;
-        break;
       case 'goalnew': U.form = { name: '', amount: '', by: F.isoDay(F.addDays(today(), 182)) }; U.formErr = ''; U.back = U.screen; U.next = U.screen; go('goal'); break;
       case 'preset':
         var pr = U.presets[i], other = pr[0] === 'Something else';
