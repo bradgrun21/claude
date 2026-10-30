@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30p';
+  var APP_VERSION = '10-30q';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -819,7 +819,7 @@
       '<section class="wf-stage" aria-label="A look inside the app"><div class="wf-glow" aria-hidden="true"></div>' +
       '<div class="wf-phone"><div class="wf-screen"><div class="wf-track" tabindex="0" aria-roledescription="carousel" aria-label="App screens, swipe to see more">' + wfSlides() + '</div>' +
       '<div class="wf-cv wf-over" aria-hidden="true"><div class="wf-sb"><span>9:41</span><span class="wf-ic">' + bars + '</span></div><div class="wf-island"></div><div class="wf-home"></div></div></div></div>' +
-      '<div class="wf-cap" aria-live="polite"><div class="wf-eb"></div><div class="wf-ct"></div><div class="wf-cd"></div></div>' +
+      '<div class="wf-cap">' + WF_CAPS.map(function (c, i) { return '<div class="wf-capi" aria-hidden="true"><div class="wf-eb">' + (i + 1) + ' of 3 \u00b7 ' + c[0] + '</div><div class="wf-ct">' + c[1] + '</div><div class="wf-cd">' + c[2] + '</div></div>'; }).join('') + '<span class="sr" aria-live="polite"></span></div>' +
       '<div class="wf-ctrl"><button type="button" class="wf-arrow" data-wf="-1" aria-label="Previous screen">' + chev('M15 5l-7 7 7 7') + '</button><div class="wf-dots">' +
       WF_CAPS.map(function (c, i) { return '<button type="button" class="wf-dot" data-wfdot="' + i + '" aria-label="Show screen ' + (i + 1) + ': ' + c[0] + '"></button>'; }).join('') +
       '</div><button type="button" class="wf-arrow" data-wf="1" aria-label="Next screen">' + chev('M9 5l7 7-7 7') + '</button></div></section>' +
@@ -839,11 +839,19 @@
     var paint = function (i) {
       wf.cur = i;
       Array.prototype.forEach.call(dots, function (d, k) { d.setAttribute('aria-current', k === i ? 'true' : 'false'); });
-      root.querySelector('.wf-eb').textContent = (i + 1) + ' of 3 · ' + WF_CAPS[i][0]; root.querySelector('.wf-ct').textContent = WF_CAPS[i][1]; root.querySelector('.wf-cd').textContent = WF_CAPS[i][2];
+      Array.prototype.forEach.call(root.querySelectorAll('.wf-capi'), function (c, k) { c.classList.toggle('on', k === i); });
+      root.querySelector('.wf-cap .sr').textContent = WF_CAPS[i][1] + '. ' + WF_CAPS[i][2];
     };
-    var go = function (i) { i = (i + n) % n; trk.scrollTo({ left: i * trk.clientWidth, behavior: reduce ? 'auto' : 'smooth' }); paint(i); };
+    var go = function (i) {
+      var wrap = i < 0 || i >= n; i = (i + n) % n; paint(i);
+      var x = i * trk.clientWidth; clearTimeout(wf.mv);
+      if (reduce) { trk.scrollLeft = x; return; }
+      if (wrap) { screen.classList.add('fade'); wf.mv = setTimeout(function () { trk.classList.add('moving'); trk.scrollLeft = x; trk.classList.remove('moving'); screen.classList.remove('fade'); }, 180); return; }
+      trk.classList.add('moving'); trk.scrollTo({ left: x, behavior: 'smooth' });
+      wf.mv = setTimeout(function () { trk.classList.remove('moving'); }, 650);
+    };
     var touched = function () { clearInterval(wf.timer); if (!wf.swiped) { wf.swiped = true; track('welcome-swipe'); } };
-    var raf; trk.addEventListener('scroll', function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { var i = Math.round(trk.scrollLeft / trk.clientWidth); if (i !== wf.cur && i >= 0 && i < n) paint(i); }); }, { passive: true });
+    var raf; trk.addEventListener('scroll', function () { if (trk.classList.contains('moving')) return; cancelAnimationFrame(raf); raf = requestAnimationFrame(function () { var i = Math.round(trk.scrollLeft / trk.clientWidth); if (i !== wf.cur && i >= 0 && i < n) paint(i); }); }, { passive: true });
     ['pointerdown', 'wheel', 'touchstart'].forEach(function (e) { trk.addEventListener(e, touched, { passive: true }); });
     root.querySelectorAll('[data-wf]').forEach(function (b) { b.addEventListener('click', function () { touched(); go(wf.cur + +b.getAttribute('data-wf')); }); });
     Array.prototype.forEach.call(dots, function (d, i) { d.addEventListener('click', function () { touched(); go(i); }); });

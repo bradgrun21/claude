@@ -1168,3 +1168,19 @@ body.is-front { margin: 0; }
   .wf-cap { max-width: none; }
 }
 @media (max-width: 879px) and (max-height: 760px) { .wf { --ph: clamp(230px, calc(100svh - 394px), 600px); } }
+/* front page: captions share one spot (the tallest sets the height), so nothing below moves between screens */
+.wf-cap { display: grid; }
+.wf-capi { grid-area: 1 / 1; display: flex; flex-direction: column; gap: 3px; visibility: hidden; opacity: 0; transition: opacity .25s ease, visibility 0s linear .25s; }
+.wf-capi.on { visibility: visible; opacity: 1; transition: opacity .25s ease; }
+/* a glide between screens pauses snapping (iPhone stutters when a smooth scroll and snapping fight); last -> first fades */
+.wf-track.moving { scroll-snap-type: none; }
+.wf-track .wf-slide { transform: translateZ(0); }
+.wf-screen .wf-track { transition: opacity .18s ease; }
+.wf-screen.fade .wf-track { opacity: 0; }
+/* the installed app also gives the status bar and home bar their space */
+@media (max-width: 879px) {
+  .wf { --ph: clamp(230px, min(52svh, calc(100svh - 448px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))), 600px); }
+  .wf-trust { gap: 4px 12px; font-size: 12.5px; }
+}
+@media (max-width: 879px) and (max-height: 760px) { .wf { --ph: clamp(230px, calc(100svh - 394px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 600px); } }
+@media (prefers-reduced-motion: reduce) { .wf-capi, .wf-screen .wf-track { transition: none; } }
