@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30q';
+  var APP_VERSION = '10-30r';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -815,7 +815,7 @@
     return '<div class="wf">' +
       '<section class="wf-copy"><div class="wf-brand"><img src="icons/icon.svg" alt="" width="30" height="30">Find Me the Money</div>' +
       '<h1>find the <span class="wf-hi">money</span> you didn’t know you had</h1>' +
-      '<p class="wf-sub">A calm plan for your paycheck. Four numbers, about a minute, and you’ll see where it’s been slipping away.</p></section>' +
+      '</section>' +
       '<section class="wf-stage" aria-label="A look inside the app"><div class="wf-glow" aria-hidden="true"></div>' +
       '<div class="wf-phone"><div class="wf-screen"><div class="wf-track" tabindex="0" aria-roledescription="carousel" aria-label="App screens, swipe to see more">' + wfSlides() + '</div>' +
       '<div class="wf-cv wf-over" aria-hidden="true"><div class="wf-sb"><span>9:41</span><span class="wf-ic">' + bars + '</span></div><div class="wf-island"></div><div class="wf-home"></div></div></div></div>' +
@@ -870,9 +870,9 @@
   var OB = ['story1', 'story2', 'name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'mins', 'finding', 'found', 'first4', 'save'];
   var OB_ASK = ['name', 'feel', 'first', 'way', 'heard', 'four', 'pay', 'freq', 'nextpay', 'exp', 'debt', 'mins'];
   // the one-tap answers: [key, what they tap, where they want to go]
-  var OB_FIRST = [['cushion', 'Build an emergency fund', 'An emergency fund, so a surprise doesn\u2019t become debt.'], ['debt', 'Pay off debt', 'Out of debt, one payoff at a time.'], ['payday', 'Stop running out before payday', 'Making it to payday with money left.'], ['same', 'Get on the same page', 'On the same page about money.']];
+  var OB_FIRST = [['cushion', 'Build an emergency fund', 'An emergency fund, so a surprise doesn\u2019t become debt.'], ['debt', 'Pay off debt', 'Out of debt, one payoff at a time.'], ['payday', 'Stop running out before payday', 'Making it to payday with money left.'], ['same', 'Build wealth', 'Building wealth that lasts.']];
   // [key, what they tap, what the app does about it]
-  var OB_WAY = [['where', 'I don\u2019t know where it goes', 'your weekly purchases show exactly where it goes.'], ['payments', 'Debt payments', 'the snowball pays off the smallest first and rolls each payment into the next.'], ['oneincome', 'One income', 'your payday plan gives every dollar a job, so one income goes further.'], ['talk', 'We don\u2019t talk about it', 'your whole budget lives in one place, so it\u2019s easy to look at together.']];
+  var OB_WAY = [['where', 'I don\u2019t know where it goes', 'your weekly purchases show exactly where it goes.'], ['payments', 'Debt payments', 'the snowball pays off the smallest first and rolls each payment into the next.'], ['oneincome', 'Not enough income', 'your payday plan gives every dollar a job, so your income goes further.'], ['talk', 'I don\u2019t know what to do', 'your plan shows the next step, one at a time.']];
   // "Every other Friday, so your next payday plan starts Friday, Nov 6."
   function payEcho() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) return '';
@@ -1504,20 +1504,18 @@
           '<p class="obline">payday hits<br>a week later<br>' + hi('it\u2019s already gone') + '</p>' +
           '<p class="obline">coffee, takeout, a few clicks online<br>it ' + hi('adds up fast') + '</p>' +
           '<p class="obline">you\u2019re not bad with money<br>you just ' + hi('don\u2019t have a plan') + ' yet</p>',
-        tap + (trashed() ? '<button type="button" class="oblink" data-a="untrash">Bring back the plan you deleted</button>' : '') +
-        (cloudOn() && !S ? '<button type="button" class="oblink" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
-        (standalone() ? '<button type="button" class="oblink" data-a="go" data-v="restore">Started in Safari? Bring your plan over</button>' : '') +
+        tap + (cloudOn() && !S ? '<button type="button" class="oblink" data-a="go" data-v="account">Already have an account? Sign in</button>' : '') +
         (storageOk ? '' : '<p class="oberr">This browser is blocking saved data (private browsing?), so your plan won\u2019t be kept. Open it in a regular tab.</p>'));
       if (k === 'story2') return wrap('<h1 class="obbig">your money needs ' + hi('a plan') + '<br>not more willpower</h1>' +
           '<p class="obline">Find Me the Money gives every dollar ' + hi('a job') + '</p>' +
           '<p class="obline">finds the money ' + hi('slipping away') + '</p>' +
-          '<p class="obline">and walks you ' + hi('7 steps') + ' from stressed to free</p>', tap);
+          '<p class="obline">and walks you through ' + hi('your journey') + ' from stressed to peace</p>', tap);
       if (k === 'name') return wrap('<p class="obkicker">first things first</p><h1 class="obq">What should we call you?</h1>' +
           '<label class="obin"><input type="text" autocomplete="given-name" autocapitalize="words" data-obname value="' + esc(name) + '" placeholder="First name" maxlength="40"></label>', obBtn('Continue', 'obnext'));
       if (k === 'feel') { var fv = it.feel == null ? 50 : it.feel;
         return wrap('<p class="obkicker">about you</p><h1 class="obq">' + who + ', how does money feel right now?</h1>' +
           '<div class="obslide"><input type="range" min="0" max="100" step="1" value="' + fv + '" data-obfeel aria-label="How money feels, calm to stressed"><div class="obends"><span>calm</span><span>stressed</span></div></div>', obBtn('Continue', 'obnext')); }
-      if (k === 'first') return wrap('<p class="obkicker">about you</p><h1 class="obq">What would you do first with found money?</h1>' + pick('first', OB_FIRST), '');
+      if (k === 'first') return wrap('<p class="obkicker">about you</p><h1 class="obq">What would you do with extra money?</h1>' + pick('first', OB_FIRST), '');
       if (k === 'way') return wrap('<p class="obkicker">about you</p><h1 class="obq">What\u2019s in the way?</h1>' + pick('way', OB_WAY), '');
       if (k === 'heard') {
         var f0 = OB_FIRST.filter(function (x) { return x[0] === it.first; })[0], w0 = OB_WAY.filter(function (x) { return x[0] === it.way; })[0], fe = it.feel == null ? 50 : it.feel;
@@ -1566,8 +1564,7 @@
             '<div class="obfirst4">' + [['1', 'Needs vs wants', 'A 1-minute lesson'], ['2', 'Set a limit for fun spending', 'Eating out, shopping, extras'], ['3', 'Cancel one subscription', 'One you won’t miss']].map(function (r, n) { return '<div style="--d:' + (0.15 + n * 0.2).toFixed(2) + 's"><small>' + r[0] + ' · ' + r[2] + '</small><b>' + r[1] + '</b></div>'; }).join('') + '</div>' +
             '<p class="obline" style="font-size:17px">Once there’s room, your money starts going to ' + hi('$1,000 for emergencies') + '.</p>', obBtn('Start my plan', 'obnext'));
         return wrap('<p class="obkicker">' + who + ', your first goal</p><div class="obfound" style="font-size:60px">$1,000<span>for emergencies</span></div>' +
-            '<p class="obline">So a flat tire or a doctor visit doesn’t go on a credit card.</p>' +
-            '<div class="obheard"><small>how you get there</small><b>Your extra (' + money(per) + ' a payday) goes here first.</b><span>→ then every extra dollar goes to your debt, smallest first.</span></div>', obBtn('Start my plan', 'obnext'));
+            '<p class="obline">So a flat tire or a doctor visit doesn’t go on a credit card.</p>', obBtn('Start my plan', 'obnext'));
       }
       // save: email, then the code
       var st = U.cloudStep, m = me();
@@ -1747,8 +1744,8 @@
       var ios = isIOS();
       return back(U.wizReturn || 'home') + '<div class="stack" style="gap:6px"><h2>Add it to your Home Screen</h2><p>' + (ios ? 'On iPhone, Safari can clear saved data from websites you haven\u2019t opened in about a week. Apps on your Home Screen are safe, and they open like a real app.' : 'It opens like a real app and is one tap away on payday.') + '</p></div>' +
         (ios && !standalone() && P.setupDone && cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>' + (S ? 'Your plan comes with you' : 'First: save your plan with your email') + '</b><span style="font-size:14px;color:var(--muted)">' + (S ? 'Open the Home Screen app and sign in with ' + esc(S.email || 'your email') + '. Your plan will be there.' : 'The Home Screen app starts empty. Save your plan first, then sign in there with the same email.') + '</span>' + (S ? '' : '<button type="button" class="outline" data-a="edit" data-v="account">Save my plan</button>') + '</div>' : '') +
-        (ios && !standalone() && P.setupDone && !cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app and tap <b>Started in Safari?</b> to paste it.</span>' +
-          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
+        (ios && !standalone() && P.setupDone && !cloudOn() ? '<div class="card stack" style="padding:16px 18px;gap:10px"><b>First: bring your plan with you</b><span style="font-size:14px;color:var(--muted)">The Home Screen app starts empty. Copy your plan first, then open the app, tap <b>Sign in</b>, then <b>Have a backup file instead?</b> to paste it.</span>' +
+          '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied. Now add it to your Home Screen' : 'Copy my plan') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Sign in</b>, then <b>Have a backup file instead?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') + '</div>' : '') +
         guideBox(ios ? 'ios' : 'android') +
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
@@ -2039,7 +2036,7 @@
         '<div class="card">' + [['install', 'Add to Home Screen']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="edit" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
-        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Started in Safari?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
+        '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Sign in</b>, then <b>Have a backup file instead?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
         (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone' + (S ? ' and signs you out. The copy in your account stays, so you can sign in again to get it back.' : '. It can’t be undone unless you have a backup.') + '</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
           : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
