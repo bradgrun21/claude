@@ -992,3 +992,13 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .inc-card { position: relative; }
 .inc-edit { position: absolute; top: 12px; right: 12px; border: 0; background: var(--card2); color: var(--ink); font-weight: 700; font-size: 13px; border-radius: 99px; padding: 6px 12px; }
 .ccard[role=button] { cursor: pointer; }
+/* on/off switches (reminders) */
+.tgls { display: flex; flex-direction: column; }
+.tglrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; border-bottom: 1px solid var(--line, rgba(255,255,255,.06)); font-size: 16px; }
+.tglrow:last-child { border-bottom: 0; }
+.tgl { flex: none; position: relative; width: 52px; height: 32px; border-radius: 16px; border: 0; padding: 0; background: rgba(255,255,255,.16); cursor: pointer; transition: background .2s; }
+.tgl i { position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: left .2s; }
+.tgl.on { background: #6FDB8E; }
+.tgl.on i { left: 23px; }
+/* Journey: the same progress gauge as Home */
+.jgauge { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; margin: 4px 0 2px; }
