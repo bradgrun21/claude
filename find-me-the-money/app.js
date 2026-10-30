@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30i';
+  var APP_VERSION = '10-30j';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -946,7 +946,7 @@
       });
     });
   }
-  function weekDone(ws, how) { P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
+  function weekDone(ws, how) { wkMark('cat'); P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
   // ---------- the budget: spending categories, recurring expenses, everything else ----------
   // spending categories people can add, with an icon each
   var SPEND_SUGGEST = [['Groceries', '🛒'], ['Gas', '⛽'], ['Eating out', '🍔'], ['Shopping', '🛍️'], ['Kids', '🧸'], ['Household', '🧺'], ['Personal care', '💇'], ['Pets', '🐾'], ['Gifts', '🎁'], ['Coffee', '☕'], ['Entertainment', '🎬'], ['Medical', '💊']];
@@ -1990,7 +1990,7 @@
       var p = profile(), o = F.outlook(p, today()), pl = o.plan, step = o.step, h = headline(o), now = today();
       var due = !!F.paydayFor(P.nextPay, P.freq, now), next = F.fromIso(p.nextPay), sv = F.streakView(P.streak, P.nextPay, P.freq, now);
       // a check-in button only when a payday check-in is due
-      var paydayStrip = due ? '<button type="button" class="sunbtn" data-a="checkin">' + (sv.count ? 'It\u2019s payday! Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'It\u2019s payday! Check in') + '</button>' : '';
+      var paydayStrip = due ? '<button type="button" class="sunbtn" data-a="checkin">' + 'It\u2019s payday! Check in' + '</button>' : '';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
       var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
       // one big number: dollars left to the current goal (no dates: paydays can bring more or less)
@@ -2000,6 +2000,34 @@
       return homeTop(toast) + hero + activeChallenges() + homeRest(o, step, snow, nw);
     },
 
+    recap: function () {
+      var wk = weekOf(today()), ws = wk[0], we = wk[1], r = wkRec(ws), by = weekSpend(ws, we), lines = {};
+      spendLines().forEach(function (l) { lines[l.key] = l; });
+      var rows = Object.keys(by).map(function (k) { var l = lines[k] || { label: 'Removed category', icon: '\uD83E\uDDFE' }; return { k: k, label: l.label, icon: l.icon, v: by[k], c: colorFor(k) }; }).sort(function (a, b) { return b.v - a.v; });
+      var tot = rows.reduce(function (t, x) { return t + x.v; }, 0), top = rows.slice(0, 5), rest = rows.slice(5).reduce(function (t, x) { return t + x.v; }, 0);
+      var parts = top.concat(rest ? [{ k: 'rest', label: 'Other', v: rest, c: 'rgba(255,255,255,.28)' }] : []);
+      // this week's budget: each spending category's weekly share (a weekly one counts as is)
+      var wkBud = spendLines().filter(function (l) { return l.grp === 'spend'; }).reduce(function (t, l) { return t + (l.per === 'week' ? l.amt : l.mon * 12 / 52); }, 0);
+      var spentBud = Object.keys(by).filter(function (k) { return lines[k] && lines[k].grp === 'spend'; }).reduce(function (t, k) { return t + by[k]; }, 0), lf = wkBud - spentBud;
+      var now = balSnap(), was = prevSnap(ws), chg = function (a, b, good) { if (b == null) return ''; var d = round2(a - b); if (Math.abs(d) < 0.5) return '<small class="rc">no change</small>'; var up = d > 0, ok = good === 'down' ? !up : up; return '<small class="rc ' + (ok ? 'ok' : 'bad') + '">' + (up ? '+' : '\u2212') + money(Math.abs(d)) + '</small>'; };
+      var balRow = function (ic, label, val, b, good) { return '<div class="row"><span>' + ic + ' ' + esc(label) + '</span><span class="bright"><b>' + money(val) + '</b>' + chg(val, b, good) + '</span></div>'; };
+      var spendCard = '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Spending</b>' +
+        '<div class="rcpie">' + donut(parts) + '<div class="rcmid"><b>' + money(tot) + '</b><small>spent</small></div></div>' +
+        (top.length ? '<div class="rclist">' + top.map(function (x) { return '<div class="row"><span><i class="rcdot" style="background:' + x.c + '"></i>' + x.icon + ' ' + esc(x.label) + '</span><span class="bright"><b>' + money2(x.v) + '</b><small class="rc">' + Math.round(x.v / tot * 100) + '%</small></span></div>'; }).join('') + '</div>' : '<p style="font-size:14px">No purchases this week yet.</p>') + '</div>';
+      var budCard = '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="row" style="border:0;padding:0"><b>Vs. budget</b><span class="bstat ' + (lf < -0.5 ? 'over' : 'ok') + '">' + (lf < -0.5 ? money(-lf) + ' over' : money(lf) + ' under') + '</span></div>' +
+        '<span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, wkBud ? spentBud / wkBud * 100 : (spentBud ? 100 : 0)) + '%;background:' + (lf < -0.5 ? 'var(--warn)' : '#6FDB8E') + '"></i></span>' +
+        '<div class="crow"><span>' + money(spentBud) + ' spent</span><span>' + money(wkBud) + ' budgeted this week</span></div></div>';
+      var balCard = '<div class="card stack" style="padding:16px 18px;gap:4px"><b style="margin-bottom:4px">Balances</b>' +
+        balRow('\uD83D\uDEDF', 'Emergency savings', now.sv, was && was.sv, 'up') +
+        funds().map(function (f) { return balRow(f.icon || '\uD83D\uDCB0', f.name || 'Fund', now.funds[f.id], was && was.funds ? was.funds[f.id] : null, 'up'); }).join('') +
+        P.goals.map(function (g) { return balRow('\uD83C\uDFAF', g.name, now.goals[g.id], was && was.goals ? was.goals[g.id] : null, 'up'); }).join('') +
+        (P.debts.length ? balRow('\uD83D\uDCB3', 'Debt', now.debt, was && was.debt, 'down') : '') + '</div>';
+      return back(U.recapBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Weekly recap \u00b7 ' + weekLabel({ start: ws, end: we }) + '</div><h2>Your week</h2></div>' +
+        (U.recapToast ? (function () { var t = U.recapToast; U.recapToast = null; return '<div class="toast pop win" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + t + '</b></div>'; })() : '') +
+        spendCard + budCard + balCard +
+        '<div class="card stack" style="padding:14px 18px;gap:6px">' + wkCheck(!!r.cat, 'Categorize transactions', 'recapgo', 'cat') + wkCheck(!!r.bal, 'Update balances', 'recapgo', 'bal') + wkCheck(!!r.done, 'Read your weekly recap') + '</div>' +
+        (r.done ? '' : '<div class="push"><button type="button" class="primary" data-a="recapdone">Mark recap complete</button></div>');
+    },
     checkin: function () { return U.ci ? ciView() : V.checkin0(); },
     checkin0: function () {
       var o = F.outlook(profile(), today());
@@ -2082,10 +2110,10 @@
       var t = U.jTab || 'map';
       var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
       var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + x + '</b></div>'; })() : '';
-      return journeyHead() + toast + celebration(2, ['plan', 'unlock']) + tabChips('jtab', t, [['map', 'Map'], ['challenges', 'Challenges'], ['milestones', 'Milestones']]) +
+      return journeyHead() + toast + celebration(2, ['plan', 'unlock']) + (P.setupDone ? weekCard() : '') + tabChips('jtab', t, [['map', 'Map'], ['challenges', 'Challenges'], ['milestones', 'Milestones']]) +
         (t === 'map' ? journeyMap()
           : t === 'challenges' ? V.challenges()
-          : (P.setupDone ? streakCard() : '') + V.milestones() + (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') + goalsCard());
+          : (P.setupDone ? weekCard() : '') + V.milestones() + (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') + goalsCard());
     },
     quiz: function () {
       var z = U.quiz; if (!z) { U.jTab = 'map'; return V.journey(); }
@@ -2222,7 +2250,7 @@
     },
     community: function () {
       var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
-      return '<div id="wins" class="stack" style="gap:10px;margin-top:8px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div><h2>Wins</h2>' + (P.setupDone ? streakCard() : '') +
+      return '<div id="wins" class="stack" style="gap:10px;margin-top:8px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div><h2>Wins</h2>' + (P.setupDone ? weekCard() : '') +
         (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') +
         '<div class="seg wins-seg" role="group" aria-label="Wins" style="align-self:flex-start">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
           var on = (U.winsView || 'challenges') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="winsview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
@@ -2368,6 +2396,7 @@
     return cur;
   }
   function checkDone() {
+    wkMark('bal');
     if (P.payVaries && num(U.thisPay) > 0) { P.payHist = (P.payHist || []).concat([{ id: uid(), amount: String(num(U.thisPay)), date: F.isoDay(today()) }]).slice(-8); payFromHist(); }
     U.thisPay = '';
     var now = today(), prevDebts = P.prevBalances || {};
@@ -2625,7 +2654,7 @@
   }
   function streakChips() {
     var out = [];
-    if ((P.streak.count || 0) >= 2) out.push(P.streak.count + ' paydays in a row');
+    var n = wkStreak(); if (n >= 2) out.push(n + ' weeks in a row');
     return out;
   }
   function cardForStep() {
@@ -2916,11 +2945,9 @@
     else if (st === 1) { pct = j.sv / F.CUSHION; l1 = money(j.sv) + ' saved'; l2 = 'of $1,000'; }
     else if (st === 2) { var orig = 0, bal = 0; P.debts.forEach(function (d) { orig += Math.max(num(d.orig), num(d.bal)); bal += num(d.bal); }); pct = orig ? 1 - bal / orig : 0; l1 = money(orig - bal) + ' paid'; l2 = money(bal) + ' left'; }
     else { pct = stepProgress(j.o); l1 = 'Step ' + st; l2 = ''; }
-    var v = F.streakView(P.streak, P.nextPay, P.freq, today());
-    return '<div class="jhead"><div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + plural(jStars(), 'star') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
+    return '<div class="jhead"><div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + (wkStreak() ? plural(wkStreak(), 'week') + ' in a row' : '') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
       (j.makeRoom ? '<div class="pbar jbar"><i style="width:' + Math.max(2, Math.min(100, pct * 100)) + '%"></i></div><div class="jsub"><span>' + l1 + '</span><span>' + l2 + '</span></div>' : '<div class="jgauge">' + progGauge(j.o, profile()) + '</div>') +
-      '<div class="jrow"><div class="chips"><span class="chip on" style="min-height:30px;font-size:13px">' + plural(v.count, 'payday') + ' in a row</span>' + (j.makeRoom ? '<span class="chip" style="min-height:30px;font-size:13px">Make room first</span>' : '') + '</div>' +
-      '<button type="button" class="linkbtn jupd" data-a="checkin">Update balances \u203a</button></div></div>';
+      (j.makeRoom ? '<div class="jrow"><div class="chips"><span class="chip" style="min-height:30px;font-size:13px">Make room first</span></div></div>' : '') + '</div>';
   }
   // a row of bubble tabs that scrolls sideways
   function tabChips(action, cur, opts) {
@@ -2993,6 +3020,50 @@
       }).join('') + (!U.allSteps && left.length > 1 ? '<button type="button" class="textbtn" data-a="allsteps" style="min-height:36px;padding:6px 0 0">See all ' + left.length + ' left</button>' : '') + '</div>';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
+  // ---------- the weekly recap: a week (Sunday to Saturday) counts when its 3 steps are done ----------
+  // P.wk[sunday] = { cat: day purchases were categorized, bal: day balances were updated, done: day the recap was read, snap }
+  function wkStart(d) { return weekOf(d || today())[0]; }
+  function wkRec(ws) { P.wk = P.wk || {}; return P.wk[ws || wkStart()] || {}; }
+  function wkMark(k) { P.wk = P.wk || {}; var ws = wkStart(), r = P.wk[ws] = P.wk[ws] || {}; if (!r[k]) r[k] = F.isoDay(today()); }
+  function wkFull(r) { return !!(r && r.cat && r.bal && r.done); }
+  function wkStreak() {
+    var ws = wkStart(), n = 0, d = F.fromIso(ws);
+    if (!wkFull(wkRec(ws))) d = F.addDays(d, -7);
+    while (wkFull(wkRec(F.isoDay(d)))) { n++; d = F.addDays(d, -7); }
+    return n;
+  }
+  function balSnap() {
+    var o = { sv: num(P.savings), debt: P.debts.reduce(function (t, d) { return t + num(d.bal); }, 0), funds: {}, goals: {} };
+    funds().forEach(function (f) { o.funds[f.id] = round2(fundBal(f)); }); P.goals.forEach(function (g) { o.goals[g.id] = num(g.saved); });
+    return o;
+  }
+  // the last recap read before this week, to show what changed
+  function prevSnap(ws) { var ks = Object.keys(P.wk || {}).filter(function (k) { return k < ws && P.wk[k].snap; }).sort(); return ks.length ? P.wk[ks[ks.length - 1]].snap : null; }
+  function weekSpend(ws, we) {
+    var by = {}, sl = P.storeLine || {}, add = function (k, a) { if (!k || isFundKey(k)) return; by[k] = (by[k] || 0) + num(a); };
+    (P.spends || []).forEach(function (x) { if (x.date >= ws && x.date <= we) add(x.key, x.amount); });
+    (P.tx || []).forEach(function (x) { if (x.date >= ws && x.date <= we) add(sl[x.merchant], x.amount); });
+    return by;
+  }
+  function donut(parts) {
+    var tot = parts.reduce(function (t, x) { return t + x.v; }, 0), r = 52, c = 2 * Math.PI * r, at = 0;
+    if (!tot) return '<svg class="donut" viewBox="0 0 140 140" aria-hidden="true"><circle cx="70" cy="70" r="' + r + '" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="20"/></svg>';
+    return '<svg class="donut" viewBox="0 0 140 140" aria-hidden="true"><g transform="rotate(-90 70 70)">' + parts.map(function (x) {
+      var len = x.v / tot * c, seg = '<circle cx="70" cy="70" r="' + r + '" fill="none" stroke="' + x.c + '" stroke-width="20" stroke-dasharray="' + Math.max(0, len - (parts.length > 1 ? 1.5 : 0)).toFixed(2) + ' ' + c.toFixed(2) + '" stroke-dashoffset="' + (-at).toFixed(2) + '"/>';
+      at += len; return seg;
+    }).join('') + '</g></svg>';
+  }
+  function wkCheck(on, label, act, v) {
+    return '<div class="wkstep' + (on ? ' on' : '') + '"><span class="wkc">' + (on ? ICON.check('#141414', 14) : '') + '</span><span class="wkl">' + label + '</span>' + (on || !act ? '' : '<button type="button" class="sharebtn" data-a="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '>Go</button>') + '</div>';
+  }
+  // the card on Journey and Wins: this week's 3 steps and the streak
+  function weekCard() {
+    var r = wkRec(), n = wkStreak(), wk = weekOf(today());
+    return '<div class="card stack wkcard" style="padding:16px 18px;gap:10px"><div style="display:flex;align-items:center;gap:12px"><span class="flame' + (n ? ' lit' : '') + '">' + ICON.flame + '</span>' +
+      '<div style="flex:1;min-width:0"><b style="font-size:17px">' + (n ? plural(n, 'week') + ' in a row' : 'Weekly streak') + '</b><small style="display:block;color:var(--muted);font-size:13px">' + weekLabel({ start: wk[0], end: wk[1] }) + '</small></div></div>' +
+      wkCheck(!!r.cat, 'Categorize transactions', 'recapgo', 'cat') + wkCheck(!!r.bal, 'Update balances', 'recapgo', 'bal') + wkCheck(!!r.done, 'Read your weekly recap', 'go', 'recap') +
+      (r.done ? '<button type="button" class="textbtn" style="align-self:flex-start;min-height:32px;padding:0" data-a="go" data-v="recap">See this week’s recap ›</button>' : '') + '</div>';
+  }
   function streakCard() {
     var v = F.streakView(P.streak, P.nextPay, P.freq, today()), t = P.totals;
     var line = v.state === 'new' ? 'Check in on payday to start your streak.'
@@ -3110,6 +3181,8 @@
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
       case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
+      case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
+      case 'recapdone': wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
       case 'fundopen': (function () {
         var f = v ? funds().filter(function (x) { return x.id === v; })[0] : null;
         U.form = f ? { id: f.id, name: f.name, amount: f.amount, per: f.per || 'week', bal: round2(fundBal(f)), icon: f.icon, color: f.color } : { name: '', amount: '', per: 'week', bal: '' };
@@ -3147,7 +3220,7 @@
           else if (k === 'fund') funds().forEach(function (f) { if (f.id === el.getAttribute('data-v')) f.start = String(round2(num(val) - fundNet(f))); });
           else if (k === 'debt') P.debts.forEach(function (d) { if (d.id === el.getAttribute('data-v')) { d.bal = val; if (num(val) > num(d.orig)) d.orig = num(val); } });
         });
-        save(); track('balance-update'); U.sheet = null; render();
+        wkMark('bal'); save(); track('balance-update'); U.sheet = null; render();
       })(); break;
       case 'stepsave': (function () { var el = app.querySelector('[data-stepin]'); if (el && el.value !== '') { P.stepAmt = String(round2(Math.max(0, num(el.value)) / F.FREQS[P.freq].perMonth)); save(); track('step-assign'); } U.sheet = null; render(); })(); break;
       case 'catadd': (function () {
@@ -3258,7 +3331,7 @@
         if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
         if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
         P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
-        U.lastSpendKey = U.form.key;
+        U.lastSpendKey = U.form.key; wkMark('cat');
         if (U.spendBack === 'scan' && U.scan) { weekDone(U.scan.week, 'saved'); if (String(U.form.note || '').trim()) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(U.form.note)] = U.form.key; } }
         save(); track('spend-add');
         if (v === 'again') {

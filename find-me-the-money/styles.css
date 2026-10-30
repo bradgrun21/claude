@@ -1002,3 +1002,25 @@ input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer
 .tgl.on i { left: 23px; }
 /* Journey: the same progress gauge as Home */
 .jgauge { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; margin: 4px 0 2px; }
+/* the + menu in the dark theme */
+.plusback { background: rgba(0,0,0,.45); }
+.plussheet { background: var(--card); border-color: var(--edge); box-shadow: 0 18px 50px rgba(0,0,0,.55); }
+.plussheet button:hover, .plussheet button:focus-visible { background: var(--card2); }
+.plussheet b { color: var(--ink); }
+/* weekly recap */
+.wkstep { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.wkc { flex: none; width: 26px; height: 26px; border-radius: 13px; border: 2px solid rgba(255,255,255,.22); display: grid; place-items: center; }
+.wkstep.on .wkc { background: #6FDB8E; border-color: #6FDB8E; }
+.wkl { flex: 1; min-width: 0; font-size: 16px; }
+.wkstep.on .wkl { color: var(--muted); }
+.wkstep .sharebtn { min-height: 34px; padding: 0 16px; }
+.rcpie { position: relative; width: 180px; height: 180px; margin: 0 auto; }
+.donut { width: 100%; height: 100%; display: block; }
+.rcmid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.rcmid b { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.rcmid small { color: var(--muted); font-size: 13px; }
+.rclist .row { padding: 9px 0; }
+.rcdot { display: inline-block; width: 10px; height: 10px; border-radius: 5px; margin-right: 8px; vertical-align: 1px; }
+.rc { display: block; text-align: right; font-size: 12px; color: var(--muted); }
+.rc.ok { color: #6FDB8E; }
+.rc.bad { color: var(--warn); }
