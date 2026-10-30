@@ -115,5 +115,73 @@
     try { if (document.fonts && document.fonts.load) { Promise.all([document.fonts.load('600 100px Manrope'), document.fonts.load('500 40px Manrope')]).then(go, go); return; } } catch (e) {}
     go();
   }
-  window.FMTMShare = { build: build, formats: Object.keys(FORMATS) };
+  // ----- a meal's recipe card: photo or emoji, name, cost per plate, ingredients, and where the recipe lives -----
+  // r = { name, emoji, color, photo, plate, total, plates, saves, rows: [{ emoji, name, amt, cost }], link, video, footer }
+  function ell(ctx, t, maxW) { t = String(t); if (ctx.measureText(t).width <= maxW) return t; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1); return t + '…'; }
+  function recipeDraw(r, img) {
+    var W = 1080, pad = 72, heroH = 560, rowH = 96, MAX = 14, rows = r.rows.slice(0, MAX), more = r.rows.length - rows.length;
+    var c = document.createElement('canvas'), ctx = c.getContext('2d');
+    ctx.font = '700 84px ' + FONT; var nl = lines(ctx, r.name, W - pad * 2).slice(0, 2);
+    var y0 = heroH + 40, H = y0 + nl.length * 92 + 40 + 84 + 70 + 50 + rows.length * rowH + (more > 0 ? 60 : 0) + 110 + (r.link ? 110 : 0) + 200;
+    c.width = W; c.height = Math.max(1350, H);
+    ctx.fillStyle = '#141414'; ctx.fillRect(0, 0, W, c.height);
+    // hero: the meal photo, or its emoji on its color
+    if (img) {
+      var s = Math.max(W / img.width, heroH / img.height), iw = img.width * s, ih = img.height * s;
+      ctx.drawImage(img, (W - iw) / 2, (heroH - ih) / 2, iw, ih);
+    } else {
+      ctx.fillStyle = r.color || '#7ED9C0'; ctx.globalAlpha = 0.35; ctx.fillRect(0, 0, W, heroH); ctx.globalAlpha = 1;
+      ctx.font = '280px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(r.emoji || '🍲', W / 2, heroH / 2 + 10);
+    }
+    var fade = ctx.createLinearGradient(0, heroH - 220, 0, heroH); fade.addColorStop(0, 'rgba(20,20,20,0)'); fade.addColorStop(1, '#141414');
+    ctx.fillStyle = fade; ctx.fillRect(0, heroH - 220, W, 220);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    // name
+    var y = y0 + 70; ctx.fillStyle = '#F4F3EF'; ctx.font = '700 84px ' + FONT;
+    nl.forEach(function (l) { ctx.fillText(l, pad, y); y += 92; });
+    // chips: per plate, plates, saves
+    y += 4; var cx = pad; ctx.font = '700 36px ' + FONT;
+    [[r.plate, '#FFD08A', ' a plate'], [r.plates ? 'Feeds ' + r.plates : null, '#F4F3EF', ''], [r.saves, '#7ED9C0', '', 'Saves ']].forEach(function (k) {
+      if (!k[0]) return; var t = (k[3] || '') + k[0] + k[2], w = ctx.measureText(t).width + 56;
+      if (cx + w > W - pad) return;
+      ctx.fillStyle = 'rgba(255,255,255,.08)'; roundRect(ctx, cx, y - 6, w, 74, 37); ctx.fill();
+      ctx.fillStyle = k[1]; ctx.fillText(t, cx + 28, y + 44); cx += w + 16;
+    });
+    y += 74 + 70;
+    // ingredients
+    if (rows.length) { ctx.font = '800 28px ' + FONT; ctx.fillStyle = '#A6A59F'; ctx.fillText('INGREDIENTS', pad, y); y += 30; }
+    rows.forEach(function (row) {
+      ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(pad, y, W - pad * 2, 2);
+      ctx.font = '48px ' + FONT; ctx.fillStyle = '#F4F3EF'; ctx.fillText(row.emoji || '•', pad, y + 66);
+      ctx.font = '700 36px ' + FONT; var costW = row.cost ? ctx.measureText(row.cost).width : 0;
+      ctx.textAlign = 'right'; ctx.fillStyle = row.cost === '—' ? '#8B8A84' : '#F4F3EF'; if (row.cost) ctx.fillText(row.cost, W - pad, y + 60); ctx.textAlign = 'left';
+      var mw = W - pad * 2 - 80 - costW - 30;
+      ctx.font = '700 36px ' + FONT; ctx.fillStyle = '#F4F3EF'; ctx.fillText(ell(ctx, row.name, mw), pad + 80, y + 46);
+      ctx.font = '500 28px ' + FONT; ctx.fillStyle = '#A6A59F'; ctx.fillText(ell(ctx, row.amt || '', mw), pad + 80, y + 82);
+      y += rowH;
+    });
+    if (more > 0) { ctx.font = '600 30px ' + FONT; ctx.fillStyle = '#A6A59F'; ctx.fillText('+' + more + ' more', pad + 80, y + 44); y += 60; }
+    if (rows.length) { ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(pad, y, W - pad * 2, 2); }
+    if (r.total) { y += 70; ctx.font = '600 34px ' + FONT; ctx.fillStyle = '#A6A59F'; ctx.fillText('Meal total', pad, y); ctx.textAlign = 'right'; ctx.font = '800 40px ' + FONT; ctx.fillStyle = '#FFD08A'; ctx.fillText(r.total, W - pad, y); ctx.textAlign = 'left'; y += 40; }
+    // where the recipe lives
+    if (r.link) {
+      y += 40; ctx.fillStyle = 'rgba(255,255,255,.08)'; roundRect(ctx, pad, y, W - pad * 2, 84, 24); ctx.fill();
+      ctx.font = '700 34px ' + FONT; ctx.fillStyle = '#F4F3EF'; ctx.fillText(ell(ctx, (r.video ? '▶️  Video on ' : '🔗  Recipe at ') + r.link, W - pad * 2 - 56), pad + 28, y + 54); y += 84;
+    }
+    // footer
+    var fy = c.height - 140; logo(ctx, pad, fy, 72);
+    ctx.font = '700 34px ' + FONT; ctx.fillStyle = '#F4F3EF'; ctx.fillText('Find Me the Money', pad + 96, fy + 32);
+    ctx.font = '500 28px ' + FONT; ctx.fillStyle = '#A6A59F'; ctx.fillText(r.footer || 'Meal Math', pad + 96, fy + 70);
+    return c;
+  }
+  function recipe(r, cb) {
+    var go = function (img) {
+      var canvas = recipeDraw(r, img), url = canvas.toDataURL('image/png');
+      canvas.toBlob(function (blob) { cb({ url: url, blob: blob }); }, 'image/png');
+    };
+    var withImg = function () { if (!r.photo) { go(null); return; } var i = new Image(); i.onload = function () { go(i); }; i.onerror = function () { go(null); }; i.src = r.photo; };
+    try { if (document.fonts && document.fonts.load) { Promise.all([document.fonts.load('700 84px Manrope'), document.fonts.load('500 28px Manrope')]).then(withImg, withImg); return; } } catch (e) {}
+    withImg();
+  }
+  window.FMTMShare = { build: build, recipe: recipe, formats: Object.keys(FORMATS) };
 })();

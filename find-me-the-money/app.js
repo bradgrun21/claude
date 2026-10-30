@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30v';
+  var APP_VERSION = '10-30w';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -901,6 +901,7 @@
       '<div class="mm-ings">' + (d.items.length ? d.items.map(mmIrow).join('') : '<div class="mm-empty">Tap + to add your first ingredient</div>') + '</div>' +
       '<button type="button" class="mm-addbtn" data-mm-addi><span class="mm-plus">+</span> Add ingredient</button>' +
       mmRecipeEdit(d) +
+      '<button type="button" class="mm-btn ghost mm-sharebtn" data-mm-share>📤 Share this meal</button>' +
       (d.id ? '<button type="button" class="mm-del" data-mm-del>Delete meal</button>' : '') +
       '<div class="mm-bar" id="mmbar">' + mmBarHtml() + '</div>';
   }
@@ -973,18 +974,63 @@
   function mmRecipeOpen(m, at) {
     var pages = m.recipePhotos || [], url = mmSafeUrl(m.recipeUrl);
     var el = document.createElement('div'); el.id = 'mmrecipe'; el.className = 'mm-rview'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Recipe');
-    el.innerHTML = '<div class="mm-rtop"><b>📖 ' + esc(m.name || 'Recipe') + '</b><button type="button" class="mm-close" data-mm-rclose aria-label="Close">✕</button></div>' +
+    el.innerHTML = '<div class="mm-rtop"><b>📖 ' + esc(m.name || 'Recipe') + '</b><span class="mm-rtopr"><button type="button" class="mm-close" data-mm-rshare aria-label="Share">📤</button><button type="button" class="mm-close" data-mm-rclose aria-label="Close">✕</button></span></div>' +
       '<div class="mm-rbody">' + pages.map(function (id, i) { return '<div class="mm-rimg" data-i="' + i + '"><img data-rid="' + esc(id) + '" alt="Recipe page ' + (i + 1) + '" role="button" tabindex="0" aria-label="Recipe page ' + (i + 1) + ', tap to zoom"></div>'; }).join('') +
       (url ? '<div class="mm-rfoot">' + mmLinkBtn(url) + '</div>' : '') + '</div>';
     document.body.appendChild(el); document.body.classList.add('mm-lock'); mmFillPages(el);
     var close = function () { el.remove(); if (!document.getElementById('mmsheet')) document.body.classList.remove('mm-lock'); document.removeEventListener('keydown', key, true); if (mmWake) { mmWake.release().catch(function () {}); mmWake = null; } };
     var key = function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
     el.querySelector('[data-mm-rclose]').onclick = close; document.addEventListener('keydown', key, true);
+    el.querySelector('[data-mm-rshare]').onclick = function () { close(); mmShareOpen(m); };
     Array.prototype.forEach.call(el.querySelectorAll('.mm-rimg'), function (b) { var z = function () { b.classList.toggle('big'); }; b.firstChild.onclick = z; b.firstChild.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); z(); } }; });
     try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { mmWake = w; }).catch(function () {}); } catch (e) {}
     var first = el.querySelector('.mm-rimg[data-i="' + (at || 0) + '"]'); if (first && at) setTimeout(function () { first.scrollIntoView({ block: 'start' }); }, 30);
     el.querySelector('[data-mm-rclose]').focus({ preventScroll: true });
     track('meal-recipe-open');
+  }
+  // ----- share a meal as a card (plus its recipe photos, if they want) -----
+  function mmAmt(it) {
+    var n = mmNum(it.amountUsed), u = it.unit || 'servings'; if (!n) return '';
+    if (u === 'count') return '× ' + n;
+    return n + ' ' + (n === 1 && /s$/.test(u) ? u.slice(0, -1) : u);
+  }
+  function mmShareData(m) {
+    var draft = m === mmSt().draft, lines = draft ? m.items : mmLines(m), c = mmTotals(lines, m.plates, m.eatingOutCost), url = mmSafeUrl(m.recipeUrl), host = '';
+    try { host = url ? new URL(url).hostname.replace(/^www\./, '') : ''; } catch (e) {}
+    return { name: String(m.name || '').trim() || 'Untitled meal', emoji: m.emoji, color: m.color, photo: m.photo || null,
+      plate: c.plate != null && c.total > 0 ? mm$(c.plate) : null, total: c.total > 0 ? mm$(c.total) : null, plates: Math.max(1, parseInt(m.plates, 10) || 1), saves: c.saves > 0 ? mm$(c.saves) : null,
+      rows: lines.filter(function (it) { return String(it.name || '').trim(); }).map(function (it) { var have = it.alreadyHave || mmNum(it.price) == null; return { emoji: it.emoji || mmGuess(it.name), name: it.name, amt: mmAmt(it), cost: have ? '—' : mm$(mmLine(it.price, it.packageAmount, it.amountUsed)) }; }),
+      link: host, video: !!url && mmIsVideo(url), url: url, footer: CONFIG.shareUrl || '', pages: (m.recipePhotos || []).slice() };
+  }
+  function mmBlob(dataUrl) { var b = atob(dataUrl.split(',')[1]), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return new Blob([a], { type: (/^data:([^;]+)/.exec(dataUrl) || [])[1] || 'image/jpeg' }); }
+  function mmFileName(name, extra) { return (String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'meal') + extra; }
+  function mmShareOpen(m) {
+    var r = mmShareData(m), sh = { type: 'share', r: r, card: null, pages: [], withPages: true };
+    mmOpen(sh); track('meal-share-open');
+    window.FMTMShare.recipe(r, function (img) { if (mmSt().sheet !== sh) return; sh.card = img; mmSheetDraw(); });
+    // the recipe photos, read now so the share opens straight from the tap
+    Promise.all(r.pages.map(mmPageGet)).then(function (srcs) { sh.pages = srcs.filter(Boolean).map(function (src, i) { return new File([mmBlob(src)], mmFileName(r.name, '-recipe-' + (i + 1) + '.jpg'), { type: 'image/jpeg' }); }); if (mmSt().sheet === sh) mmSheetDraw(); });
+  }
+  function mmShareFiles(sh) { return [new File([sh.card.blob], mmFileName(sh.r.name, '-card.png'), { type: 'image/png' })].concat(sh.withPages ? sh.pages : []); }
+  function mmShareSheet() {
+    var sh = mmSt().sheet;
+    return mmSheetHead('📤 Share this meal') +
+      '<div class="mm-shprev">' + (sh.card ? '<img src="' + sh.card.url + '" alt="Recipe card for ' + esc(sh.r.name) + '">' : '<span class="mm-s">Making your card…</span>') + '</div>' +
+      (sh.pages.length ? '<button type="button" class="mm-chip mm-shpages" data-mm-shpages aria-pressed="' + sh.withPages + '">📖 Add ' + (sh.pages.length > 1 ? 'the ' + sh.pages.length + ' recipe photos' : 'the recipe photo') + '</button>' : '') +
+      '<div class="mm-acts"><button type="button" class="mm-btn ghost" data-mm-shsave' + (sh.card ? '' : ' disabled') + '>⬇️ Save image</button><button type="button" class="mm-btn gold" data-mm-shgo' + (sh.card ? '' : ' disabled') + '>📤 Share</button></div>';
+  }
+  function mmShareGo() {
+    var sh = mmSt().sheet; if (!sh || !sh.card) return;
+    var files = mmShareFiles(sh), text = sh.r.name + (sh.r.plate ? ' · ' + sh.r.plate + ' a plate' : '') + (sh.r.url ? '\n' + sh.r.url : '');
+    if (!(navigator.canShare && navigator.canShare({ files: files })) && files.length > 1) files = files.slice(0, 1);
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      navigator.share({ files: files, text: text }).then(function () { track('meal-share'); }).catch(function (err) { if (err && err.name !== 'AbortError') { mmShareSave(); } });
+    } else mmShareSave();
+  }
+  function mmShareSave() {
+    var sh = mmSt().sheet; if (!sh || !sh.card) return;
+    mmShareFiles(sh).forEach(function (f, i) { setTimeout(function () { download(f.name, f.type, f); }, i * 400); });
+    track('meal-share-save'); mmToast('⬇️ Saved');
   }
   function mmBarHtml() {
     var d = mmSt().draft, c = mmTotals(d.items, d.plates, d.eatingOutCost);
@@ -1020,7 +1066,7 @@
     var st = mmSt(), sh = st.sheet; if (!sh) return;
     var el = document.getElementById('mmsheet');
     if (!el) { el = document.createElement('div'); el.id = 'mmsheet'; el.className = 'mm-scrim'; el.innerHTML = '<div class="mm-panel" role="dialog" aria-modal="true"></div>'; document.body.appendChild(el); document.body.classList.add('mm-lock'); }
-    el.firstChild.innerHTML = { plan: mmPlanSheet, pick: mmPickSheet, item: mmItemSheet, look: mmLookSheet }[sh.type]();
+    el.firstChild.innerHTML = { plan: mmPlanSheet, pick: mmPickSheet, item: mmItemSheet, look: mmLookSheet, share: mmShareSheet }[sh.type]();
     if (sh.type === 'item') mmCalcLive();
   }
   function mmSheetHead(t) { return '<div class="mm-grab"></div><div class="mm-shtitle"><b>' + t + '</b><button type="button" class="mm-close" data-mm-close aria-label="Close">✕</button></div>'; }
@@ -1189,6 +1235,10 @@
     if (a('color')) { d.color = a('color'); render(); mmSheetDraw(); return; }
     if (a('rview')) { mmRecipeOpen(d, +a('rview')); return; }
     if (a('rdel')) { d.recipePhotos = (d.recipePhotos || []).filter(function (x, i) { return i !== +a('rdel'); }); render(); return; }
+    if (has('share')) { mmShareOpen(d); return; }
+    if (has('shpages')) { sh.withPages = !sh.withPages; mmSheetDraw(); return; }
+    if (has('shgo')) { mmShareGo(); return; }
+    if (has('shsave')) { mmShareSave(); return; }
     if (a('rsee')) { mmRecipeOpen(mmMeal(a('rsee')) || {}, 0); return; }
     if (has('nophoto')) { d.photo = null; render(); mmSheetDraw(); return; }
     if (has('addi')) { mmOpen({ type: 'pick', q: '' }); setTimeout(function () { var q = document.getElementById('mmQ'); if (q) q.focus(); }, 60); return; }
