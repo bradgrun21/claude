@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30h';
+  var APP_VERSION = '10-30i';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -105,14 +105,14 @@
       debts: [], savings: '', givingPct: 0, giveMode: 'pct', giveMonthly: '', payVaries: false, payHist: [], payBasis: 'low', fun: '', goals: [], tx: [], txFrom: null, txTo: null, sorted: {}, lastHeadline: null, history: [],
       streak: { count: 0, best: 0, grace: 0, lastPayday: null }, totals: { debtPaid: 0, saved: 0, daysBack: 0 }, lastFree: null, prevSavings: null, prevGoals: {},
       challenges: [], challengesDone: 0, badges: {}, unseen: [], plans: [], plansDone: 0, shares: 0, basics: '', unlocked: {}, installSeen: false, communityJoined: false, funParts: [], found: null,
-      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], moneyDate: null, moneyDates: [], storeLine: {}, weeks: {}, merchantMem: {}, intro: {}, qPayMonth: '', payAuto: false, basicsAuto: false,
+      efMonths: '', retire: '', kids: '', college: '', home: '', mortgage: '', qPay: '', qExp: '', qDebt: '', qMin: '', quick: null, spends: [], household: '', payLabel: '', incomes: [], retirements: [], otherIncome: [], storeLine: {}, weeks: {}, merchantMem: {}, intro: {}, qPayMonth: '', payAuto: false, basicsAuto: false,
       retirePct: '', retireMonthly: '', retireBal: '', retireFrom: '', collegeBal: '', collegeMonthly: '', mortgagePay: '', mortgageRate: '' };
   }
   var storageOk = true;
   function load() {
     try {
       var raw = localStorage.getItem(CONFIG.storageKey); if (!raw) return blank();
-      var d = JSON.parse(raw); delete d.x;
+      var d = JSON.parse(raw); delete d.x; delete d.moneyDate; delete d.moneyDates;
       // plans saved before features unlocked gradually keep everything they already had
       if (d.setupDone && !d.unlocked) d.unlocked = { challenges: true, milestones: true };
       // one retirement answer becomes the first retirement account
@@ -312,7 +312,7 @@
         return os.login(S.uid).then(function () { return os.User.PushSubscription.optIn(); });
       });
     }).then(function () {
-      P.remind = Object.assign({ payday: true, mdate: true, bills: true, hour: 9 }, P.remind || {}, { on: true }); P.tz = tz || P.tz || '';
+      P.remind = Object.assign({ payday: true, bills: true, hour: 9 }, P.remind || {}, { on: true }); P.tz = tz || P.tz || '';
       save(); track('reminders-on'); U.toast = ['Reminders are on.', 'We\u2019ll nudge you on payday. Change it anytime in Settings.', true]; render();
     }, function (er) {
       U.remErr = er && er.message === 'denied' ? 'Your phone said no to notifications. Turn them on for this app in your phone\u2019s settings, then try again.' : 'We couldn\u2019t turn on reminders right now. Check your connection and try again.';
@@ -339,7 +339,7 @@
     if (compact) return '';
     var tog = function (k, label) { var on = r[k] !== false; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="remindk" data-v="' + k + '">' + (on ? '\u2713 ' : '') + label + '</button>'; };
     return head + '<span style="font-size:14px;color:var(--muted)">\u2713 On for this phone. One reminder a day at most.</span>' +
-      '<div class="field">Remind me about<div class="chips">' + tog('payday', 'Payday check-in') + tog('mdate', 'Money date') + tog('bills', 'Bills due tomorrow') + '</div></div>' +
+      '<div class="field">Remind me about<div class="chips">' + tog('payday', 'Payday check-in') + tog('bills', 'Bills due tomorrow') + '</div></div>' +
       '<div class="field">Time of day<div class="chips">' + [[8, '8 am'], [9, '9 am'], [12, 'Noon'], [18, '6 pm']].map(function (h) { var on = (r.hour || 9) === h[0]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="remindhour" data-v="' + h[0] + '">' + h[1] + '</button>'; }).join('') + '</div></div>' +
       '<button type="button" class="textbtn" data-a="remindoff" style="align-self:flex-start;color:var(--warn)">Turn off reminders</button></div>';
   }
@@ -851,7 +851,7 @@
   // the one-tap answers: [key, what they tap, where they want to go]
   var OB_FIRST = [['cushion', 'Build a cushion', 'A cushion, so a surprise doesn\u2019t become debt.'], ['debt', 'Pay off debt', 'Out of debt, one payoff at a time.'], ['payday', 'Stop running out before payday', 'Making it to payday with money left.'], ['same', 'Get on the same page', 'On the same page about money.']];
   // [key, what they tap, what the app does about it]
-  var OB_WAY = [['where', 'I don\u2019t know where it goes', 'your weekly purchases show exactly where it goes.'], ['payments', 'Debt payments', 'the snowball pays off the smallest first and rolls each payment into the next.'], ['oneincome', 'One income', 'your payday plan gives every dollar a job, so one income goes further.'], ['talk', 'We don\u2019t talk about it', 'a 20-minute monthly money date makes it easy to start.']];
+  var OB_WAY = [['where', 'I don\u2019t know where it goes', 'your weekly purchases show exactly where it goes.'], ['payments', 'Debt payments', 'the snowball pays off the smallest first and rolls each payment into the next.'], ['oneincome', 'One income', 'your payday plan gives every dollar a job, so one income goes further.'], ['talk', 'We don\u2019t talk about it', 'your whole budget lives in one place, so it\u2019s easy to look at together.']];
   // "Every other Friday, so your next payday plan starts Friday, Nov 6."
   function payEcho() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(P.nextPay)) return '';
@@ -1294,7 +1294,7 @@
     return goals;
   }
   // ---------- the activity calendar ----------
-  var CAL_KINDS = { mdate: ['Money date', 'cal-mdate'], bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
+  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Check-in', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
   function calEvents(y, m) {
     var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
     // paydays: step from the next payday in both directions
@@ -1310,8 +1310,6 @@
     (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
     (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
     if (itemized()) P.bills.forEach(function (b) { billDates(b, first, last).forEach(function (iso) { add(iso, 'bill', (b.name || 'Bill') + ' due \u00b7 ' + money(dueAmount(b))); }); });
-    if (P.moneyDate && P.moneyDate.due) billDates({ due: P.moneyDate.due, rep: 'monthly' }, first, last).forEach(function (iso) { add(iso, 'mdate', 'Money date'); });
-    (P.moneyDates || []).forEach(function (iso) { add(iso, 'checkin', 'Money date done'); });
     return ev;
   }
   // purchases by day: { iso: [{ note, amount }] }
@@ -1336,16 +1334,15 @@
     var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
     var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill'; }).length; }, 0);
     var soon = upcomingBills(14);
-    var mdn = mdNext(now); if (mdn && F.daysBetween(now, F.fromIso(mdn)) <= 14) soon.push({ iso: mdn, name: 'Money date', amt: null, md: true });
     soon = soon.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; }).slice(0, 5);
-    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="' + (x.md ? 'cal-mdate' : 'cal-bill') + '"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + (x.md ? '' : money(x.amt)) + '</b></div>'; }).join('') + '</div>'
+    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="cal-bill"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + money(x.amt) + '</b></div>'; }).join('') + '</div>'
       : (itemized() && !P.bills.some(function (b) { return b.due; }) ? '<button type="button" class="linkbtn" data-a="go" data-v="plan" style="align-self:flex-start;font-size:13px">Add due dates to your bills to see them here \u203a</button>' : '');
     return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
-      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + (P.moneyDate && P.moneyDate.due ? '<span><i class="cal-mdate"></i>Money date</span>' : '') + '<span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
+      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + '<span><i class="cal-check"></i>Check-in</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
   }
   function calTabs() { return '<div class="seg caltabs" role="group" aria-label="Calendar view">' + [['due', 'Due & wins'], ['spend', 'Spending']].map(function (t) { var on = (U.calTab || 'due') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="caltab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'; }
   // the same month, with what was spent on each day
@@ -1416,45 +1413,6 @@
     var now = today(), to = F.addDays(now, days), out = [];
     if (itemized()) P.bills.forEach(function (b) { if (F.billMonthly(b) > 0 || b.rep === 'once') billDates(b, now, to).forEach(function (iso) { out.push({ iso: iso, name: b.name || 'Bill', amt: dueAmount(b) }); }); });
     return out.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; });
-  }
-  // ---------- the monthly money date ----------
-  var MD_STEPS = [
-    ['Celebrate one win since last time', 'Even a small one. Say it out loud.', 'milestones', 'See my wins'],
-    ['Look back at last month', 'Spent vs budget, line by line. No blame, just notice.', 'mdlast', 'Open last month'],
-    ['Update your balances', 'Savings and every debt, so your progress is real.', 'checkin', 'Update now'],
-    ['Look ahead', 'Bills coming up, birthdays, trips, anything different next month.', 'home', 'See the calendar'],
-    ['Adjust next month\u2019s budget', 'Move money where it\u2019s needed. Every dollar gets a job.', 'plan', 'Open the budget'],
-    ['Check your goals', 'Still the right ones? On track for the date?', 'plans', 'See goals'],
-    ['Pick one small thing to try', 'A challenge, a bill to cancel, one habit.', 'challenges', 'Pick a challenge']
-  ];
-  function mdNext(from) {
-    if (!P.moneyDate || !P.moneyDate.due) return null;
-    var b = { due: P.moneyDate.due, rep: 'monthly' }, n = nextDue(b, from || today());
-    // Done a few days early? That one counts, so point to the month after.
-    if (n && (P.moneyDates || []).some(function (x) { return x >= F.isoDay(F.addDays(F.fromIso(n), -7)); })) n = nextDue(b, F.addDays(F.fromIso(n), 1));
-    return n;
-  }
-  function mdDueNow() {
-    if (!P.moneyDate || !P.moneyDate.due) return false;
-    var now = today(), last = billDates({ due: P.moneyDate.due, rep: 'monthly' }, F.addDays(now, -3), now).pop();
-    return !!last && !(P.moneyDates || []).some(function (x) { return x >= last; });
-  }
-  function moneyDateCard() {
-    var md = P.moneyDate, two = extraIncomes().length > 0 || P.household === 'shared';
-    if (!md || !md.due || U.mdEdit) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Monthly money date</div><b>' + (two ? 'Twenty minutes, once a month, together' : 'Twenty minutes, once a month, with yourself') + '</b>' +
-      '<span style="font-size:14px;color:var(--muted)">Celebrate a win, look back, look ahead, and give next month\u2019s money a job. ' + (two ? 'Couples who do this fight less about money.' : 'It\u2019s the habit that keeps a plan alive.') + '</span>' +
-      '<label class="field">Pick the first one<input type="date" data-mddate value="' + esc(md && md.due || F.isoDay(F.addDays(today(), 7))) + '"></label>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="mdset">Set my money date</button>' + (U.mdEdit ? '<button type="button" class="sharebtn ghost" data-a="mdcancel">Cancel</button>' : '') + '</div></div>';
-    var nx = mdNext(today()), due = mdDueNow();
-    return '<div class="card stack mdcard' + (due ? ' due' : '') + '" style="padding:16px 18px;gap:10px"><div class="eyebrow">Monthly money date</div><b>' + (due ? 'It\u2019s money date day' : 'Next: ' + dayMonth(F.fromIso(nx))) + '</b>' +
-      '<span style="font-size:14px;color:var(--muted)">Repeats on the ' + ordinal(F.fromIso(md.due).getDate()) + ' of every month.' + ((P.moneyDates || []).length ? ' ' + plural(P.moneyDates.length, 'money date') + ' done.' : '') + '</span>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="go" data-v="moneydate">' + (due ? 'Start it now' : 'Open the checklist') + '</button><button type="button" class="sharebtn ghost" data-a="mdics">Add to my calendar</button><button type="button" class="sharebtn ghost" data-a="mdchange">Change day</button></div></div>';
-  }
-  function mdIcs() {
-    var d = F.fromIso(mdNext(today()) || P.moneyDate.due), day = F.isoDay(d).replace(/-/g, ''), stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
-    return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Find Me the Money//Money date//EN', 'BEGIN:VEVENT', 'UID:fmtm-moneydate-' + uid() + '@findmethemoney', 'DTSTAMP:' + stamp,
-      'DTSTART;VALUE=DATE:' + day, 'RRULE:FREQ=MONTHLY;BYMONTHDAY=' + Math.min(28, d.getDate()), 'SUMMARY:Money date (Find Me the Money)', 'DESCRIPTION:Twenty minutes: celebrate a win\\, look back\\, look ahead\\, give next month a plan.',
-      'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Money date today', 'TRIGGER:PT18H', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
   }
   // ---------- the 30-second "find my money" ----------
   // the money to reclaim: debt payments you keep once the debt is gone, plus money that has no job yet
@@ -2128,17 +2086,6 @@
         tabChips('chtab', tab, [['suggested', 'Suggested'], ['Food', 'Food'], ['Spending', 'Spending'], ['bills', 'Bills & debt'], ['Savings', 'Saving'], ['earn', 'Earn more'], ['done', 'Completed' + (allDone.length ? ' (' + allDone.length + ')' : '')]]) + body;
     },
 
-    moneydate: function () {
-      var two = extraIncomes().length > 0 || P.household === 'shared', ck = U.mdChecks || {}, done = Object.keys(ck).filter(function (k) { return ck[k]; }).length;
-      return back(U.mdBack || 'plans') + '<div class="stack" style="gap:6px"><div class="eyebrow">Monthly money date \u00b7 about 20 minutes</div><h2>' + (two ? 'Your money date' : 'Your money date') + '</h2>' +
-        '<p>' + (two ? 'Sit down together, phones on this screen. Both voices count, nobody gets blamed, and you end with something fun.' : 'Grab a coffee and go top to bottom. This is how a plan keeps working.') + '</p></div>' +
-        '<div class="card" style="padding:6px 18px">' + MD_STEPS.map(function (x, i) {
-          var on = !!ck[i];
-          return '<div class="row mdrow" style="align-items:flex-start;padding:12px 0"><button type="button" class="mdcheck' + (on ? ' on' : '') + '" data-a="mdcheck" data-i="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(x[0]) + '">' + (on ? ICON.check('#fff', 14) : '') + '</button>' +
-            '<div style="flex:1;min-width:0"><b>' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:13px;margin-top:2px">' + x[1] + '</small><button type="button" class="linkbtn" data-a="mdgo" data-v="' + x[2] + '" style="font-size:13px;margin-top:4px">' + x[3] + ' \u203a</button></div></div>';
-        }).join('') + '</div>' +
-        '<div class="push"><button type="button" class="primary" data-a="mddone">' + (done >= MD_STEPS.length ? 'Money date done' : 'Mark money date done') + '</button></div>';
-    },
     journey: function () {
       var t = U.jTab || 'map';
       var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
@@ -2194,7 +2141,7 @@
       }).join('');
       return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
         (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + goalsCard() + moneyDateCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
+        celebration(2, ['plan', 'unlock']) + goalsCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
         '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
     },
     planday: function () {
@@ -2925,7 +2872,7 @@
     // dated goals as flags
     var flags = [].filter(function (g) { return g.by; }).map(function (g) { return '<span class="jflag">' + ICON.flag + ' ' + esc(g.name) + ' · ' + shortDate(F.fromIso(g.by)) + '</span>'; }).join('');
     html += '<p class="jahead">' + ahead + '</p>' + (flags ? '<div class="jflags">' + flags + '</div>' : '');
-    return html + moneyDateCard() + pathCard(j.o, j.step);
+    return html + pathCard(j.o, j.step);
   }
   function journeyHead() {
     var j = jState(), st = Math.min(j.step, 7), pct, l1, l2;
@@ -2956,7 +2903,6 @@
     if (S && !firstName() && !U.nameLater) return '<div class="card stack" style="padding:16px 18px;gap:10px"><b>What should we call you?</b><label class="field">First name<input type="text" autocomplete="given-name" autocapitalize="words" data-namein placeholder="Like Sarah"></label>' +
       '<label class="optin"><input type="checkbox" data-nameoptin' + (me().optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad. Unsubscribe anytime.</span></label>' +
       '<div style="display:flex;gap:10px;align-items:center"><button type="button" class="sharebtn" data-a="namesave">Save</button><button type="button" class="textbtn" data-a="namelater">Not now</button></div></div>';
-    if (mdDueNow()) return moneyDateCard();
     var t = todayStep(); if (t) return t;
     return checklist();
   }
@@ -3303,13 +3249,6 @@
       case 'household': P.household = v; if (v === 'single') P.incomes = extraIncomes(); if (v === 'shared' && !(P.incomes || []).length) { P.incomes = [{ id: uid(), label: '', amount: '', freq: P.freq, nextPay: P.nextPay }]; } save(); render(); break;
       case 'incadd': P.incomes = P.incomes || []; P.incomes.push({ id: uid(), label: '', amount: '', freq: P.freq, nextPay: P.nextPay }); if (!P.household) P.household = 'shared'; save(); render(); break;
       case 'incfreq': P.incomes[i].freq = v; save(); render(); break;
-      case 'mdset': (function () { var el = app.querySelector('[data-mddate]'), dt = el && el.value; if (!/^\d{4}-\d{2}-\d{2}$/.test(dt || '')) return; P.moneyDate = { due: dt }; U.mdEdit = false; save(); track('money-date-set'); })(); render(); break;
-      case 'mdchange': U.mdEdit = true; render(); break;
-      case 'mdcancel': U.mdEdit = false; render(); break;
-      case 'mdics': download('find-me-the-money-money-date.ics', 'text/calendar', mdIcs()); track('money-date-ics'); break;
-      case 'mdcheck': U.mdChecks = U.mdChecks || {}; U.mdChecks[i] = !U.mdChecks[i]; render(); break;
-      case 'mdgo': U.mdChecks = U.mdChecks || {}; if (v === 'mdlast') { var nd = today(); U.spendMonth = F.isoDay(new Date(nd.getFullYear(), nd.getMonth() - 1, 1)).slice(0, 7); go('plan'); } else go(v); break;
-      case 'mddone': P.moneyDates = P.moneyDates || []; P.moneyDates.push(F.isoDay(today())); U.mdChecks = {}; save(); track('money-date-done'); U.planToast = 'Money date done. See you next month.'; go('plans'); break;
       case 'calday': U.calDay = U.calDay === v ? null : v; render(); break;
       case 'calmove': (function () { var n = today(), c = U.calMonth || [n.getFullYear(), n.getMonth()], d = new Date(c[0], c[1] + (+v), 1); U.calMonth = [d.getFullYear(), d.getMonth()]; U.calDay = null; })(); render(); break;
       case 'plview': U.planMonth = v === 'month'; U.bEdit = null; render(); break;

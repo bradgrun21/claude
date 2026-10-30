@@ -550,12 +550,6 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .paylabel input { flex: 1; min-width: 0; min-height: 40px; border-radius: 12px; border: 1px solid var(--edge); background: rgba(255,255,255,.8); padding: 0 12px; font: inherit; font-size: 15px; color: var(--ink); }
 .paylabel .x { width: 32px; height: 32px; border-radius: 16px; border: 1px solid var(--edge); background: rgba(255,255,255,.5); color: var(--muted); flex: none; }
 .paylabel input { border-color: rgba(27,46,45,.14); }
-/* monthly money date */
-.cal-mdate { background: #5AA8C8; }
-.mdcard.due { border: 2px solid #5AA8C8; }
-.mdcheck { width: 28px; height: 28px; flex: none; border-radius: 14px; border: 2px solid #2A6B66; background: #fff; display: grid; place-items: center; margin-right: 12px; }
-.mdcheck.on { background: #2A6B66; }
-.mdrow { justify-content: flex-start; }
 
 /* shared budget invite code */
 .invitecode { font-size: 30px; font-weight: 700; letter-spacing: 6px; text-align: center; padding: 12px; border-radius: 16px; background: rgba(42,107,102,.08); color: #2A6B66; font-variant-numeric: tabular-nums; }

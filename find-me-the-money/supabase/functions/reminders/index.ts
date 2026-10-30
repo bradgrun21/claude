@@ -24,7 +24,7 @@ function rollPayday(iso: string, freq: string, today: Date) {
   while (daysBetween(today, d) < 0) d = addDays(d, step);
   return isoDay(d);
 }
-// is a bill or money date due on this exact day (same rules as billDates in app.js)
+// is a bill due on this exact day (same rules as billDates in app.js)
 function dueOn(due: string, rep: string, day: Date) {
   if (!due) return false;
   const iso = isoDay(day); if (iso < due) return false;
@@ -43,8 +43,6 @@ function pick(data: any, today: Date): { kind: string; title: string; body: stri
     const n = data.streak && data.streak.count ? data.streak.count : 0;
     return { kind: 'payday', title: 'It’s payday!', body: n ? 'Two minutes to check in and make it ' + (n + 1) + ' paydays in a row.' : 'Two minutes to check in and start your streak.' };
   }
-  if (r.mdate !== false && data.moneyDate && data.moneyDate.due && dueOn(data.moneyDate.due, 'monthly', today))
-    return { kind: 'mdate', title: 'Money date today', body: 'Twenty minutes to celebrate a win and give next month’s money a job.' };
   const tomorrow = addDays(today, 1);
   if (r.bills !== false && (data.bills || []).some((b: { due?: string; rep?: string }) => b.due && dueOn(b.due, b.rep || 'monthly', tomorrow)))
     return { kind: 'bills', title: 'A bill is due tomorrow', body: 'Open your plan to see what’s coming up.' };
