@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30g';
+  var APP_VERSION = '10-30h';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -2009,23 +2009,10 @@
       if (step === 1) prog = [p.savings / F.CUSHION, money(p.savings) + ' saved', money(F.CUSHION) + ' goal'];
       else if (step === 2) { var t = o.target, d0 = P.debts.filter(function (d) { return d.id === t.id; })[0], orig = Math.max(num(d0.orig), t.bal); prog = [(orig - t.bal) / orig, money(orig - t.bal) + ' paid', money(orig) + ' total']; }
       else if (step === 3) prog = [Math.min(1, p.savings / pl.safetyNet), money(p.savings) + ' saved', money(pl.safetyNet) + ' goal (' + efMonths() + ' months)'];
-      var where = step === 1 ? 'Starter Cushion' : step === 2 ? esc(o.target.name) : step === 3 ? 'Full Safety Net' : 'investing';
       // a check-in button only when a payday check-in is due
       var paydayStrip = due ? '<button type="button" class="sunbtn" data-a="checkin">' + (sv.count ? 'It\u2019s payday! Check in \u00b7 make it ' + (sv.count + 1) + ' in a row' : 'It\u2019s payday! Check in') + '</button>' : '';
       var toast = U.toast ? (U.toast[2] ? '<div class="sunburst" aria-hidden="true"></div>' : '') + '<div class="toast pop' + (U.toast[2] ? ' win' : '') + '" role="status"><b>' + U.toast[0] + '</b>' + U.toast[1] + '</div>' : '';
-      var short = step <= 3 && pl.extra <= 0 ? Math.ceil(-pl.extra) : -1;
-      var nojob = short < 0 && step <= 3 && pl.toStep < 0.5 ? Math.round(pl.unassigned) : 0;
       var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
-      if (nojob > 0) return homeTop(toast) + '<div class="hero">' + stepChip + gauge(prog ? prog[0] : 0, 'idle') +
-        '<div class="hmid"><div class="hbig">' + money(nojob) + '</div><small>of extra each paycheck has no job yet</small></div>' +
-        '<p class="hsub">Give it a job and your progress starts.</p>' +
-        '<div class="stack" style="gap:8px;width:100%"><button type="button" class="primary" data-a="stepall">Put ' + money(nojob) + ' toward ' + where + '</button><button type="button" class="outline" data-a="go" data-v="plan">Choose in my budget</button></div>' + paydayStrip + '</div>' +
-        homeRest(o, step, snow0(o, step));
-      if (short >= 0) return homeTop(toast) + '<div class="hero">' + stepChip + gauge(prog ? prog[0] : 0, 'idle') +
-        '<div class="hmid">' + (short > 0 ? '<div class="hbig over">' + money(short) + '</div><small>short each paycheck</small>' : '<div class="hbig">$0</div><small>left for your step</small>') + '</div>' +
-        '<p class="hsub">Find ' + (short > 0 ? 'it' : 'a little extra') + ' and your plan starts moving. Pick one:</p>' +
-        '<div class="stack" style="gap:8px;width:100%">' + [!funSet() ? ['edit', 'basics', 'Lower my monthly expenses'] : ['edit', 'fun', 'Lower my fun money'], ['go', 'plan', 'Trim my budget'], ['scan', '', 'See where my money goes']].map(function (x) { return '<button type="button" class="outline" data-a="' + x[0] + '" data-v="' + x[1] + '">' + x[2] + '</button>'; }).join('') + '</div>' + paydayStrip + '</div>' +
-        homeRest(o, step, snow0(o, step));
       // one big number: dollars left to the current goal (no dates: paydays can bring more or less)
       var left = step === 1 ? Math.max(0, F.CUSHION - p.savings) : step === 2 && o.target ? o.target.bal : step === 3 ? Math.max(0, pl.safetyNet - p.savings) : 0;
       var leftText = step === 1 ? 'left to your Starter Cushion' : step === 2 && o.target ? 'left on ' + esc(o.target.name) : step === 3 ? 'left to your Full Safety Net' : '';
