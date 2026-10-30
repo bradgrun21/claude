@@ -1382,3 +1382,17 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .mm-shprev { display: grid; place-items: center; min-height: 220px; margin: 4px 0 12px; }
 .mm-shprev img { max-width: 100%; max-height: 52vh; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
 .mm-shpages { width: 100%; justify-content: center; }
+/* Meal Math: grocery list */
+.mm-seg button { padding: 10px 6px; white-space: nowrap; }
+.mm-gadd { display: flex; gap: 8px; margin-bottom: 12px; }
+.mm-gadd .mm-in { flex: 1; }
+.mm-gadd .mm-btn { flex: none; padding: 0 18px; }
+.mm-gitem { display: flex; align-items: stretch; background: var(--card); border-radius: 16px; }
+.mm-gcheck { flex: 1; min-width: 0; display: grid; grid-template-columns: 28px 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; background: none; border: 0; color: var(--ink); font: inherit; text-align: left; padding: 10px 12px; cursor: pointer; min-height: 60px; }
+.mm-gcheck .mm-em { width: 40px; height: 40px; border-radius: 12px; background: var(--card2); font-size: 22px; display: grid; place-items: center; }
+.mm-box { width: 26px; height: 26px; border-radius: 8px; border: 2px solid #4a4945; display: grid; place-items: center; font-weight: 900; font-size: 15px; color: #0f1d19; }
+.mm-gitem.done .mm-box { background: var(--green); border-color: var(--green); }
+.mm-gitem.done .mm-n { text-decoration: line-through; color: var(--muted); }
+.mm-gitem.done .mm-em, .mm-gitem.done .mm-c { opacity: .5; }
+.mm-gx { flex: none; width: 44px; border: 0; background: none; color: var(--muted); font-size: 14px; cursor: pointer; border-left: 1px solid rgba(255,255,255,.06); }
+.mm-gclear { width: 100%; margin-top: 10px; color: var(--muted); }

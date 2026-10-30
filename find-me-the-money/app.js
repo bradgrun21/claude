@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30w';
+  var APP_VERSION = '10-30x';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -842,7 +842,7 @@
   }
   function mmHead(active) {
     return '<div class="mm-top"><div><div class="mm-crumb">Meals</div><h2 class="mm-h1">Meal Math</h2></div><div class="mm-topr">' + (active === 'meals' ? '<button type="button" class="mm-pill" data-mm-go="pantry">🧺 Prices</button>' : '') + mmGear() + '</div></div>' +
-      '<div class="mm-seg" role="group" aria-label="Meal Math"><button type="button" data-mm-go="week" aria-pressed="' + (active === 'week') + '">📅 Week</button><button type="button" data-mm-go="meals" aria-pressed="' + (active === 'meals') + '">🍲 Meals</button></div>';
+      '<div class="mm-seg" role="group" aria-label="Meal Math"><button type="button" data-mm-go="week" aria-pressed="' + (active === 'week') + '">📅 Week</button><button type="button" data-mm-go="meals" aria-pressed="' + (active === 'meals') + '">🍲 Meals</button><button type="button" data-mm-go="list" aria-pressed="' + (active === 'list') + '">🛒 List</button></div>';
   }
   function mmEntryRow(e) {
     var em, name, sub, bg = '', s = mmSlot(e.slot);
@@ -989,11 +989,12 @@
     track('meal-recipe-open');
   }
   // ----- share a meal as a card (plus its recipe photos, if they want) -----
-  function mmAmt(it) {
-    var n = mmNum(it.amountUsed), u = it.unit || 'servings'; if (!n) return '';
+  function mmQty(n, u) {
+    n = mmR2(n || 0); u = u || 'servings'; if (!n) return '';
     if (u === 'count') return '× ' + n;
     return n + ' ' + (n === 1 && /s$/.test(u) ? u.slice(0, -1) : u);
   }
+  function mmAmt(it) { return mmQty(mmNum(it.amountUsed), it.unit); }
   function mmShareData(m) {
     var draft = m === mmSt().draft, lines = draft ? m.items : mmLines(m), c = mmTotals(lines, m.plates, m.eatingOutCost), url = mmSafeUrl(m.recipeUrl), host = '';
     try { host = url ? new URL(url).hostname.replace(/^www\./, '') : ''; } catch (e) {}
@@ -1039,11 +1040,63 @@
       '<div><div class="k">Meal total</div><div class="v">' + mm$(c.total) + '</div></div><div><div class="k">Per plate</div><div class="v">' + mm$(c.plate) + '</div></div>' +
       '<div><div class="k">Saves</div><div class="v t">' + mm$(c.saves) + '</div></div><button type="button" class="mm-save" data-mm-save>Save</button></div>';
   }
+  // ----- the grocery list: what the planned meals still need this week, plus anything else, to check off or copy -----
+  // P.grocery = { checked: { 'sunday|pantryItemId': 1 (in the cart) or 2 (cleared) }, extras: [{ id, name, done }] }
+  function mmGroc() { var g = P.grocery || (P.grocery = {}); g.checked = g.checked || {}; g.extras = g.extras || []; return g; }
+  // meals planned from today to the end of the week, already-have items left out, the same item added up across meals
+  function mmNeeds(wk) {
+    var td = mmToday(), end = mmAdd(wk, 6), by = {}, out = [];
+    mmPlan().filter(function (e) { return e.type === 'meal' && e.date >= wk && e.date <= end && e.date >= td; }).forEach(function (e) {
+      var m = mmMeal(e.mealId); if (!m) return;
+      (m.items || []).forEach(function (it) {
+        var p = mmItem(it.pantryItemId); if (it.alreadyHave || !p) return;
+        var r = by[p.id]; if (!r) { r = by[p.id] = { id: p.id, p: p, need: 0, meals: [] }; out.push(r); }
+        r.need += mmNum(it.amountUsed) || 0; if (r.meals.indexOf(m.name) < 0) r.meals.push(m.name);
+      });
+    });
+    // the cost is whole packages: 5 servings from a 32-serving bag still means buying the bag
+    out.forEach(function (r) { var pkg = mmNum(r.p.packageAmount), price = mmNum(r.p.price), packs = pkg && r.need ? Math.ceil(r.need / pkg - 1e-9) : null; r.cost = price != null && packs ? mmR2(packs * price) : null; });
+    return out.sort(function (a, b) { return a.p.name.localeCompare(b.p.name); });
+  }
+  function mmGItems(wk) {
+    var g = mmGroc();
+    return mmNeeds(wk).map(function (r) { var c = g.checked[wk + '|' + r.id]; return { k: 'm:' + r.id, done: !!c, gone: c === 2, emoji: r.p.emoji || mmGuess(r.p.name), name: r.p.name, qty: mmQty(r.need, r.p.unit), sub: [mmQty(r.need, r.p.unit), r.meals.join(', ')].filter(Boolean).join(' · '), cost: r.cost }; })
+      .concat(g.extras.map(function (x) { return { k: 'x:' + x.id, id: x.id, done: !!x.done, emoji: mmGuess(x.name), name: x.name, qty: '', sub: '', cost: null, extra: true }; }))
+      .filter(function (it) { return !it.gone; });
+  }
+  function mmGRow(it) {
+    return '<div class="mm-gitem' + (it.done ? ' done' : '') + '"><button type="button" class="mm-gcheck" role="checkbox" aria-checked="' + it.done + '" data-mm-gtick="' + esc(it.k) + '"><span class="mm-box" aria-hidden="true">' + (it.done ? '✓' : '') + '</span><span class="mm-em">' + esc(it.emoji) + '</span>' +
+      '<span class="mm-mid"><span class="mm-n">' + esc(it.name) + '</span>' + (it.sub ? '<span class="mm-s">' + esc(it.sub) + '</span>' : '') + '</span>' + (it.cost != null ? '<span class="mm-c">' + mm$(it.cost) + '</span>' : '') + '</button>' +
+      (it.extra ? '<button type="button" class="mm-gx" data-mm-gdel="' + esc(it.id) + '" aria-label="Remove ' + esc(it.name) + '">✕</button>' : '') + '</div>';
+  }
+  function mmListView() {
+    var wk = mmSt().wk, items = mmGItems(wk), todo = items.filter(function (x) { return !x.done; }), got = items.filter(function (x) { return x.done; });
+    var left = todo.reduce(function (t, x) { return t + (x.cost || 0); }, 0);
+    return mmHead('list') + mmWeekNav(wk, 'data-mm-wk') +
+      '<div class="mm-strip"><span>🛒 <b>' + todo.length + '</b> to get</span><span>✓ <b>' + got.length + '</b> in the cart</span>' + (left ? '<span>💵 about <b>' + mm$(mmR2(left)) + '</b></span>' : '') + '</div>' +
+      '<form class="mm-gadd" data-mm-gform><input class="mm-in" id="mmGAdd" placeholder="Add an item" aria-label="Add an item" autocomplete="off" enterkeyhint="done" maxlength="60"><button type="submit" class="mm-btn gold">Add</button></form>' +
+      (items.length ? '' : '<div class="mm-empty">No meals coming up this week</div>') +
+      (todo.length ? '<div class="mm-list">' + todo.map(mmGRow).join('') + '</div>' : '') +
+      (got.length ? '<div class="mm-h2">✓ In the cart</div><div class="mm-list">' + got.map(mmGRow).join('') + '</div>' : '') +
+      (items.length ? '<div class="mm-acts"><button type="button" class="mm-btn ghost" data-mm-gcopy>📋 Copy list</button>' + (navigator.share ? '<button type="button" class="mm-btn ghost" data-mm-gshare>📤 Share</button>' : '') + '</div>' : '') +
+      (got.length ? '<button type="button" class="mm-btn ghost mm-gclear" data-mm-gclear>🧹 Clear checked</button>' : '');
+  }
+  // what's left to get, as plain text for notes, messages or another list app
+  function mmGText() {
+    var wk = mmSt().wk, todo = mmGItems(wk).filter(function (x) { return !x.done; });
+    return todo.length ? '🛒 Grocery list · ' + mmWeekLabel(wk) + '\n' + todo.map(function (x) { return '☐ ' + x.name + (x.qty ? ' (' + x.qty + ')' : ''); }).join('\n') : '';
+  }
+  function mmCopy(t) {
+    var done = function () { mmToast('📋 Copied'); track('grocery-copy'); };
+    var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { mmToast('Couldn’t copy here'); } ta.remove(); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done, old); return; } } catch (e) {}
+    old();
+  }
   function mealsScreen() {
     var st = mmSt();
     if (st.view === 'edit' && !st.draft) st.view = 'meals';
     if (st.view === 'edit') setTimeout(function () { mmFillPages(app); }, 0);
-    return '<div class="mm">' + (st.view === 'edit' ? mmEditView() : st.view === 'meals' ? mmMealsView() : st.view === 'pantry' ? mmPantryView() : mmWeekView()) + '</div>';
+    return '<div class="mm">' + (st.view === 'edit' ? mmEditView() : st.view === 'meals' ? mmMealsView() : st.view === 'pantry' ? mmPantryView() : st.view === 'list' ? mmListView() : mmWeekView()) + '</div>';
   }
   // the weekly recap's "Meals at home" section
   function mmRecap(ws) {
@@ -1235,6 +1288,20 @@
     if (a('color')) { d.color = a('color'); render(); mmSheetDraw(); return; }
     if (a('rview')) { mmRecipeOpen(d, +a('rview')); return; }
     if (a('rdel')) { d.recipePhotos = (d.recipePhotos || []).filter(function (x, i) { return i !== +a('rdel'); }); render(); return; }
+    if (a('gtick')) {
+      var gk = a('gtick'), g = mmGroc();
+      if (gk.indexOf('m:') === 0) { var ck = st.wk + '|' + gk.slice(2); if (g.checked[ck]) delete g.checked[ck]; else g.checked[ck] = 1; }
+      else g.extras.forEach(function (x) { if ('x:' + x.id === gk) x.done = !x.done; });
+      save(); render(); return;
+    }
+    if (a('gdel')) { mmGroc().extras = mmGroc().extras.filter(function (x) { return x.id !== a('gdel'); }); save(); render(); return; }
+    if (has('gclear')) {
+      var gc = mmGroc(); gc.extras = gc.extras.filter(function (x) { return !x.done; });
+      Object.keys(gc.checked).forEach(function (k) { if (k.indexOf(st.wk + '|') === 0 && gc.checked[k] === 1) gc.checked[k] = 2; });
+      save(); render(); return;
+    }
+    if (has('gcopy')) { var tx = mmGText(); if (tx) mmCopy(tx); else mmToast('Nothing left to get'); return; }
+    if (has('gshare')) { var ts = mmGText(); if (!ts) { mmToast('Nothing left to get'); return; } navigator.share({ text: ts }).then(function () { track('grocery-share'); }).catch(function () {}); return; }
     if (has('share')) { mmShareOpen(d); return; }
     if (has('shpages')) { sh.withPages = !sh.withPages; mmSheetDraw(); return; }
     if (has('shgo')) { mmShareGo(); return; }
@@ -1259,6 +1326,13 @@
     var sh = mmSt().sheet; if (!sh) return;
     if (e.key === 'Escape') mmClose(true);
     if (e.key === 'Enter' && e.target.id === 'mmOut') { e.preventDefault(); mmSetEntry({ type: 'eatOut', budget: sh.budget }); }
+  });
+  document.addEventListener('submit', function (e) {
+    if (!e.target.hasAttribute || !e.target.hasAttribute('data-mm-gform')) return;
+    e.preventDefault();
+    var inp = document.getElementById('mmGAdd'), name = String(inp && inp.value || '').trim().slice(0, 60); if (!name) return;
+    mmGroc().extras.push({ id: uid(), name: name.charAt(0).toUpperCase() + name.slice(1), done: false }); save(); track('grocery-add'); render();
+    var again = document.getElementById('mmGAdd'); if (again) again.focus();
   });
   document.addEventListener('change', function (e) {
     if (!e.target.hasAttribute) return;
@@ -1331,7 +1405,7 @@
       ['.mpath', 'Your map', 'Short lessons and checkpoints. Tap one to start.']
     ],
     meals: [
-      ['.mm-seg', 'Week and meals', 'Plan the week, or price out the meals you cook.'],
+      ['.mm-seg', 'Week, meals and list', 'Plan the week, price out the meals you cook, and shop from your grocery list.'],
       ['.mm-strip', 'This week', 'Meals at home, what eating at home saved, and meals out.'],
       ['.mm-day', 'Plan a day', 'Tap a meal slot to pick a meal, leftovers or eating out.'],
       ['.gearbtn', 'Settings', 'Your account, reminders and data live here now.']
