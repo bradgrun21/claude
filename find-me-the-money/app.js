@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30k';
+  var APP_VERSION = '10-30l';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -1033,14 +1033,27 @@
     for (var k = Math.floor(F.daysBetween(anchor, first) / step) - 1; k <= Math.ceil(F.daysBetween(anchor, last) / step) + 1; k++) { var d = F.addDays(anchor, k * step); if (d >= first && d <= last) n++; }
     return n;
   }
+  // what a recurring expense really costs in one calendar month: weekly and every-2-weeks ones count each
+  // date they land on (4 or 5 Fridays), yearly ones count only in the month they're due; without a due date, the average
+  function billInMonth(b, y, m) {
+    var f = b.freq || b.rep, a = num(b.amount);
+    if (!b.due || !f || f === 'monthly') return F.billMonthly(b);
+    if (f === 'weekly' || f === 'biweekly') return a * paydaysIn(b.due, f, y, m);
+    if (f === 'yearly') return F.fromIso(b.due).getMonth() === m ? a : 0;
+    return F.billMonthly(b);
+  }
+  // weeks (Sunday to Saturday) that start in a month: a weekly category or fund counts once for each
+  function weeksIn(y, m) { var n = 0, dim = new Date(y, m + 1, 0).getDate(); for (var d = 1; d <= dim; d++) if (new Date(y, m, d).getDay() === 0) n++; return n; }
+  function catInMonth(c, y, m) { return c.per === 'week' ? num(c.amount) * weeksIn(y, m) : catMonthly(c); }
+  function fundInMonth(f, y, m) { return f.per === 'week' ? num(f.amount) * weeksIn(y, m) : fundMonthly(f); }
   // this month's income (pay x paychecks that land in it) and what's left after everything with a job
   function monthMoney(ym) {
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1, n = paydaysIn(P.nextPay, P.freq, y, m), pl = F.plan(profile()), ppm = pl.ppm;
     var income = num(P.paycheck) * n + extraIncomes().reduce(function (t, x) { return t + num(x.amount) * paydaysIn(x.nextPay || P.nextPay, x.freq || 'biweekly', y, m); }, 0) + otherMonthly();
     var by = { need: 0, want: 0, debt: 0, save: 0, give: 0 };
-    recurring().forEach(function (b) { by[typeOf(b)] += budgetMonthly(b); });
-    cats().forEach(function (c) { by[typeOf(c)] += catMonthly(c); });
-    by.save += fundsMonthly(); by[lineMeta('fun').type || 'want'] += funMonthly(); by[lineMeta('basics').type || 'need'] += elseMonthly();
+    recurring().forEach(function (b) { if (!fromFund(b)) by[typeOf(b)] += billInMonth(b, y, m); });
+    cats().forEach(function (c) { by[typeOf(c)] += catInMonth(c, y, m); });
+    funds().forEach(function (f) { by.save += fundInMonth(f, y, m); }); by[lineMeta('fun').type || 'want'] += funMonthly(); by[lineMeta('basics').type || 'need'] += elseMonthly();
     pl.rows.forEach(function (r) { if (r.kind === 'min') by.debt += r.amount * ppm; else if (r.kind === 'give') by.give += r.amount * ppm; else if (r.kind === 'save') by.save += r.amount * ppm; else if (r.kind === 'goal') by.save += r.amount * n; });
     // the step takes its amount from each paycheck, but never more than this month has left
     var before = by.need + by.want + by.debt + by.save + by.give;
@@ -1057,7 +1070,8 @@
   }
   function budSpend(ym) {
     var m = spentMap(ym), lines = spendLines().filter(function (l) { return l.grp === 'spend'; }), now = today(), isNow = ym === monthOf(F.isoDay(now));
-    var budget = lines.reduce(function (t, l) { return t + l.mon; }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
+    var yy = +ym.slice(0, 4), mo = +ym.slice(5, 7) - 1, monOf = function (l) { return l.per === 'week' ? l.amt * weeksIn(yy, mo) : l.mon; };
+    var budget = lines.reduce(function (t, l) { return t + monOf(l); }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
     var dl = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1, perDay = isNow && left > 0 ? left / dl : 0;
     // on track = spending at or under where the month's pace says it should be
     var dim = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(), pace = isNow ? budget * now.getDate() / dim : budget;
@@ -1069,7 +1083,7 @@
     var cards = lines.map(function (l) {
       var wk = l.per === 'week' && isNow ? weekOf(now) : null;
       var sp = wk ? (P.spends || []).filter(function (x) { return x.key === l.key && x.date >= wk[0] && x.date <= wk[1]; }).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
-      var cap = wk ? l.amt : l.mon, lf = cap - sp, pct = cap ? Math.round(sp / cap * 100) : (sp ? 100 : 0);
+      var cap = wk ? l.amt : monOf(l), lf = cap - sp, pct = cap ? Math.round(sp / cap * 100) : (sp ? 100 : 0);
       var card = '<button type="button" class="ccard" data-a="catopen" data-v="' + l.key + '">' + icoBox(l.icon, l.key) + '<span class="cmid"><b>' + esc(l.label) + (l.type ? ' <span class="ttag t-' + l.type + '">' + TYPES.filter(function (t) { return t[0] === l.type; })[0][1] + '</span>' : '') + '</b><span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, pct) + '%;background:' + colorFor(l.key) + '"></i></span>' +
         '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + (wk ? ' this week' : '') + '</span><span>' + money2(cap) + (l.per === 'week' ? '/wk' : '') + '</span></span>' + '</span></button>';
       return card;
@@ -1079,7 +1093,7 @@
       '<div class="badd"><input type="text" data-catnew placeholder="Or name your own" maxlength="30" aria-label="Category name"><button type="button" class="sharebtn" data-a="catnew">Add</button></div><button type="button" class="textbtn" data-a="catadd" data-v="">Close</button></div>'
       : '<button type="button" class="outline" data-a="catadd" data-v="open">+ Add a category</button>';
     var rec = recurring().slice().sort(function (x, y) { return (x.due ? F.fromIso(x.due).getDate() : 40) - (y.due ? F.fromIso(y.due).getDate() : 40); });
-    var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b></div><span>' + money(recurMonthly()) + '/mo</span></div>' +
+    var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b></div><span>' + money(recurring().reduce(function (t, b) { return t + (fromFund(b) ? 0 : billInMonth(b, yy, mo)); }, 0)) + ' in ' + new Date(yy, mo, 1).toLocaleDateString('en-US', { month: 'short' }) + '</span></div>' +
       (rec.length ? '<div class="card rlist">' + rec.map(function (b) {
         var f = b.freq || 'monthly', nx = b.due ? nextDue(b, now) : null;
         return '<button type="button" class="rrow" data-a="recuropen" data-v="' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + ' <span class="ttag t-' + typeOf(b) + '">' + TYPES.filter(function (t) { return t[0] === typeOf(b); })[0][1] + '</span></b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + (fromFund(b) ? ' · from ' + esc((funds().filter(function (x) { return x.id === b.fund; })[0] || {}).name || 'fund') : '') + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
