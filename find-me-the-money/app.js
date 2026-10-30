@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30m';
+  var APP_VERSION = '10-30n';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -861,7 +861,8 @@
   // what a budget line is for; spending categories and recurring expenses pick one
   var TYPES = [['need', 'Need'], ['want', 'Want'], ['debt', 'Debt'], ['save', 'Savings / goal']];
   var WANT_WORDS = /eating out|shopping|gifts|coffee|entertainment|stream|music|gym|fun|subscri/i;
-  function typeOf(x) { return x.type || (WANT_WORDS.test(x.name || '') || x.group === 'subs' ? 'want' : 'need'); }
+  // every budget line is a Need or a Want (lines saved as Debt or Savings before fall back by name)
+  function typeOf(x) { return x.type === 'need' || x.type === 'want' ? x.type : (WANT_WORDS.test(x.name || '') || x.group === 'subs' ? 'want' : 'need'); }
   // an icon for bills saved before icons existed, by name
   function iconFor(name) {
     var n = String(name || '').toLowerCase(), m = [[/rent|mortgage|home|house/, '🏠'], [/electric|power|light/, '💡'], [/water|sewer/, '💧'], [/internet|wifi/, '📶'], [/phone|cell/, '📱'], [/car|auto|gas|fuel/, '🚗'], [/health|doctor|dental|medical|prescription/, '🩺'], [/child|daycare|kid|school/, '👶'], [/stream|netflix|hulu|disney/, '📺'], [/music|spotify/, '🎵'], [/gym|fitness/, '🏋️'], [/grocer|food/, '🛒'], [/insurance/, '🛡️'], [/pet|vet/, '🐾'], [/trash/, '🗑️'], [/church|tithe|giv/, '⛪']];
@@ -962,7 +963,7 @@
         '<label class="field">Amount each time<input type="number" inputmode="decimal" min="0" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0"></label>' +
         '<div class="field">How often<div class="seg wrap" role="group">' + [['monthly', 'Monthly'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Weekly'], ['yearly', 'Yearly']].map(function (o) { var on = freq === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="recurfreq" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
         (freq === 'monthly' ? '<label class="field">Due on the<select data-g="day">' + days + '</select></label>' : '<label class="field">Next due date<input type="date" data-g="due" value="' + esc(f.due || '') + '"></label>') +
-        '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.map(function (t) { var on = (f.type || typeOf(f)) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="recurtype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+        '<div class="field">Type<div class="seg wrap" role="group">' + TYPES.slice(0, 2).map(function (t) { var on = typeOf(f) === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="recurtype" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
         '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (f.color || (f.id ? colorFor('b:' + f.id) : '')) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="recurcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
         (funds().length ? '<div class="field">Paid from<div class="seg wrap" role="group">' + [['', 'My budget']].concat(funds().map(function (x) { return [x.id, (x.icon || '\uD83D\uDCB0') + ' ' + esc(x.name || 'Fund')]; })).map(function (o) { var on = (f.fund || '') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="recurfund" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' : '') +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
@@ -2705,7 +2706,7 @@
         budgetV2();
         var bl = f.id ? P.bills.filter(function (x) { return x.id === f.id; })[0] : null, before = bl ? budgetMonthly(bl) : 0, wasFund = bl ? !!fromFund(bl) : false;
         if (!bl) { bl = { id: uid() }; P.bills.push(bl); }
-        bl.name = nm; bl.icon = f.icon; bl.amount = String(round2(num(f.amount))); bl.freq = f.freq; bl.rep = f.freq; bl.due = due; delete bl.per; bl.group = F.groupFor(nm); bl.type = f.type || typeOf({ name: nm }); if (f.color) bl.color = f.color;
+        bl.name = nm; bl.icon = f.icon; bl.amount = String(round2(num(f.amount))); bl.freq = f.freq; bl.rep = f.freq; bl.due = due; delete bl.per; bl.group = F.groupFor(nm); bl.type = typeOf({ type: f.type, name: nm }); if (f.color) bl.color = f.color;
         if (f.fund) bl.fund = f.fund; else delete bl.fund;
         if (before > 0 || wasFund) shiftRough(budgetMonthly(bl) - before);
         save(); track('recurring-save'); U.sheet = null; render();
