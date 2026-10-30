@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30t';
+  var APP_VERSION = '10-30u';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -1151,8 +1151,8 @@
       ['.hero', 'Your next goal', 'How much is left on the step you’re on. It fills as you save and pay down debt.'],
       [function () { var h = app.querySelector('.hero'), n = h && h.nextElementSibling; return n && n.querySelector('[data-a=chquit]') ? n : null; }, 'Your challenge', 'A challenge you started. Log your progress right here.'],
       ['.recaprow', 'Weekly recap', 'Your week at a glance: spending, balances and meals at home.'],
-      ['.commcard', 'Your community', 'Free help from people on the same path, plus coaching if you want it.'],
       ['.cal', 'Your month', 'Paydays, bills coming up and your wins. Tap a day to see it.'],
+      ['.commcard', 'Your community', 'Free help from people on the same path, or a coach. Tap one to see more.'],
       ['.fab', 'Add anything', 'Add purchases, update balances or set a goal.']
     ],
     plan: [
@@ -3049,20 +3049,20 @@
   // the community lives on Skool; Home always shows it, switching between the free community and coaching
   function communityCard() {
     var url = CONFIG.communityUrl, curl = CONFIG.coachingUrl || url; if (!url) return '';
-    var ct = U.commTab || 'free', coach = ct === 'coach';
+    var ct = U.commTab || '', coach = ct === 'coach';
     var items = coach
       ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.']]
       : [['Weekly recaps, together', 'Share how your week went. Streaks are easier with company.'], ['Live challenges', 'Run a No-Spend Weekend or Emergency Fund Sprint with a group.'], ['Ask anything', 'Stuck on a bill or a tough month? Ask people on the same path.']];
-    return '<div class="card stack commcard" style="padding:16px 18px;gap:10px"><div class="eyebrow">The Find Me the Money community</div><b style="font-size:18px">You don\u2019t have to do this alone</b>' +
-      tabChips('commtab', ct, [['free', 'Free community'], ['coach', 'Coaching']]) +
+    return '<div class="card stack commcard" style="padding:16px 18px;gap:10px"><b style="font-size:18px">You don\u2019t have to do this alone</b>' +
+      tabChips('commtab', ct, [['free', 'Free Community'], ['coach', 'Partner with a Coach']]) + (!ct ? '</div>' :
       '<div class="stack" style="gap:8px">' + items.map(function (x) { return '<div><b style="font-size:15px">' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:14px">' + x[1] + '</small></div>'; }).join('') + '</div>' +
       (coach ? '<small style="color:var(--muted);font-size:13px"><b>Who\u2019s Brad?</b> I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</small>' +
           '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">\ud83c\udf05 Founding Members: price locked for life, first 25 only</small>'
         : '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (P.communityJoined ? 'Open the community' : 'Join the FREE community') + '</a>') +
-      '</div>';
+      '</div>');
   }
   function homeRest() {
-    return communityCard() + calendarCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
+    return calendarCard() + communityCard() + '<p class="fine">Find Me the Money is an educational budgeting tool, not financial, tax or investment advice.</p>';
   }
   function stat(v, label) { return '<div><b>' + v + '</b><span>' + label + '</span></div>'; }
   // ---------- the weekly recap: a week (Sunday to Saturday) counts when its 3 steps are done ----------
@@ -3451,7 +3451,7 @@
       case 'payvary': P.payVaries = !!v; if (P.payVaries && !(P.payHist || []).length) P.payHist = [{ id: uid(), amount: P.paycheck || '' }, { id: uid(), amount: '' }]; payFromHist(); save(); render(); break;
       case 'payhistadd': P.payHist = P.payHist || []; P.payHist.push({ id: uid(), amount: '' }); save(); render(); (function () { var el = app.querySelectorAll('[data-list=payHist]'); if (el.length) el[el.length - 1].focus(); })(); break;
       case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
-      case 'commtab': U.commTab = v; render(); break;
+      case 'commtab': U.commTab = U.commTab === v ? '' : v; render(); break;
       case 'remindon': remindOn(); break;
       case 'remindoff': remindOff(); break;
       case 'remindk': P.remind = P.remind || {}; P.remind[v] = P.remind[v] === false; save(); render(); break;

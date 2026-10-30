@@ -559,6 +559,8 @@ textarea.plancode { width: 100%; box-sizing: border-box; border-radius: 12px; bo
 .tabchips::-webkit-scrollbar { display: none; }
 .tabchips .chip { flex: none; white-space: nowrap; }
 .tabchips .chip.on { background: #2A6B66; color: #fff; border-color: #2A6B66; }
+.commcard .tabchips { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; margin: 2px 0 0; padding: 0; }
+.commcard .tabchips .chip { white-space: normal; padding: 0 8px; min-height: 44px; text-align: center; }
 
 /* money that still needs a job */
 .left.open { background: rgba(255,176,124,.22); color: var(--ink); border-color: rgba(232,135,95,.45); }

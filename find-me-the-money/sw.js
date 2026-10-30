@@ -1,7 +1,7 @@
 // Payday reminders: OneSignal's push handling shares this worker. If it can't load, the app still works offline.
 try { importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js'); } catch (e) {}
 // Keeps the app working offline. Bump VERSION after each deploy so phones pick up the new files.
-var VERSION = 'fmtm-2026-10-30t';
+var VERSION = 'fmtm-2026-10-30u';
 var FILES = ['./', 'index.html', 'styles.css', 'core.js', 'scan.js', 'share.js', 'app.js', 'privacy.html', 'lessons.json', 'manifest.webmanifest', 'icons/icon.svg', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(VERSION).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) {

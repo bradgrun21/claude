@@ -36,7 +36,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Budget starts with Income: every paycheck and other money, with + Add income
 - Challenges and milestones use bubble tabs: Suggested (3, with Show all), Food, Spending, Bills & debt, Saving, Earn more, Completed; milestones: Up next, Getting started, Saving, Debt, Streaks, Days back, Challenges & earning, Earned
 - Pay that changes: add recent paychecks and plan on your lowest (safest) or your average
-- Community lives on Home (goal: move people to Skool): a card with Free community / Coaching bubbles, each showing its benefits and join link. The last tab is now Wins (streak, challenges, milestones). YouTube is an icon in the Home header
+- Community lives on Home (goal: move people to Skool): a card under the calendar titled "You don’t have to do this alone" with Free Community / Partner with a Coach bubbles; tapping one opens its benefits and join link, tapping it again closes them. The last tab is now Wins (streak, challenges, milestones). YouTube is an icon in the Home header
 - (earlier) Community tab had two sections: the free community and coaching (benefits: 2 live coaching calls a month, an accountability group, budget feedback; a short "Who's Brad?" card; Learn about coaching opens the Skool plans page; a small Founding Members note)
 - After saving with email, the Home Screen how-to shows next (it no longer shows on the first screen)
 - Setup ends with Save your progress: sign in with an emailed code before Home (or Not now)
