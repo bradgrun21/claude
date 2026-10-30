@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30n';
+  var APP_VERSION = '10-30o';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -591,9 +591,9 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['spendnew', '', 'Add spending', 'Five seconds per purchase'], ['checkin', '', 'Update my balances', 'Savings, funds and debts'], ['scan', '', 'Add this week\u2019s purchases', 'Scan a screenshot of your bank app'], ['goalnew', '', 'Add a goal', 'A trip, a car, a gift']];
+    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Scan or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
-      return '<button type="button" role="menuitem" data-a="' + x[0] + '"' + (x[1] ? ' data-v="' + x[1] + '"' : '') + '><b>' + x[2] + '</b><small>' + x[3] + '</small></button>'; }).join('') + '</div>';
+      return '<button type="button" role="menuitem" data-a="' + x[0] + '"><span class="plusic" aria-hidden="true">' + x[1] + '</span><span class="plustx"><b>' + x[2] + '</b><small>' + x[3] + '</small></span></button>'; }).join('') + '</div>';
   }
 
   var ICON = {
@@ -1834,17 +1834,17 @@
         return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
           '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, i) + '</div></div>';
       }).join('');
-      return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add this week’s purchases</h2>' +
-        '<p>Scan screenshots of your bank app’s transaction list, or type them in. Everything stays on this phone.</p></div>' +
+      return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2>' +
+        '<p>Scan your bank app or type them in.</p></div>' +
         '<div class="typeit"><input type="text" data-typed autocomplete="off" placeholder="Type it: coffee 5, gas $50 yesterday" aria-label="Type purchases"><button type="button" class="sharebtn" data-a="typedadd">Add</button></div>' +
         (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'screenshot ' + sc.reading + ' of ' + sc.total : 'your screenshot') + '…</b><small>A few seconds each. The first one takes longer.</small></div>' : '') +
         (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
         (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
-          '<small style="color:var(--muted)">Check each purchase that’s right and pick its category. Unchecked rows are skipped, so leave pending charges, transfers and repeats unchecked.</small></div>' +
+          '<small style="color:var(--muted)">Check the right ones and pick a category. Unchecked rows are skipped.</small></div>' +
           '<div class="card scl">' + rows + '</div>' +
           '<div class="push"><button type="button" class="primary" data-a="scansave"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') : 'Check the purchases to save') + '</button>' + pick('Scan another screenshot', 'outline') + '<button type="button" class="textbtn" data-a="weekhand">Add one by hand</button></div>'
           : sc.reading ? '' : '<div class="stack" style="gap:10px">' + pick('Scan a screenshot', 'primary') + '<button type="button" class="outline" data-a="weekhand">Add one by hand</button><button type="button" class="textbtn" data-a="weeknone">No purchases this week</button></div>' +
-            '<p style="font-size:13px;color:var(--muted)">Tip: scroll your bank app to this week’s purchases and take a screenshot or two. On iPhone, if a photo won’t open, save it to Files first and choose it from there.</p>');
+            '<p style="font-size:13px;color:var(--muted)">On iPhone, if a photo won’t open, save it to Files and pick it from there.</p>');
     },
     spendadd: function () {
       var f = U.form || {}, lines = spendLines(), last = f.key;
@@ -1853,7 +1853,7 @@
         return '<div class="field">' + title + '<div class="chips" style="margin-top:8px">' + mine.map(function (l) {
           var on = last === l.key; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="spendcat" data-v="' + l.key + '">' + esc(l.short || l.label) + '</button>'; }).join('') + '</div></div>';
       };
-      return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><div class="eyebrow">5 seconds</div><h2>Add spending</h2><p>What did you spend, and on what? It counts against that line in your budget.</p></div>' +
+      return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><h2>Add a purchase</h2></div>' +
         (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
         '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
