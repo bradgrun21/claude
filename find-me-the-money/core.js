@@ -12,7 +12,7 @@
     monthly: { label: 'Once a month', perMonth: 1, days: 365 / 12 }
   };
   var STEPS = [
-    ['Starter Cushion', 'Save $1,000 for emergencies'],
+    ['$1,000 Emergency Fund', 'Save $1,000 for emergencies'],
     ['Debt Snowball', 'Pay off everything but the house, smallest first'],
     ['Full Safety Net', '3 to 6 months of expenses saved'],
     ['Future You', 'Invest 15% of income for retirement'],
@@ -245,43 +245,9 @@
     return o;
   }
 
-  // ---------- streaks and wins ----------
-  var MILESTONES = [3, 6, 13, 26, 52, 104];
+  // ---------- wins ----------
   function nextAfter(iso, freq) { return isoDay(addDays(fromIso(iso), FREQS[freq].days)); }
-  // the scheduled payday a check-in today counts for: the latest one on or before tomorrow (null if none is due)
-  function paydayFor(nextPay, freq, today) {
-    var lim = addDays(today, 1), d = nextPay;
-    if (daysBetween(lim, fromIso(d)) > 0) return null;
-    while (daysBetween(lim, fromIso(nextAfter(d, freq))) <= 0) d = nextAfter(d, freq);
-    return d;
-  }
-  // A payday check-in counts from the day before payday to 2 days after. Missed or late paydays
-  // use up a grace pass if one is saved; otherwise the streak starts over. Every 4 in a row earns a pass (hold 1).
-  function applyCheckin(st, payday, checkinIso, freq) {
-    st = Object.assign({ count: 0, best: 0, grace: 0, lastPayday: null }, st);
-    var out = { usedGrace: 0, broke: false, earnedGrace: false, milestone: null };
-    if (st.lastPayday === payday) return { st: st, out: out, repeat: true };
-    var late = daysBetween(fromIso(payday), fromIso(checkinIso)) > 2;
-    var missed = st.lastPayday ? Math.max(0, Math.round(daysBetween(fromIso(st.lastPayday), fromIso(payday)) / FREQS[freq].days) - 1) : 0;
-    var need = missed + (late ? 1 : 0);
-    if (need && need <= st.grace) { st.grace -= need; out.usedGrace = need; }
-    else if (need) { out.broke = st.count > 0; st.count = 0; st.grace = 0; }
-    st.count += 1; st.best = Math.max(st.best, st.count); st.lastPayday = payday;
-    if (st.count % 4 === 0 && st.grace < 1) { st.grace = 1; out.earnedGrace = true; }
-    if (MILESTONES.indexOf(st.count) >= 0) out.milestone = st.count;
-    return { st: st, out: out };
-  }
-  // how the streak looks between check-ins
-  function streakView(st, nextPay, freq, today) {
-    st = st || {};
-    var count = st.count || 0, grace = st.grace || 0, closed = 0, d = nextPay;
-    if (!count) return { count: 0, best: st.best || 0, grace: 0, state: 'new', due: !!paydayFor(nextPay, freq, today) };
-    while (daysBetween(fromIso(d), today) > 2 && closed < 60) { closed++; d = nextAfter(d, freq); }
-    var due = !!paydayFor(nextPay, freq, today);
-    var state = closed > grace ? 'paused' : due ? 'due' : 'active';
-    return { count: state === 'paused' ? 0 : count, was: count, best: Math.max(st.best || 0, count), grace: grace, state: state, due: due };
-  }
-  // what changed since the last check-in: debt paid down and money saved (savings + goals)
+  // what changed since the last balance update: debt paid down and money saved (savings + goals)
   function winsBetween(prev, now) {
     var paid = 0, saved = now.savings - (prev.savings || 0);
     Object.keys(now.debts).forEach(function (id) { if (prev.debts && id in prev.debts) paid += Math.max(0, prev.debts[id] - now.debts[id]); });
@@ -303,7 +269,7 @@
     { id: 'nofees30', title: '30 Days, No Late Fees', kind: 'clean', days: 30, tag: 'Bills', blurb: 'Every bill on time for 30 days. We count the days; tell us if a fee happens.', share: 'Thirty days without a single late fee.' },
     { id: 'nooverdraft30', title: '30 Days, No Overdraft', kind: 'clean', days: 30, tag: 'Bills', blurb: 'Keep your checking account above $0 for 30 days.', share: 'Thirty days with zero overdrafts.' },
     { id: 'nocard30', title: '30 Days, No New Card Debt', kind: 'clean', days: 30, tag: 'Debt', blurb: 'Use cash or debit. No new charges on a card you’re paying off.', share: 'Thirty days without adding to my card debt.' },
-    { id: 'sprint30', title: 'Cushion Sprint', kind: 'cushion', days: 30, tag: 'Savings', blurb: 'Reach $1,000 saved in 30 days. Sell something, pick up a shift, pause a want.', share: 'I sprinted to my $1,000 emergency cushion.' },
+    { id: 'sprint30', title: 'Emergency Fund Sprint', kind: 'cushion', days: 30, tag: 'Savings', blurb: 'Reach $1,000 saved in 30 days. Sell something, pick up a shift, pause a want.', share: 'I sprinted to my $1,000 emergency fund.' },
     { id: 'sell3', title: 'Sell 3 Things', kind: 'count', target: 3, days: 30, tag: 'Income', blurb: 'Clothes, gear, that thing in the closet. Sell three things this month.', share: 'Sold three things and put the money to work.' },
     { id: 'found100', title: 'Find $100', kind: 'amount', target: 100, days: 30, tag: 'Income', blurb: 'Find $100 this month: sell, skip, cancel or side gig. Add it as you go.', share: 'I found an extra $100 this month.' },
     { id: 'cancel1', title: 'Cancel One Subscription', kind: 'once', days: 7, tag: 'Spending', blurb: 'Pick one subscription you don’t love and cancel it this week.', share: 'Cancelled a subscription I didn’t need.' },
@@ -316,7 +282,7 @@
     { id: 'boost50', title: 'Snowball Boost', kind: 'once', days: 14, tag: 'Debt', blurb: 'Put an extra $50 on your smallest debt before your next payday.', share: 'Threw an extra $50 at my snowball.' }
   ];
   function challengeDef(id) { return CHALLENGES.filter(function (c) { return c.id === id; })[0]; }
-  // c = { id, start, marks: [iso], amount, slipped, done }; facts gives savings for the Cushion Sprint
+  // c = { id, start, marks: [iso], amount, slipped, done }; facts gives savings for the Emergency Fund Sprint
   function challengeStatus(c, today, facts) {
     var def = challengeDef(c.id), dayN = daysBetween(fromIso(c.start), today) + 1, marks = c.marks || [], todayIso = isoDay(today);
     var st = { def: def, dayN: dayN, daysLeft: Math.max(0, def.days - dayN + 1), state: 'active', progress: 0, label: '', canMark: false, marked: marks.indexOf(todayIso) >= 0 };
@@ -364,14 +330,14 @@
   var BADGES = [
     { id: 'plan', title: 'Plan Built', desc: 'Every dollar of my paycheck has a job.', test: function (f) { return f.setupDone; } },
     { id: 'sorted', title: 'Eyes Wide Open', desc: 'Sorted every store into needs and wants.', test: function (f) { return f.sortedAll; } },
-    ladder('checkin-1', 'First Check-In', 'Checked in on payday for the first time.', 'checkins', 1),
-    ladder('streak-3', 'Habit Forming', '3 paydays in a row.', 'streakBest', 3),
-    ladder('streak-6', 'Paying Myself First', '6 paydays in a row.', 'streakBest', 6),
-    ladder('streak-13', 'Half-Year Hero', '13 paydays in a row.', 'streakBest', 13),
-    ladder('streak-26', 'Year of Showing Up', '26 paydays in a row.', 'streakBest', 26),
+    ladder('checkin-1', 'First Weekly Recap', 'Finished your first week: categorized, balances updated, recap read.', 'checkins', 1),
+    ladder('streak-3', 'Habit Forming', '3 weeks in a row.', 'streakBest', 3),
+    ladder('streak-6', 'Paying Myself First', '6 weeks in a row.', 'streakBest', 6),
+    ladder('streak-13', 'Quarter Strong', '13 weeks in a row.', 'streakBest', 13),
+    ladder('streak-26', 'Half-Year Hero', '26 weeks in a row.', 'streakBest', 26),
     ladder('saved-250', 'First $250', '$250 in emergency savings.', 'savings', 250, 'money'),
-    ladder('saved-500', 'Halfway Cushion', '$500 in emergency savings.', 'savings', 500, 'money'),
-    ladder('cushion', 'Starter Cushion', '$1,000 saved. Emergencies don’t go on a card anymore.', 'savings', 1000, 'money'),
+    ladder('saved-500', 'Halfway There', '$500 in emergency savings.', 'savings', 500, 'money'),
+    ladder('cushion', '$1,000 Emergency Fund', '$1,000 saved. Emergencies don’t go on a card anymore.', 'savings', 1000, 'money'),
     ladder('payoff-1', 'First Debt Down', 'Paid off my first debt.', 'debtsPaid', 1),
     ladder('payoff-3', 'Snowball Rolling', 'Paid off 3 debts.', 'debtsPaid', 3),
     ladder('paid-500', '$500 Paid Down', '$500 of debt gone since I started.', 'debtPaidTotal', 500, 'money'),
@@ -402,15 +368,15 @@
   // ---------- reading plans ----------
   // one short read and one action a day; a new day opens each calendar day, and you can always catch up
   var PLANS = [{
-    id: 'reset7', title: '7-Day Money Reset', blurb: 'One short read and one small action a day. By day 7 you have a plan, a cushion in motion and a payday habit.', share: 'I finished the 7-Day Money Reset.',
+    id: 'reset7', title: '7-Day Money Reset', blurb: 'One short read and one small action a day. By day 7 you have a plan, an emergency fund in motion and a weekly habit.', share: 'I finished the 7-Day Money Reset.',
     days: [
       { title: 'Find your number', read: ['Most of us don\u2019t have a spending problem as much as a seeing problem. Money leaves in small, quiet amounts, and we never add it up.', 'Today you only have to look. What comes in each paycheck, and what already has a job? No judgment. You can\u2019t change what you can\u2019t see.', 'Open your Payday Plan and read every line. Notice what surprises you.'], action: ['See my Payday Plan', 'plan'] },
       { title: 'Sort your spending', read: ['A need keeps you housed, fed, healthy and getting to work. A want makes life more fun. Both are fine. Problems start when wants hide inside needs.', 'Today you\u2019ll sort your own spending, store by store. You decide what\u2019s a need. Be honest, not harsh.'], action: ['Sort my spending', 'spend'] },
       { title: 'Wants, on purpose', read: ['Cutting every want rarely lasts. What lasts is choosing your wants ahead of time, so the money you spend on fun is money you meant to spend.', 'Pick a monthly fun-money number you can live with. The difference between that and last month is money found.'], action: ['Set my fun money', 'fun'] },
-      { title: 'Your $1,000 cushion', read: ['The first thing to build is a small wall between you and life. A flat tire or a vet bill shouldn\u2019t go on a credit card.', 'That wall is $1,000. Not forever, just first. Add what you have saved today. If you\u2019re not there yet, finishing today unlocks Challenges, and the Cushion Sprint gets you there faster than you think.'], action: ['Add my savings', 'savings'] },
+      { title: 'Your $1,000 emergency fund', read: ['The first thing to build is a small wall between you and life. A flat tire or a vet bill shouldn\u2019t go on a credit card.', 'That wall is $1,000. Not forever, just first. Add what you have saved today. If you\u2019re not there yet, finishing today unlocks Challenges, and the Emergency Fund Sprint gets you there faster than you think.'], action: ['Add my savings', 'savings'] },
       { title: 'Smallest debt first', read: ['List every debt, smallest balance to largest. Pay minimums on everything, then throw every extra dollar at the smallest one.', 'It isn\u2019t always the cheapest math, but it\u2019s the math people finish. Quick wins build momentum, and each paid-off payment rolls into the next.'], action: ['Check my debts', 'debts'] },
       { title: 'Name your dream', read: ['Saying no is easier when you know what you\u2019re saying yes to. A trip, a car that runs, a Christmas without a credit card.', 'Name one goal and give it a dollar amount. We\u2019ll give it a date.'], action: ['Add a goal', 'goalnew'] },
-      { title: 'Make it a payday habit', read: ['Plans don\u2019t fail on day one. They fail on the third payday, when life gets busy.', 'Put your payday check-ins on your calendar. Two minutes, every payday: update your balances, watch your date move and celebrate the win.'], action: ['Set up my payday habit', 'habit'] }
+      { title: 'Make it a weekly habit', read: ['Plans don\u2019t fail on day one. They fail in week three, when life gets busy.', 'Once a week, take ten minutes: categorize your purchases, update your balances and read your weekly recap. Do all three and your streak grows.'], action: ['Start my weekly habit', 'habit'] }
     ]
   }];
   function planDef(id) { return PLANS.filter(function (p) { return p.id === id; })[0]; }
@@ -426,7 +392,7 @@
 
   var api = { CUSHION: CUSHION, PLANS: PLANS, planDef: planDef, planStatus: planStatus, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
     CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
-    nextAfter: nextAfter, paydayFor: paydayFor, applyCheckin: applyCheckin, streakView: streakView, winsBetween: winsBetween, freedomDate: freedomDate,
+    nextAfter: nextAfter, winsBetween: winsBetween, freedomDate: freedomDate,
     cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
     BUDGET: BUDGET, groupFor: groupFor, billMonthly: billMonthly, billGroups: billGroups,
     plan: plan, perCheck: perCheck, stateFrom: stateFrom, smallest: smallest, paycheck: paycheck, paychecksUntil: paychecksUntil, outlook: outlook };

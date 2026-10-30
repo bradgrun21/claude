@@ -1,4 +1,4 @@
-// Find Me the Money: payday reminders.
+// Find Me the Money: bill reminders.
 // Runs every hour (see supabase/reminders.sql). For each saved plan whose person turned reminders on,
 // it checks the local time in their time zone, works out what is due today, and sends at most one
 // reminder a day through OneSignal. Messages never include amounts, names or anything from the budget.
@@ -11,19 +11,12 @@
 //   TEST_USER_IDS        comma-separated account ids that get real messages in test mode
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 
-// --- due logic start (kept in step with core.js and app.js; tested by tests/reminders.test.js)
-const FREQ_DAYS: Record<string, number> = { weekly: 7, biweekly: 14, semimonthly: 365 / 24, monthly: 365 / 12 };
+// --- due logic start (kept in step with core.js and app.js)
 const DAY = 86400000;
 function fromIso(s: string) { const p = String(s).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
 function isoDay(d: Date) { return d.toISOString().slice(0, 10); }
 function addDays(d: Date, n: number) { return new Date(d.getTime() + Math.round(n) * DAY); }
 function daysBetween(a: Date, b: Date) { return Math.round((fromIso(isoDay(b)).getTime() - fromIso(isoDay(a)).getTime()) / DAY); }
-// the next payday on or after today (same rule as rollPayday in core.js)
-function rollPayday(iso: string, freq: string, today: Date) {
-  let d = fromIso(iso); const step = FREQ_DAYS[freq] || 14;
-  while (daysBetween(today, d) < 0) d = addDays(d, step);
-  return isoDay(d);
-}
 // is a bill due on this exact day (same rules as billDates in app.js)
 function dueOn(due: string, rep: string, day: Date) {
   if (!due) return false;
@@ -35,16 +28,12 @@ function dueOn(due: string, rep: string, day: Date) {
   const dim = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate();
   return day.getUTCDate() === Math.min(start.getUTCDate(), dim);
 }
-// what to say today, most important first; at most one
+// what to say today; at most one
 // deno-lint-ignore no-explicit-any
 function pick(data: any, today: Date): { kind: string; title: string; body: string } | null {
   const r = data && data.remind; if (!r || !r.on || !data.setupDone) return null;
-  if (r.payday !== false && data.nextPay && rollPayday(data.nextPay, data.freq || 'biweekly', today) === isoDay(today)) {
-    const n = data.streak && data.streak.count ? data.streak.count : 0;
-    return { kind: 'payday', title: 'It’s payday!', body: n ? 'Two minutes to check in and make it ' + (n + 1) + ' paydays in a row.' : 'Two minutes to check in and start your streak.' };
-  }
   const tomorrow = addDays(today, 1);
-  if (r.bills !== false && (data.bills || []).some((b: { due?: string; rep?: string }) => b.due && dueOn(b.due, b.rep || 'monthly', tomorrow)))
+  if (r.bills !== false && (data.bills || []).some((b: { due?: string; rep?: string; freq?: string }) => b.due && dueOn(b.due, b.freq || b.rep || 'monthly', tomorrow)))
     return { kind: 'bills', title: 'A bill is due tomorrow', body: 'Open your plan to see what’s coming up.' };
   return null;
 }

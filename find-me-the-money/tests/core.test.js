@@ -68,42 +68,6 @@ test('A missed payday rolls forward on schedule', () => {
 });
 
 // ---------- streaks and wins ----------
-test('A check-in counts from the day before payday', () => {
-  assert.strictEqual(C.paydayFor('2026-10-25', 'biweekly', new Date(2026, 9, 23)), null);
-  assert.strictEqual(C.paydayFor('2026-10-25', 'biweekly', new Date(2026, 9, 24)), '2026-10-25');
-  assert.strictEqual(C.paydayFor('2026-10-25', 'biweekly', new Date(2026, 10, 9)), '2026-11-08');
-});
-test('On-time paydays build the streak; every 4th earns a grace pass; milestones fire', () => {
-  let st = {}, r, day = new Date(2026, 9, 25);
-  const seen = [];
-  for (let i = 0; i < 6; i++) {
-    const pd = C.isoDay(C.addDays(day, i * 14));
-    r = C.applyCheckin(st, pd, pd, 'biweekly'); st = r.st;
-    if (r.out.milestone) seen.push(r.out.milestone);
-    if (i === 3) assert.ok(r.out.earnedGrace, 'grace pass at 4');
-  }
-  assert.strictEqual(st.count, 6); assert.strictEqual(st.grace, 1); assert.deepStrictEqual(seen, [3, 6]);
-});
-test('A missed payday uses the grace pass instead of breaking the streak', () => {
-  const st = { count: 4, best: 4, grace: 1, lastPayday: '2026-10-25' };
-  const r = C.applyCheckin(st, '2026-11-22', '2026-11-22', 'biweekly');
-  assert.strictEqual(r.out.usedGrace, 1); assert.strictEqual(r.st.count, 5); assert.strictEqual(r.st.grace, 0);
-});
-test('Missing a payday with no grace pass starts a new streak (best is kept)', () => {
-  const r = C.applyCheckin({ count: 5, best: 5, grace: 0, lastPayday: '2026-10-25' }, '2026-11-22', '2026-11-23', 'biweekly');
-  assert.ok(r.out.broke); assert.strictEqual(r.st.count, 1); assert.strictEqual(r.st.best, 5);
-});
-test('Checking in twice for the same payday does not double count', () => {
-  const r = C.applyCheckin({ count: 2, best: 2, grace: 0, lastPayday: '2026-10-25' }, '2026-10-25', '2026-10-26', 'biweekly');
-  assert.ok(r.repeat); assert.strictEqual(r.st.count, 2);
-});
-test('Streak view: active, due, then paused after the window closes', () => {
-  const st = { count: 3, best: 3, grace: 0, lastPayday: '2026-10-11' };
-  assert.strictEqual(C.streakView(st, '2026-10-25', 'biweekly', new Date(2026, 9, 19)).state, 'active');
-  assert.strictEqual(C.streakView(st, '2026-10-25', 'biweekly', new Date(2026, 9, 25)).state, 'due');
-  const v = C.streakView(st, '2026-10-25', 'biweekly', new Date(2026, 9, 28));
-  assert.strictEqual(v.state, 'paused'); assert.strictEqual(v.count, 0); assert.strictEqual(v.best, 3);
-});
 test('Wins: debt paid down and money saved since the last check-in', () => {
   const w = C.winsBetween({ debts: { a: 850, b: 420 }, savings: 400, goals: { g: 0 } }, { debts: { a: 800, b: 0, c: 300 }, savings: 650, goals: { g: 30 } });
   assert.strictEqual(w.debtPaid, 470); assert.strictEqual(w.saved, 280);

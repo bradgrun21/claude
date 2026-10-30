@@ -39,9 +39,28 @@ create policy "activity own delete" on public.activity for delete using (auth.ui
 
 -- For Brad only: one row per person. It lives in its own schema, which the app can't reach.
 -- See it in Table Editor (pick the "admin" schema at the top) or with: select * from admin.people_overview;
+-- Weeks count when all 3 weekly steps are done (categorize, update balances, read the recap); the app sends
+-- "week-done" once for each. Weeks run Sunday to Saturday, Arizona time.
 create schema if not exists admin;
 revoke all on schema admin from anon, authenticated;
-create or replace view admin.people_overview as
+drop view if exists admin.people_overview;
+create view admin.people_overview as
+with now_az as (
+  select (now() at time zone 'America/Phoenix')::date as d
+), this_week as (
+  select d - extract(dow from d)::int as ws from now_az
+), weeks as (
+  select distinct user_id, d - extract(dow from d)::int as ws
+  from (select user_id, (at at time zone 'America/Phoenix')::date as d from public.activity where event = 'week-done') x
+), runs as (
+  select user_id, count(*) as n, max(ws) as last_ws
+  from (select user_id, ws, ws - (7 * row_number() over (partition by user_id order by ws))::int as g from weeks) i
+  group by user_id, g
+), streaks as (
+  select r.user_id, sum(r.n) as weeks_done, max(r.n) as best_week_streak,
+    max(case when r.last_ws >= t.ws - 7 then r.n else 0 end) as week_streak
+  from runs r cross join this_week t group by r.user_id
+)
 select
   p.first_name,
   coalesce(p.email, u.email) as email,
@@ -50,7 +69,9 @@ select
   p.created_at::date as joined,
   p.last_seen,
   (now()::date - p.last_seen::date) as days_since_seen,
-  count(a.*) filter (where a.event ~ '^checkin-[0-9]+$') as checkins,
+  coalesce(s.week_streak, 0) as week_streak,
+  coalesce(s.weeks_done, 0) as weeks_done,
+  coalesce(s.best_week_streak, 0) as best_week_streak,
   count(a.*) filter (where a.event like 'lesson-%') as lessons_done,
   count(a.*) filter (where a.event like 'quiz-pass-%') as quizzes_passed,
   count(a.*) filter (where a.event = 'scan-save') as weeks_scanned,
@@ -60,9 +81,10 @@ select
   max(a.at) as last_activity
 from public.people p
 left join auth.users u on u.id = p.user_id
+left join streaks s on s.user_id = p.user_id
 left join public.activity a on a.user_id = p.user_id
-group by p.user_id, p.first_name, p.email, u.email, p.marketing_opt_in, p.step, p.created_at, p.last_seen
-order by p.last_seen desc;
+group by p.user_id, p.first_name, p.email, u.email, p.marketing_opt_in, p.step, p.created_at, p.last_seen, s.week_streak, s.weeks_done, s.best_week_streak
+order by coalesce(s.week_streak, 0) desc, p.last_seen desc;
 
 -- For your email tool: only people who said yes.
 create or replace view admin.email_list as
