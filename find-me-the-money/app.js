@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30u';
+  var APP_VERSION = '10-30v';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
 
@@ -764,6 +764,9 @@
   // ---------- Meal Math: what home-cooked meals cost, a week of breakfasts, lunches and dinners, and what eating
   // at home saved. Prices are the family's own (no price lookups). Data lives in the plan, so backups and sync carry it:
   //   P.pantryItems: { id, name, emoji, price|null, packageAmount, unit, updatedAt }
+  //   a meal can also carry recipePhotos: [page ids, up to 3] and recipeUrl (a recipe page or video).
+  //   The pages themselves live in this phone's IndexedDB (fmtm-recipes), not in the plan: the plan is kept twice in
+  //   localStorage (about 5 MB in all) and sent whole to the cloud on every change, so a few photos would fill it.
   //   P.meals: { id, name, emoji, color, plates, eatingOutCost|null, photo, items: [{ pantryItemId, amountUsed, alreadyHave }], createdAt }
   //   P.planEntries: { id, date, slot: breakfast|lunch|dinner, type: meal|leftovers|eatOut, mealId, budget, createdAt }
   // No suggestion buttons in this feature: it shows what was saved, never what to do with it.
@@ -843,7 +846,7 @@
   }
   function mmEntryRow(e) {
     var em, name, sub, bg = '', s = mmSlot(e.slot);
-    if (e.type === 'meal') { var m = mmMeal(e.mealId); if (!m) return ''; var c = mmCalc(m); em = mmTile(m); bg = 'background:' + mmTint(m.color); name = esc(m.name); sub = mm$(c.plate) + ' a plate' + (c.saves > 0 ? ' · <b>saves ' + mm$(c.saves) + '</b>' : ''); }
+    if (e.type === 'meal') { var m = mmMeal(e.mealId); if (!m) return ''; var c = mmCalc(m); em = mmTile(m); bg = 'background:' + mmTint(m.color); name = esc(m.name); sub = mm$(c.plate) + ' a plate' + (c.saves > 0 ? ' · <b>saves ' + mm$(c.saves) + '</b>' : '') + (mmHasRecipe(m) ? ' · 📖' : ''); }
     else if (e.type === 'leftovers') { em = '🥡'; name = 'Leftovers'; sub = 'Already paid for'; }
     else { em = '🍔'; name = 'Eat out'; sub = mmW(e.budget) + ' budget'; }
     return '<button type="button" class="mm-entry" data-mm-slot="' + e.date + '|' + e.slot + '"><span class="mm-sl">' + s[2] + ' ' + s[1] + '</span><span class="mm-em" style="' + bg + '">' + em + '</span><span class="mm-mid"><span class="mm-n">' + name + '</span><span class="mm-s">' + sub + '</span></span><span class="mm-chev">›</span></button>';
@@ -897,8 +900,91 @@
       '<div class="mm-h2">Ingredients' + (d.items.length ? ' · ' + d.items.length : '') + '</div>' +
       '<div class="mm-ings">' + (d.items.length ? d.items.map(mmIrow).join('') : '<div class="mm-empty">Tap + to add your first ingredient</div>') + '</div>' +
       '<button type="button" class="mm-addbtn" data-mm-addi><span class="mm-plus">+</span> Add ingredient</button>' +
+      mmRecipeEdit(d) +
       (d.id ? '<button type="button" class="mm-del" data-mm-del>Delete meal</button>' : '') +
       '<div class="mm-bar" id="mmbar">' + mmBarHtml() + '</div>';
+  }
+  // ----- the recipe: photos of the page (to read while cooking) and/or a link to a recipe or video -----
+  var MM_PAGES = 3;
+  function mmHasRecipe(m) { return !!(m && ((m.recipePhotos && m.recipePhotos.length) || mmSafeUrl(m.recipeUrl))); }
+  function mmSafeUrl(u) {
+    u = String(u || '').trim(); if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+    try { var x = new URL(u); return /^https?:$/.test(x.protocol) && x.hostname.indexOf('.') > 0 ? x.href : ''; } catch (e) { return ''; }
+  }
+  function mmIsVideo(u) { return /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|vimeo\.com|facebook\.com|fb\.watch)$/i.test((function () { try { return new URL(u).hostname; } catch (e) { return ''; } })()); }
+  function mmLinkBtn(u) { var v = mmIsVideo(u); return '<a class="mm-btn ghost mm-rlink" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" data-mm-rgo>' + (v ? '▶️ Watch the video' : '🔗 Open the recipe') + '</a>'; }
+  function mmRecipeEdit(d) {
+    var pages = d.recipePhotos || [], url = mmSafeUrl(d.recipeUrl);
+    return '<div class="mm-h2">📖 Recipe</div><div class="mm-recipe">' +
+      (pages.length ? '<div class="mm-pages">' + pages.map(function (id, i) { return '<span class="mm-page"><button type="button" class="mm-pagebtn" data-mm-rview="' + i + '" aria-label="Open recipe page ' + (i + 1) + '"><img data-rid="' + esc(id) + '" alt=""></button><button type="button" class="mm-pagex" data-mm-rdel="' + i + '" aria-label="Remove recipe page ' + (i + 1) + '">✕</button></span>'; }).join('') + '</div>' : '') +
+      (pages.length < MM_PAGES ? '<label class="mm-addbtn mm-rbtn">📷 ' + (pages.length ? 'Add another page' : 'Take a picture of the recipe') + '<input type="file" accept="image/*" data-mm-rphoto class="sr"></label>' : '') +
+      '<label class="mm-field"><span class="mm-lab">🔗 Recipe or video link</span><input class="mm-in" data-mm-f="recipeUrl" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a link" value="' + esc(d.recipeUrl || '') + '"></label>' +
+      '<div id="mmrlink">' + (url ? mmLinkBtn(url) : '') + '</div></div>';
+  }
+  // the page store: { id: JPEG data URL } in IndexedDB, with what's been read kept in memory
+  var mmRc = {}, mmDbP = null;
+  function mmDb() {
+    if (!mmDbP) mmDbP = new Promise(function (ok, no) {
+      if (!window.indexedDB) { no(new Error('no idb')); return; }
+      var r = indexedDB.open('fmtm-recipes', 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('pages'); };
+      r.onsuccess = function () { ok(r.result); }; r.onerror = function () { mmDbP = null; no(r.error); };
+    });
+    return mmDbP;
+  }
+  function mmDbDo(mode, fn) { return mmDb().then(function (db) { return new Promise(function (ok, no) { var tx = db.transaction('pages', mode), st = tx.objectStore('pages'), res = fn(st); tx.oncomplete = function () { ok(res && res.result); }; tx.onerror = tx.onabort = function () { no(tx.error); }; }); }); }
+  function mmPagePut(id, src) { return mmDbDo('readwrite', function (st) { st.put(src, id); }).then(function () { mmRc[id] = src; }); }
+  function mmPageGet(id) { return id in mmRc ? Promise.resolve(mmRc[id]) : mmDbDo('readonly', function (st) { return st.get(id); }).then(function (v) { mmRc[id] = v || null; return mmRc[id]; }, function () { return null; }); }
+  // pages no meal (or the open draft) uses any more are deleted
+  function mmPageGc() {
+    var keep = {}; mmMeals().concat(mmSt().draft ? [mmSt().draft] : []).forEach(function (m) { (m.recipePhotos || []).forEach(function (id) { keep[id] = 1; }); });
+    mmDbDo('readonly', function (st) { return st.getAllKeys(); }).then(function (keys) {
+      var gone = (keys || []).filter(function (k) { return !keep[k]; }); if (!gone.length) return;
+      gone.forEach(function (k) { delete mmRc[k]; }); return mmDbDo('readwrite', function (st) { gone.forEach(function (k) { st.delete(k); }); });
+    }).catch(function () {});
+  }
+  // fill every <img data-rid> on screen; a page taken on another phone isn't here
+  function mmFillPages(root) {
+    Array.prototype.forEach.call((root || document).querySelectorAll('img[data-rid]:not([src])'), function (img) {
+      mmPageGet(img.getAttribute('data-rid')).then(function (src) {
+        if (src) img.src = src; else { var ph = document.createElement('span'); ph.className = 'mm-nopage'; ph.textContent = '📷 On the phone that took it'; img.replaceWith(ph); }
+      });
+    });
+  }
+  // recipe pages are bigger than the meal photo so the words stay readable: about 1200px, JPEG
+  function mmRecipePhoto(file) {
+    if (!file) return;
+    var d = mmSt().draft; if (!d) return;
+    var rd = new FileReader();
+    rd.onload = function () { var img = new Image(); img.onload = function () {
+      var s = Math.min(1, 1200 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      var id = uid();
+      mmPagePut(id, c.toDataURL('image/jpeg', 0.75)).then(function () {
+        if (mmSt().draft !== d) return;
+        d.recipePhotos = (d.recipePhotos || []).concat([id]).slice(0, MM_PAGES); track('meal-recipe-photo'); render();
+      }, function () { mmToast('Couldn’t save that photo on this phone'); });
+    }; img.onerror = function () { mmToast('Couldn’t open that photo'); }; img.src = rd.result; };
+    rd.readAsDataURL(file);
+  }
+  // full screen, for cooking: pages one under another, tap a page to zoom, and the screen stays on
+  var mmWake = null;
+  function mmRecipeOpen(m, at) {
+    var pages = m.recipePhotos || [], url = mmSafeUrl(m.recipeUrl);
+    var el = document.createElement('div'); el.id = 'mmrecipe'; el.className = 'mm-rview'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Recipe');
+    el.innerHTML = '<div class="mm-rtop"><b>📖 ' + esc(m.name || 'Recipe') + '</b><button type="button" class="mm-close" data-mm-rclose aria-label="Close">✕</button></div>' +
+      '<div class="mm-rbody">' + pages.map(function (id, i) { return '<div class="mm-rimg" data-i="' + i + '"><img data-rid="' + esc(id) + '" alt="Recipe page ' + (i + 1) + '" role="button" tabindex="0" aria-label="Recipe page ' + (i + 1) + ', tap to zoom"></div>'; }).join('') +
+      (url ? '<div class="mm-rfoot">' + mmLinkBtn(url) + '</div>' : '') + '</div>';
+    document.body.appendChild(el); document.body.classList.add('mm-lock'); mmFillPages(el);
+    var close = function () { el.remove(); if (!document.getElementById('mmsheet')) document.body.classList.remove('mm-lock'); document.removeEventListener('keydown', key, true); if (mmWake) { mmWake.release().catch(function () {}); mmWake = null; } };
+    var key = function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    el.querySelector('[data-mm-rclose]').onclick = close; document.addEventListener('keydown', key, true);
+    Array.prototype.forEach.call(el.querySelectorAll('.mm-rimg'), function (b) { var z = function () { b.classList.toggle('big'); }; b.firstChild.onclick = z; b.firstChild.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); z(); } }; });
+    try { if (navigator.wakeLock) navigator.wakeLock.request('screen').then(function (w) { mmWake = w; }).catch(function () {}); } catch (e) {}
+    var first = el.querySelector('.mm-rimg[data-i="' + (at || 0) + '"]'); if (first && at) setTimeout(function () { first.scrollIntoView({ block: 'start' }); }, 30);
+    el.querySelector('[data-mm-rclose]').focus({ preventScroll: true });
+    track('meal-recipe-open');
   }
   function mmBarHtml() {
     var d = mmSt().draft, c = mmTotals(d.items, d.plates, d.eatingOutCost);
@@ -910,6 +996,7 @@
   function mealsScreen() {
     var st = mmSt();
     if (st.view === 'edit' && !st.draft) st.view = 'meals';
+    if (st.view === 'edit') setTimeout(function () { mmFillPages(app); }, 0);
     return '<div class="mm">' + (st.view === 'edit' ? mmEditView() : st.view === 'meals' ? mmMealsView() : st.view === 'pantry' ? mmPantryView() : mmWeekView()) + '</div>';
   }
   // the weekly recap's "Meals at home" section
@@ -944,6 +1031,7 @@
     return mmSheetHead('📅 Plan a meal') +
       '<div class="mm-daterow"><button type="button" class="mm-nav" data-mm-pd="-1" aria-label="Previous day">‹</button><b>' + mmDay(p.date) + (p.date === td ? ' · Today' : '') + '</b><button type="button" class="mm-nav" data-mm-pd="1" aria-label="Next day">›</button></div>' +
       '<div class="mm-slots" role="group" aria-label="Meal">' + MM_SLOTS.map(function (x) { return '<button type="button" class="mm-chip" data-mm-ps="' + x[0] + '" aria-pressed="' + (x[0] === p.slot) + '">' + x[2] + ' ' + x[1] + '</button>'; }).join('') + '</div>' +
+      (cur && cur.type === 'meal' && mmHasRecipe(mmMeal(cur.mealId)) ? '<button type="button" class="mm-btn gold mm-rsee" data-mm-rsee="' + cur.mealId + '">📖 Open the recipe</button>' : '') +
       '<div class="mm-h2">Your meals</div><div class="mm-list">' + (meals.length ? meals.map(function (x) {
         return '<button type="button" class="mm-row" data-mm-pm="' + x.m.id + '" aria-pressed="' + on('meal', x.m.id) + '"><span class="mm-em" style="background:' + mmTint(x.m.color) + '">' + mmTile(x.m) + '</span><span class="mm-mid"><span class="mm-n">' + esc(x.m.name) + '</span><span class="mm-s">' + mm$(x.c.plate) + ' a plate' + (x.c.saves > 0 ? ' · saves ' + mm$(x.c.saves) : '') + '</span></span><span class="mm-r">' + (on('meal', x.m.id) ? '✓' : '') + '</span></button>';
       }).join('') : '<div class="mm-empty">No meals yet. Add one from 🍲 Meals.</div>') + '</div>' +
@@ -1027,8 +1115,8 @@
   }
   function mmStartEdit(id, from) {
     var st = mmSt(), m = id ? mmMeal(id) : null; st.backTo = from || 'meals';
-    st.draft = m ? { id: m.id, name: m.name, emoji: m.emoji, color: m.color, plates: m.plates, eatingOutCost: m.eatingOutCost, photo: m.photo || null, items: mmLines(m).map(function (x) { x.key = uid(); return x; }) }
-      : { id: null, name: '', emoji: '🍲', color: MM_COLORS[mmMeals().length % MM_COLORS.length][1], plates: 4, eatingOutCost: null, photo: null, items: [] };
+    st.draft = m ? { id: m.id, name: m.name, emoji: m.emoji, color: m.color, plates: m.plates, eatingOutCost: m.eatingOutCost, photo: m.photo || null, recipePhotos: (m.recipePhotos || []).slice(), recipeUrl: m.recipeUrl || '', items: mmLines(m).map(function (x) { x.key = uid(); return x; }) }
+      : { id: null, name: '', emoji: '🍲', color: MM_COLORS[mmMeals().length % MM_COLORS.length][1], plates: 4, eatingOutCost: null, photo: null, recipePhotos: [], recipeUrl: '', items: [] };
     st.view = 'edit'; if (U.screen !== 'meals') go('meals'); else render(); window.scrollTo(0, 0);
   }
   function mmSaveDraft() {
@@ -1041,10 +1129,18 @@
       p.emoji = it.emoji || mmGuess(name); p.price = mmNum(it.price); p.packageAmount = mmNum(it.packageAmount); p.unit = it.unit || 'servings'; p.updatedAt = now;
       items.push({ pantryItemId: p.id, amountUsed: mmNum(it.amountUsed) || 0, alreadyHave: !!it.alreadyHave });
     });
-    var m = { name: String(d.name || '').trim() || 'Untitled meal', emoji: d.emoji, color: d.color, plates: Math.max(1, parseInt(d.plates, 10) || 1), eatingOutCost: mmNum(d.eatingOutCost), photo: d.photo || null, items: items };
-    var meal = d.id ? mmMeal(d.id) : null;
-    if (meal) { for (var k in m) meal[k] = m[k]; } else { meal = m; meal.id = uid(); meal.createdAt = now; mmMeals().push(meal); track('meal-new'); }
-    var c = mmCalc(meal); save(); st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); window.scrollTo(0, 0);
+    var m = { name: String(d.name || '').trim() || 'Untitled meal', emoji: d.emoji, color: d.color, plates: Math.max(1, parseInt(d.plates, 10) || 1), eatingOutCost: mmNum(d.eatingOutCost), photo: d.photo || null, recipePhotos: (d.recipePhotos || []).slice(0, MM_PAGES), recipeUrl: mmSafeUrl(d.recipeUrl), items: items };
+    var meal = d.id ? mmMeal(d.id) : null, before = meal ? JSON.stringify(meal) : null;
+    if (meal) { for (var k in m) meal[k] = m[k]; } else { meal = m; meal.id = uid(); meal.createdAt = now; mmMeals().push(meal); }
+    save();
+    if (!storageOk) {
+      // the phone's storage is full: put the meal back the way it was and keep the draft open
+      if (before) { var old = JSON.parse(before); Object.keys(meal).forEach(function (k) { delete meal[k]; }); Object.assign(meal, old); } else P.meals = mmMeals().filter(function (x) { return x !== meal; });
+      save(); mmToast('No room on this phone to save'); return;
+    }
+    if (!before) track('meal-new');
+    var c = mmCalc(meal);
+    setTimeout(mmPageGc, 0); st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); window.scrollTo(0, 0);
     mmToast('🎉 Saved · ' + mm$(c.plate) + ' a plate');
   }
   // a photo, shrunk to about 700px on its long side and kept as a JPEG in the plan
@@ -1080,10 +1176,10 @@
     if (has('out')) { var cur = mmEntry(sh.date, sh.slot); sh.outOpen = true; sh.budget = cur && cur.type === 'eatOut' ? cur.budget : ''; mmSheetDraw(); setTimeout(function () { var el = document.getElementById('mmOut'); if (el) el.focus(); }, 40); return; }
     if (has('saveout')) { mmSetEntry({ type: 'eatOut', budget: sh.budget }); return; }
     if (has('clear')) { var p = sh; P.planEntries = mmPlan().filter(function (x) { return !(x.date === p.date && x.slot === p.slot); }); save(); mmClose(true); mmToast('Cleared ' + mmSlot(p.slot)[1].toLowerCase()); return; }
-    if (has('back')) { st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); return; }
+    if (has('back')) { st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); mmPageGc(); return; }
     if (has('save')) { mmSaveDraft(); return; }
     if (has('del')) {
-      if (t.getAttribute('data-sure')) { var id = d.id; P.meals = mmMeals().filter(function (m) { return m.id !== id; }); P.planEntries = mmPlan().filter(function (x) { return x.mealId !== id; }); save(); st.draft = null; st.view = 'meals'; render(); mmToast('Meal deleted'); }
+      if (t.getAttribute('data-sure')) { var id = d.id; P.meals = mmMeals().filter(function (m) { return m.id !== id; }); P.planEntries = mmPlan().filter(function (x) { return x.mealId !== id; }); save(); st.draft = null; st.view = 'meals'; render(); mmToast('Meal deleted'); mmPageGc(); }
       else { t.setAttribute('data-sure', '1'); t.textContent = 'Tap again to delete'; }
       return;
     }
@@ -1091,6 +1187,9 @@
     if (has('look')) { mmOpen({ type: 'look' }); return; }
     if (a('me')) { d.emoji = a('me'); d.photo = null; render(); mmSheetDraw(); return; }
     if (a('color')) { d.color = a('color'); render(); mmSheetDraw(); return; }
+    if (a('rview')) { mmRecipeOpen(d, +a('rview')); return; }
+    if (a('rdel')) { d.recipePhotos = (d.recipePhotos || []).filter(function (x, i) { return i !== +a('rdel'); }); render(); return; }
+    if (a('rsee')) { mmRecipeOpen(mmMeal(a('rsee')) || {}, 0); return; }
     if (has('nophoto')) { d.photo = null; render(); mmSheetDraw(); return; }
     if (has('addi')) { mmOpen({ type: 'pick', q: '' }); setTimeout(function () { var q = document.getElementById('mmQ'); if (q) q.focus(); }, 60); return; }
     if (has('newing')) { var qq = String(sh.q || '').trim(); qq = qq.charAt(0).toUpperCase() + qq.slice(1); mmOpenItem('meal', { name: qq, emoji: mmGuess(qq) }); return; }
@@ -1111,11 +1210,19 @@
     if (e.key === 'Escape') mmClose(true);
     if (e.key === 'Enter' && e.target.id === 'mmOut') { e.preventDefault(); mmSetEntry({ type: 'eatOut', budget: sh.budget }); }
   });
-  document.addEventListener('change', function (e) { if (e.target.hasAttribute && e.target.hasAttribute('data-mm-photo')) { mmPhoto(e.target.files && e.target.files[0]); e.target.value = ''; } });
+  document.addEventListener('change', function (e) {
+    if (!e.target.hasAttribute) return;
+    if (e.target.hasAttribute('data-mm-photo')) { mmPhoto(e.target.files && e.target.files[0]); e.target.value = ''; }
+    if (e.target.hasAttribute('data-mm-rphoto')) { mmRecipePhoto(e.target.files && e.target.files[0]); e.target.value = ''; }
+  });
   function mmBar() { var b = document.getElementById('mmbar'); if (b) b.innerHTML = mmBarHtml(); }
   document.addEventListener('input', function (e) {
     var t = e.target, st = mmSt(), sh = st.sheet;
-    if (t.hasAttribute && t.hasAttribute('data-mm-f') && st.draft) { st.draft[t.getAttribute('data-mm-f')] = t.value; mmBar(); return; }
+    if (t.hasAttribute && t.hasAttribute('data-mm-f') && st.draft) {
+      st.draft[t.getAttribute('data-mm-f')] = t.value;
+      if (t.getAttribute('data-mm-f') === 'recipeUrl') { var rl = document.getElementById('mmrlink'), u = mmSafeUrl(t.value); if (rl) rl.innerHTML = u ? mmLinkBtn(u) : ''; } else mmBar();
+      return;
+    }
     if (!sh) return;
     if (t.id === 'mmOut') { sh.budget = t.value; return; }
     if (t.id === 'mmQ') { sh.q = t.value; document.getElementById('mmPickList').innerHTML = mmPickList(); return; }

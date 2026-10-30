@@ -1354,3 +1354,25 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 @keyframes mmpop { from { transform: translate(-50%, 10px); opacity: 0; } }
 @media (max-width: 360px) { .mm-bar-in { grid-template-columns: 1fr 1fr 1fr; } .mm-bar-in .mm-save { grid-column: 1 / -1; } .mm-grid { grid-template-columns: repeat(6, 1fr); } .mm-entry { grid-template-columns: 40px minmax(0, 1fr) auto; } .mm-sl { display: none; } }
 @media (prefers-reduced-motion: reduce) { .mm-panel, .mm-toast { animation: none; } }
+
+/* Meal Math: recipe photos and link */
+.mm-recipe { display: grid; gap: 12px; }
+.mm-pages { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; }
+.mm-pages::-webkit-scrollbar { display: none; }
+.mm-page { position: relative; flex: none; }
+.mm-pagebtn { display: block; width: 92px; height: 120px; border: 0; padding: 0; border-radius: 12px; overflow: hidden; background: var(--card2); cursor: pointer; }
+.mm-pagebtn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mm-pagex { position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--bg); background: var(--card2); color: var(--ink); font-size: 12px; font-weight: 800; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.mm-rbtn { margin-top: 0; position: relative; }
+.mm-rlink { width: 100%; text-decoration: none; }
+.mm-rsee { width: 100%; margin-top: 12px; }
+.mm-rview { position: fixed; inset: 0; z-index: 80; background: #0d0d0d; display: flex; flex-direction: column; }
+.mm-rtop { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; border-bottom: 1px solid #262626; }
+.mm-rtop b { font-size: 17px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-rbody { flex: 1; grid-template-columns: minmax(0, 1fr); overflow: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px calc(20px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; align-content: start; }
+.mm-rimg { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; width: 100%; }
+.mm-rimg img { width: 100%; display: block; border-radius: 12px; cursor: zoom-in; }
+.mm-rimg.big img { cursor: zoom-out; }
+.mm-rimg.big img { width: 220%; max-width: none; }
+.mm-rfoot { padding-top: 4px; }
+.mm-nopage { display: grid; place-items: center; width: 100%; height: 100%; min-height: 120px; padding: 8px; text-align: center; font-size: 12px; color: var(--muted); background: var(--card2); border-radius: 12px; }
