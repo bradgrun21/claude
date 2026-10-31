@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31e';
+  var APP_VERSION = '10-31f';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -18,6 +18,7 @@
     // Payday reminders (OneSignal web push). The App ID is public; the key that sends lives only in Supabase.
     oneSignalAppId: '3c20b5fb-493d-4da3-b894-fdc3d9614d3b',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
+    supportEmail: '', // TODO(Brad): your support email, for "Message Brad" on the chat's care card and the privacy page (until then: the community link)
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
     coachingUrl: 'https://www.skool.com/find-me-the-money-1929/plans?src=join', // where "Learn about coaching" goes (paid level or booking page); empty uses the community link
@@ -609,7 +610,7 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Snap or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
+    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Snap or type them'], ['chatopen', '\uD83D\uDCAC', 'Tell me what you spent', 'Type it like you’d say it'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
       return '<button type="button" role="menuitem" data-a="' + x[0] + '"><span class="plusic" aria-hidden="true">' + x[1] + '</span><span class="plustx"><b>' + x[2] + '</b><small>' + x[3] + '</small></span></button>'; }).join('') + '</div>';
   }
@@ -1380,6 +1381,7 @@
     if (e.key === 'Enter' && e.target.id === 'mmOut') { e.preventDefault(); mmSetEntry({ type: 'eatOut', budget: sh.budget }); }
   });
   document.addEventListener('submit', function (e) {
+    if (e.target.hasAttribute && e.target.hasAttribute('data-chatform')) { e.preventDefault(); var ci = document.getElementById('chatIn'); chatSend(ci ? ci.value : ''); return; }
     if (!e.target.hasAttribute || !e.target.hasAttribute('data-mm-gform')) return;
     e.preventDefault();
     var inp = document.getElementById('mmGAdd'), name = String(inp && inp.value || '').trim().slice(0, 60); if (!name) return;
@@ -1961,6 +1963,139 @@
         aiStatus(true); render();
       });
     });
+  }
+  // ---------- chat: "HEB 84.20 groceries and 12 at Sonic yesterday" ----------
+  // Cheap first: entry.js reads plain purchases on the phone (no AI, never counts). Only what it can't read goes to the
+  // ai function, which answers with proposed actions. Every action is a card with Confirm / Edit / Skip and nothing
+  // changes until Confirm. The only sentences shown are Brad's (FMTMAI.REPLIES and CHAT_SAY) and the person's own words.
+  var CHAT_AI_WORDS = /\b(balance|savings|checking|account|grateful|thankful|should|how much|left|spend today|spent nothing|nothing today|didn'?t|did not|lesson|debt|credit card|eat(ing)? out|invest\w*|401k|crypto)\b|\?/i;
+  var CHAT_SAY = {
+    signin: 'Sign in to use chat. A purchase typed like “HEB 84.20” still works.',
+    paused: 'Chat is resting until the 1st. A purchase typed like “HEB 84.20” still works.',
+    limit: 'You’ve used this month’s chat messages. A purchase typed like “HEB 84.20” still works.',
+    slow: 'One moment. Try that again in a minute.',
+    error: 'That didn’t go through. Try again.'
+  };
+  // the accounts a balance can go to: emergency savings, saving funds, goals, debts
+  function chatAccounts() {
+    return [{ k: 'savings', label: 'Emergency savings' }].concat(funds().map(function (f) { return { k: 'fund:' + f.id, label: f.name || 'Fund' }; }),
+      (P.goals || []).map(function (g, i) { return { k: 'goal:' + i, label: g.name || 'Goal' }; }), (P.debts || []).map(function (d) { return { k: 'debt:' + d.id, label: d.name || 'Debt' }; }));
+  }
+  function chatMatch(hint) {
+    var w = String(hint || '').toLowerCase().split(/[^a-z0-9]+/).filter(function (x) { return x.length > 2 && !/^(the|my|account|balance)$/.test(x); });
+    var hits = chatAccounts().filter(function (a) { var l = a.label.toLowerCase(); return w.some(function (x) { return l.indexOf(x) >= 0; }); });
+    return hits.length === 1 ? hits[0].k : '';
+  }
+  // what's left this month in each spending line (the app answers "how much is left"; the AI never does the math)
+  function chatLeft() {
+    var ym = monthOf(F.isoDay(today())), m = spentMap(ym);
+    return spendLines().filter(function (l) { return l.grp === 'spend'; }).map(function (l) { return { key: l.key, label: l.label, icon: l.icon, left: round2((l.per === 'week' ? l.amt * weeksIn(today().getFullYear(), today().getMonth()) : l.mon) - (m[l.key] || 0)) }; });
+  }
+  function chatCard(a) {
+    var c = { id: uid(), a: a, state: 'open' };
+    if (a.type === 'add_purchase') { var mem = (P.merchantMem || {})[merchKey(a.merchant)]; c.key = mem || a.category_key || suggestKey(a.merchant, spendLines()).key || ''; }
+    if (a.type === 'update_balance') c.acct = chatMatch(a.account_hint);
+    if (a.type === 'how_much_left') c.state = 'info';
+    return c;
+  }
+  function chatSend(text) {
+    text = String(text || '').trim().slice(0, FMTMAI.CHAT_MAX); if (!text) return;
+    var st = U.chat = { text: text, cards: [], busy: false, reply: '', report: '' };
+    // hard money stress: no logging, a calm card instead (checked here before any AI, so it works even when AI is off)
+    if (FMTMAI.needsCare(text)) { st.reply = 'care'; track('chat-care'); render(); return; }
+    if (!CHAT_AI_WORDS.test(text)) {
+      var rows = FMTMEntry.parseTyped(FMTMAI.maskDigits(text), today());
+      if (rows.length) { st.cards = rows.map(function (r) { return chatCard({ type: 'add_purchase', date: r.date, merchant: r.merchant, amount: r.amount, category_key: null }); }); track('chat-local'); render(); return; }
+    }
+    if (!S) { st.reply = 'signin'; render(); return; }
+    st.busy = true; render(); track('chat-ai');
+    aiCall('chat', { text: FMTMAI.maskDigits(text), categories: aiCats(), budgetLeft: chatLeft().map(function (x) { return { key: x.key, left: x.left }; }), today: F.isoDay(today()) }).then(function (r) {
+      r = r || {}; st.busy = false;
+      if (r.paused) st.reply = 'paused';
+      else if (r.limitReached) { st.reply = 'limit'; track('chat-limit'); }
+      else if (r.slow) st.reply = 'slow';
+      else (r.actions || []).forEach(function (a) {
+        if (a.type === 'reply') { st.reply = a.topic; if (a.topic === 'care') track('chat-care'); }
+        else if (a.type === 'refused') st.reply = 'old_date';
+        else st.cards.push(chatCard(a));
+      });
+      if (!st.reply && !st.cards.length) st.reply = 'unclear';
+      if (U.chat === st) render();
+    }, function (er) { st.busy = false; st.reply = er && (er.status === 401 || er.message === 'signed out') ? 'signin' : 'error'; if (U.chat === st) render(); });
+  }
+  var CHAT_ITEM = { debt: ['💳', 'No new debt today'], eat: ['🍽️', 'No eating out today'], lesson: ['🎧', 'I did today’s lesson'] };
+  function chatCardHtml(c, i) {
+    var a = c.a, td = F.isoDay(today()), line = '', extra = '', btns = true;
+    if (c.state === 'skipped') return '';
+    if (a.type === 'add_purchase') {
+      if (c.edit) line = '<div class="chatedit"><label>$<input type="number" inputmode="decimal" step="0.01" data-cc="' + i + '" data-ccf="amount" value="' + esc(a.amount) + '" aria-label="Amount"></label><input type="text" data-cc="' + i + '" data-ccf="merchant" value="' + esc(a.merchant) + '" maxlength="40" aria-label="Store"><input type="date" data-cc="' + i + '" data-ccf="date" value="' + esc(a.date) + '" aria-label="Date"></div>';
+      else line = '🧾 <b>' + esc(a.merchant) + '</b> · ' + money2(a.amount) + ' · ' + chDate(a.date);
+      var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
+      extra = '<select data-cckey="' + i + '" aria-label="Category"' + (c.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) { var m = lines.filter(function (l) { return l.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === c.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : ''; }).join('') + '</select>';
+      // big or old: just checking
+      if (a.amount > 1000 || (a.date && F.daysBetween(F.fromIso(a.date), today()) > 14)) extra += '<p class="chatwarn">Just checking: ' + money2(a.amount) + ' on ' + chDate(a.date) + '?</p>';
+    } else if (a.type === 'no_spend_today') line = '✅ <b>No spend today</b>';
+    else if (a.type === 'check_daily_item') line = CHAT_ITEM[a.item][0] + ' <b>' + CHAT_ITEM[a.item][1] + '</b>';
+    else if (a.type === 'gratitude') line = '🙏 <b>“' + esc(a.text) + '”</b>';
+    else if (a.type === 'update_balance') {
+      var acct = chatAccounts().filter(function (x) { return x.k === c.acct; })[0];
+      line = '💰 <b>' + (acct ? esc(acct.label) : 'Which account?') + '</b> · ' + money2(a.amount);
+      if (!acct) { extra = '<div class="chatpick">' + chatAccounts().map(function (x) { return '<button type="button" class="chmini" data-a="chatacct" data-v="' + i + '|' + esc(x.k) + '">' + esc(x.label) + '</button>'; }).join('') + '</div>'; }
+    } else if (a.type === 'how_much_left') {
+      var cl = chatLeft().filter(function (x) { return x.key === a.category_key; })[0]; btns = false;
+      line = cl ? cl.icon + ' <b>' + esc(cl.label) + '</b>: ' + (cl.left < 0 ? money2(-cl.left) + ' over this month' : money2(cl.left) + ' left this month') : 'That category isn’t in your budget.';
+    }
+    if (c.state === 'done') return '<div class="chatcard done"><span class="chatok">✓</span><span>' + line + '</span></div>';
+    return '<div class="chatcard"><div>' + line + '</div>' + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') +
+      (btns ? '<div class="chatbtns"><button type="button" class="chmini gold" data-a="chatok" data-v="' + i + '">Confirm</button>' + (a.type === 'add_purchase' ? '<button type="button" class="chmini" data-a="chatedit" data-v="' + i + '">' + (c.edit ? 'Done' : 'Edit') + '</button>' : '') + '<button type="button" class="chmini" data-a="chatskip" data-v="' + i + '">Skip</button></div>' : '') + '</div>';
+  }
+  function chatArea() {
+    var st = U.chat, body = '';
+    if (st) {
+      var say = st.reply ? (FMTMAI.REPLIES[st.reply] || CHAT_SAY[st.reply] || '') : '';
+      body = '<div class="chatyou">' + esc(FMTMAI.maskDigits(st.text)) + '</div>' +
+        (st.busy ? '<div class="chatcard"><span class="spin" aria-hidden="true"></span> Reading…</div>' : '') +
+        (st.reply === 'care' ? '<div class="chatcard care"><p>' + esc(say) + '</p><div class="chatbtns"><a class="chmini gold" href="tel:988">Call 988</a><a class="chmini" href="sms:988">Text 988</a>' +
+            (CONFIG.supportEmail ? '<a class="chmini" href="mailto:' + esc(CONFIG.supportEmail) + '">Message Brad</a>' : CONFIG.communityUrl ? '<a class="chmini" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener">Message Brad</a>' : '') + '</div></div>'
+          : say ? '<div class="chatcard reply"><p>' + esc(say) + '</p>' + (st.reply === 'advice' ? '<div class="chatbtns">' + (CONFIG.communityUrl ? '<a class="chmini gold" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Free community</a>' : '') + (CONFIG.coachingUrl ? '<a class="chmini" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Coaching</a>' : '') + '</div>' : '') + '</div>' : '') +
+        st.cards.map(chatCardHtml).join('') +
+        (st.cards.length && !st.busy ? (st.report === 'open' ? '<div class="chatcard"><p>Send this to Brad? He’ll see your message and what came back.</p><div class="chatbtns"><button type="button" class="chmini gold" data-a="chatreport" data-v="send">Send</button><button type="button" class="chmini" data-a="chatreport" data-v="no">Cancel</button></div></div>'
+          : st.report === 'sent' ? '<small class="chatfoot">Sent. Thanks.</small>' : '<button type="button" class="linkbtn chatwrong" data-a="chatreport" data-v="open">Something look wrong?</button>') : '');
+    }
+    return '<div class="chatbox" id="chatbox">' + body +
+      '<form class="chatbar" data-chatform><input type="text" id="chatIn" maxlength="' + FMTMAI.CHAT_MAX + '" placeholder="Tell me what you spent…" aria-label="Tell me what you spent" autocomplete="off" enterkeyhint="send"><button type="submit" class="sharebtn">Send</button></form>' +
+      '<small class="chatfoot">Educational tool, not financial advice.</small></div>';
+  }
+  function chatConfirm(i) {
+    var c = U.chat && U.chat.cards[i]; if (!c || c.state !== 'open') return;
+    var a = c.a, td = chToday();
+    if (a.type === 'add_purchase') {
+      if (!(num(a.amount) > 0)) { c.err = 'Enter how much it was.'; render(); return; }
+      if (!c.key) { c.err = 'Pick a category.'; render(); return; }
+      var date = /^\d{4}-\d{2}-\d{2}$/.test(String(a.date)) ? a.date : td;
+      P.spends.push({ id: uid(), date: date, amount: String(round2(num(a.amount))), key: c.key, note: String(a.merchant || '').trim().slice(0, 40), src: 'chat' });
+      P.merchantMem = P.merchantMem || {}; if (a.merchant) P.merchantMem[merchKey(a.merchant)] = c.key;
+      wkMark('cat'); markLogged([date]);
+    } else if (a.type === 'update_balance') {
+      if (!c.acct) { c.err = 'Pick the account.'; render(); return; }
+      var before = balancesNow(), val = String(round2(Math.max(0, num(a.amount)))), k = c.acct.split(':');
+      if (k[0] === 'savings') P.savings = val;
+      else if (k[0] === 'goal') { var g = P.goals[+k[1]]; if (g) g.saved = num(val); }
+      else if (k[0] === 'fund') funds().forEach(function (f) { if (f.id === k[1]) f.start = String(round2(num(val) - fundNet(f))); });
+      else if (k[0] === 'debt') P.debts.forEach(function (d) { if (d.id === k[1]) { d.bal = val; if (num(val) > num(d.orig)) d.orig = num(val); } });
+      recordBalances(before); wkMark('bal'); if (chCanEdit()) chRec(td, true).balUpdated = true;
+    } else {
+      // the daily checklist: only today, and not once the day is full
+      if (!chCanEdit()) { c.err = 'Today’s checklist is already full.'; render(); return; }
+      var r = chRec(td, true);
+      if (a.type === 'no_spend_today') r.noSpend = true;
+      else if (a.type === 'gratitude') r.gratitude = String(a.text).slice(0, 280);
+      else if (a.item === 'debt') r.noNewDebt = true;
+      else if (a.item === 'eat') r.noEatingOut = true;
+      else if (a.item === 'lesson') markLesson(dailyLesson().ref);
+      track('daily-item');
+    }
+    c.state = 'done'; c.err = ''; save(); track('chat-confirm'); render();
   }
   // what's on the Add purchases screen above the list: snap buttons and the count, or why snaps are resting
   function snapArea() {
@@ -2884,7 +3019,7 @@
       }).join('');
       return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2>' +
         '<p>Snap a receipt or your bank app, or type them in.</p></div>' + (sc.reading ? '' : snapArea()) +
-        '<div class="typeit"><input type="text" data-typed autocomplete="off" placeholder="Type it: coffee 5, gas $50 yesterday" aria-label="Type purchases"><button type="button" class="sharebtn" data-a="typedadd">Add</button></div>' +
+        chatArea() +
         (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'photo ' + sc.reading + ' of ' + sc.total : 'your photo') + '…</b><small>A few seconds each.</small></div>' : '') +
         (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
         (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
@@ -3522,16 +3657,16 @@
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
-      case 'typedadd': (function () {
-        var inp = app.querySelector('[data-typed]'), sc = U.scan, txt = inp ? inp.value : '';
-        if (!sc || !window.FMTMEntry || !txt.trim()) return;
-        var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMEntry.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); });
-        var found = FMTMEntry.parseTyped(txt, today());
-        if (!found.length) { sc.err = 'Add an amount, like “coffee 5” or “gas $50 yesterday”.'; render(); return; }
-        // typed rows join the same list as scanned ones, checked, with a category guess
-        FMTMEntry.dedupe(sc.rows.concat(found), seen).slice(sc.rows.length).forEach(function (row) { var g = suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = true; sc.rows.push(row); });
-        sc.err = ''; track('typed-add'); render();
-        var again = app.querySelector('[data-typed]'); if (again) again.focus();
+      case 'chatopen': openScan(); setTimeout(function () { var el = document.getElementById('chatIn'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 80); break;
+      case 'chatok': chatConfirm(+v); break;
+      case 'chatskip': if (U.chat && U.chat.cards[+v]) { U.chat.cards[+v].state = 'skipped'; render(); } break;
+      case 'chatedit': if (U.chat && U.chat.cards[+v]) { U.chat.cards[+v].edit = !U.chat.cards[+v].edit; render(); } break;
+      case 'chatacct': (function () { var pr = String(v).split('|'), cc = U.chat && U.chat.cards[+pr[0]]; if (cc) { cc.acct = pr.slice(1).join('|'); cc.err = ''; render(); } })(); break;
+      case 'chatreport': (function () {
+        var st = U.chat; if (!st) return;
+        if (v === 'open') st.report = 'open'; else if (v === 'no') st.report = '';
+        else if (v === 'send') { st.report = 'sent'; if (S) aiCall('report', { what: 'chat', input: FMTMAI.maskDigits(st.text), output: st.cards.map(function (c) { return c.a; }) }).catch(function () {}); track('chat-report'); }
+        render();
       })(); break;
       case 'altopen': U.altOpen = true; U.altMsg = ''; render(); break;
       case 'altsave': (function () {
@@ -3825,7 +3960,6 @@
   // the return key moves the intro along, and adds a typed purchase; Escape closes an edit sheet
   app.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && U.sheet) { U.sheet = null; render(); return; }
-    if (e.key === 'Enter' && e.target.hasAttribute && e.target.hasAttribute('data-typed')) { e.preventDefault(); var ta = app.querySelector('[data-a=typedadd]'); if (ta) ta.click(); return; }
     if (e.key !== 'Enter' || !e.target.closest || !e.target.closest('.ob')) return;
     var bt = app.querySelector('.ob .obbtn'); if (bt) { e.preventDefault(); bt.click(); }
   });
@@ -3921,6 +4055,8 @@
     if (t.hasAttribute('data-mename')) { var nv = String(t.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (nv) { setMe({ name: nv }); peopleSave(); render(); } return; }
     if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
     if (t.getAttribute('data-file') === 'snap') { snapFiles(t); return; }
+    if (t.hasAttribute('data-cckey')) { var ck = U.chat && U.chat.cards[+t.getAttribute('data-cckey')]; if (ck) { ck.key = t.value; ck.err = ''; render(); } return; }
+    if (t.hasAttribute('data-cc')) { var ce = U.chat && U.chat.cards[+t.getAttribute('data-cc')]; if (ce) { var f = t.getAttribute('data-ccf'); ce.a[f] = f === 'amount' ? round2(num(t.value)) : String(t.value).slice(0, 40); } return; }
     if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }
     if (t.hasAttribute('data-scan-key')) { var sk = U.scan.rows[+t.getAttribute('data-scan-key')]; sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; U.scan.err = ''; render(); return; }
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {
