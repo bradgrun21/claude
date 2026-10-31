@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31c';
+  var APP_VERSION = '10-31d';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -137,6 +137,8 @@
       if (!d.retirements && (num(d.retirePct) || num(d.retireMonthly) || num(d.retireBal))) d.retirements = [{ id: uid(), owner: 0, type: d.retireFrom === 'post' ? 'IRA' : '401(k)', pct: d.retirePct || '', monthly: d.retireMonthly || '', bal: d.retireBal || '', from: d.retireFrom || 'pre' }];
       // bills saved before budget groups existed get placed by name
       (d.bills || []).forEach(function (b) { if (!b.group) b.group = F.groupFor(b.name); });
+      // the challenge's days moved to the daily checklist everyone has
+      window.FMTMDaily.migrate(d);
       return Object.assign(blank(), d);
     }
     catch (e) { storageOk = false; return blank(); }
@@ -1406,15 +1408,37 @@
     if (t.id === 'mmUses') { sh.f.amountUsed = t.value; mmCalcLive(); return; }
   });
   // ---------- the 30-Day Challenge (Level 1): 5 small things every day for 30 days; miss a day and it's back to Day 1 ----------
-  // P.challenge = { status: notStarted | active | restart | completed, level: 1, startDate, attempts, longestStreak, totalDaysCompleted, completedAt,
-  //   days: { iso: { noSpend, balUpdated, balancesConfirmed, noNewDebt, noEatingOut, lessonDone, gratitude, logged, done } } }
+  // The daily checklist is for everyone: P.daily = { iso: { logged, noSpend, balUpdated, balancesConfirmed, noNewDebt, noEatingOut,
+  //   lessonDone, lessonRef, gratitude, done } } (rules in daily.js). The challenge reads the same days:
+  // P.challenge = { status: notStarted | active | restart | completed, level: 1, startDate, attempts, longestStreak, totalDaysCompleted, completedAt }
   // 'restart' is the calm stop between a missed day and "Start again". Only today can be checked off; past days stay as they were.
-  // The lessons live in challenge-lessons.js (placeholders until the real ones are in).
+  // The challenge lessons live in challenge-lessons.js (placeholders until the real ones are in).
+  var D = window.FMTMDaily;
   var CH_NAME = '30-Day Challenge', CH_DAYS = 30;
-  var CH_TASKS = [['log', '🧾', 'Log purchases & update balances'], ['debt', '💳', 'No new debt'], ['eat', '🍽️', 'No eating out'], ['lesson', '🎧', 'Today’s 5-minute lesson'], ['grat', '🙏', 'One thing you’re grateful for']];
-  function chS() { var c = P.challenge || (P.challenge = { status: 'notStarted', level: 1, startDate: null, days: {}, attempts: 0, longestStreak: 0, totalDaysCompleted: 0, completedAt: null }); c.days = c.days || {}; return c; }
+  var CH_TASKS = D.ITEMS;
+  function chS() { var c = P.challenge || (P.challenge = { status: 'notStarted', level: 1, startDate: null, attempts: 0, longestStreak: 0, totalDaysCompleted: 0, completedAt: null }); return c; }
   function chToday() { return F.isoDay(today()); }
-  function chRec(iso, make) { var c = chS(); if (make && !c.days[iso]) c.days[iso] = {}; return c.days[iso] || {}; }
+  function chRec(iso, make) { P.daily = P.daily || {}; if (make && !P.daily[iso]) P.daily[iso] = {}; return P.daily[iso] || {}; }
+  function chCanEdit() { return D.canEdit(P, chToday(), chToday()); }
+  // purchases saved today and dated today check off half of task 1
+  function markLogged(dates) { var td = chToday(); if (dates.indexOf(td) >= 0 && chCanEdit() && !chRec(td).logged) { chRec(td, true).logged = true; track('daily-item'); } }
+  // today's lesson: the challenge's lesson for the day; otherwise the next unread lesson in lessons.json, then the challenge lessons
+  function lessonRefInfo(ref) {
+    if (ref.indexOf('ch:') === 0) { var n = +ref.slice(3), L = chLesson(n); return { ref: ref, title: L.title, minutes: L.minutes || 5, a: 'chlesson', v: String(n) }; }
+    var id = ref.slice(2), l = lessonFor(id) || { title: 'Lesson' }; return { ref: ref, title: l.title, minutes: 5, a: 'lessonopen', v: id };
+  }
+  function dailyLesson() {
+    var td = chToday(), r = chRec(td);
+    if (r.lessonRef) return lessonRefInfo(r.lessonRef);
+    if (chLive()) return lessonRefInfo('ch:' + chDayN(td));
+    var ids = LESSONS ? Object.keys(LESSONS).filter(function (k) { return LESSONS[k].chapter !== 'quiz'; }) : CUSHION_LESSONS.concat(SNOWBALL_LESSONS).map(function (x) { return x[0]; });
+    var next = ids.filter(function (id) { return !lessonDone(id); })[0];
+    return lessonRefInfo(next ? 'L:' + next : 'ch:' + ((P.chLessonsRead || 0) % CH_DAYS + 1));
+  }
+  function markLesson(ref) {
+    if (!chCanEdit()) return false; var r = chRec(chToday(), true); if (r.lessonDone) return false;
+    r.lessonDone = true; r.lessonRef = ref; if (ref.indexOf('ch:') === 0 && !chLive()) P.chLessonsRead = (P.chLessonsRead || 0) + 1; track('daily-item'); return true;
+  }
   function chDayN(iso) { var c = chS(); return c.startDate ? F.daysBetween(F.fromIso(c.startDate), F.fromIso(iso || chToday())) + 1 : 0; }
   function chLive() { var c = chS(); return c.status === 'active' && !!c.startDate && c.startDate <= chToday(); }
   function chFirst() { var d = today(); return F.isoDay(new Date(d.getFullYear(), d.getMonth() + 1, 1)); }
@@ -1425,29 +1449,27 @@
     var lines = {}, re = /eat(ing)? out|restaurant|dining|take ?out|fast food|delivery/i; spendLines().forEach(function (l) { lines[l.key] = l.label; });
     return (P.spends || []).some(function (s) { return s.date === iso && re.test(lines[s.key] || ''); }) || mmPlan().some(function (e) { return e.date === iso && e.type === 'eatOut'; });
   }
-  function chTasks(iso) {
-    var r = chRec(iso), spent = (P.spends || []).some(function (s) { return s.date === iso; });
-    var t = { spent: spent, logA: spent || !!r.noSpend, logB: !!(r.balUpdated || r.balancesConfirmed), debt: !!r.noNewDebt, eat: !!r.noEatingOut, lesson: !!r.lessonDone, grat: !!String(r.gratitude || '').trim() };
-    t.log = t.logA && t.logB; t.n = [t.log, t.debt, t.eat, t.lesson, t.grat].filter(Boolean).length; return t;
-  }
-  // runs before every draw: a day left undone stops the run; a day with all 5 done counts
+  function chTasks(iso) { return D.tasks(P, iso); }
+  // runs before every draw: in a challenge, a day left undone stops the run; for everyone, a day with all 5 done is a full day
   function chCheck() {
-    var c = P.challenge; if (!P.setupDone || !c || c.status !== 'active' || !c.startDate) return;
-    var td = chToday();
-    for (var d = c.startDate; d < td; d = mmAdd(d, 1)) {
-      if (c.days[d] && c.days[d].done) continue;
-      var reached = F.daysBetween(F.fromIso(c.startDate), F.fromIso(d));
-      c.status = 'restart'; c.reached = reached; c.missed = d; c.longestStreak = Math.max(c.longestStreak || 0, reached);
-      U.chRestartShown = false; track('challenge-restart-day-' + reached); save(); return;
+    if (!P.setupDone) return;
+    var c = P.challenge, td = chToday();
+    if (c && c.status === 'active' && c.startDate && c.startDate < td) {
+      var rc = D.runCheck(P, c.startDate, td);
+      if (rc.missed) {
+        c.status = 'restart'; c.reached = rc.reached; c.missed = rc.missed; c.longestStreak = Math.max(c.longestStreak || 0, rc.reached);
+        U.chRestartShown = false; track('challenge-restart-day-' + rc.reached); save(); return;
+      }
     }
-    if (c.startDate > td) return;
-    var t = chTasks(td), r = chRec(td);
-    if (t.n < 5 || r.done) return;
-    r = chRec(td, true); r.done = true; r.logged = t.spent;
-    var n = chDayN(td); c.totalDaysCompleted = (c.totalDaysCompleted || 0) + 1; c.longestStreak = Math.max(c.longestStreak || 0, n);
-    track('challenge-day-complete-' + n);
-    if (n >= CH_DAYS) { c.status = 'completed'; c.completedAt = td; track('challenge-complete'); }
-    else setTimeout(function () { mmToast('✅ Day ' + n + ' done · ' + (CH_DAYS - n) + ' to go'); }, 30);
+    var r = chRec(td);
+    if (r.done || !D.full(P, td)) return;
+    chRec(td, true).done = true; track('daily-full');
+    if (chLive()) {
+      var n = chDayN(td); c.totalDaysCompleted = (c.totalDaysCompleted || 0) + 1; c.longestStreak = Math.max(c.longestStreak || 0, n);
+      track('challenge-day-complete-' + n);
+      if (n >= CH_DAYS) { c.status = 'completed'; c.completedAt = td; track('challenge-complete'); }
+      else setTimeout(function () { mmToast('✅ Day ' + n + ' done · ' + (CH_DAYS - n) + ' to go'); }, 30);
+    } else setTimeout(function () { mmToast('✅ All 5 done. That’s a full day.'); }, 30);
     save();
   }
   // a day can roll over while the app is open
@@ -1460,32 +1482,37 @@
     c.reached = null; c.missed = null; c.completedAt = null; U.chQuit = false; save();
   }
   function chStats() {
-    var c = chS(), keys = Object.keys(c.days);
-    return { attempts: c.attempts || 0, longest: c.longestStreak || 0, total: c.totalDaysCompleted || 0,
-      lessons: keys.filter(function (k) { return c.days[k].lessonDone; }).length, grateful: keys.filter(function (k) { return String(c.days[k].gratitude || '').trim(); }).length };
+    var c = chS(), k = D.counts(P);
+    return { attempts: c.attempts || 0, longest: c.longestStreak || 0, total: c.totalDaysCompleted || 0, lessons: k.lessons, grateful: k.grateful, full: k.full };
   }
   function chStatRow() {
     var s = chStats();
     return '<div class="chstats"><div><b>' + s.longest + '</b><small>longest run</small></div><div><b>' + s.total + '</b><small>days done</small></div><div><b>' + s.attempts + '</b><small>' + (s.attempts === 1 ? 'attempt' : 'attempts') + '</small></div></div>';
   }
-  // the card on Home: today's 5 tasks as chips, and a ring that fills as they get done
+  // the card on Home: today's 5 tasks as chips, and a ring that fills as they get done. In the challenge it's "Day 12 of 30";
+  // otherwise it's "Today", with an offer to make it a challenge
+  function chChips(t, locked) {
+    return '<div class="chchips">' + CH_TASKS.map(function (x) {
+      var on = t[x[0]], act = x[0] === 'debt' ? 'chdebt' : x[0] === 'eat' ? 'cheat' : 'chopen';
+      return '<button type="button" class="chchip' + (on ? ' on' : '') + '" data-a="' + act + '" data-v="' + x[0] + '" aria-pressed="' + on + '" aria-label="' + esc(x[2]) + '"' + (locked && act !== 'chopen' ? ' disabled' : '') + '><span>' + x[1] + '</span>' + (on ? '<i aria-hidden="true">✓</i>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
   function chHome() {
     var c = chS(), td = chToday();
     if (!P.setupDone) return '';
     if (c.status === 'restart') return '<div class="card chhome stack"><b>🌱 ' + (c.reached ? 'You showed up ' + plural(c.reached, 'day') + ' in a row. That counts.' : 'A fresh start.') + '</b><small>Day 1 starts today.</small><button type="button" class="primary" data-a="chagain">Start again</button></div>';
-    if (c.status === 'completed') return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🏆</span><span><b>' + CH_NAME + ' done</b><small>Level 1 complete</small></span><i aria-hidden="true">›</i></button>';
-    if (c.status !== 'active') return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🔥</span><span><b>' + CH_NAME + '</b><small>5 small things a day</small></span><i aria-hidden="true">›</i></button>';
-    if (c.startDate > td) return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🔥</span><span><b>' + CH_NAME + '</b><small>Starts ' + chDate(c.startDate) + '</small></span><i aria-hidden="true">›</i></button>';
-    var t = chTasks(td), n = chDayN(td), done = !!chRec(td).done;
-    return '<div class="card chhome"><button type="button" class="chtop" data-a="go" data-v="journey"><span class="chring" style="--p:' + (t.n / 5 * 100) + '"><b>' + t.n + '/5</b></span><span><b>Day ' + n + ' of ' + CH_DAYS + '</b><small>' + (t.n === 5 ? '✅ Done for today' : plural(5 - t.n, 'task') + ' left today') + '</small></span><i aria-hidden="true">›</i></button>' +
-      '<div class="chchips">' + CH_TASKS.map(function (x) {
-        var on = t[x[0]], act = x[0] === 'debt' ? 'chdebt' : x[0] === 'eat' ? 'cheat' : 'chopen';
-        return '<button type="button" class="chchip' + (on ? ' on' : '') + '" data-a="' + act + '" data-v="' + x[0] + '" aria-pressed="' + on + '" aria-label="' + esc(x[2]) + '"' + (done && act !== 'chopen' ? ' disabled' : '') + '><span>' + x[1] + '</span>' + (on ? '<i aria-hidden="true">✓</i>' : '') + '</button>';
-      }).join('') + '</div></div>';
+    var t = chTasks(td), locked = !chCanEdit(), live = chLive();
+    var top = live ? '<b>Day ' + chDayN(td) + ' of ' + CH_DAYS + '</b><small>' + (t.n === 5 ? '✅ Done for today' : plural(5 - t.n, 'task') + ' left today') + '</small>'
+      : '<b>Today</b><small>' + (t.n === 5 ? '✅ All 5 done. That’s a full day.' : t.n + ' of 5') + '</small>';
+    var foot = live ? '' : c.status === 'active' ? '<div class="chmake"><span>🔥 Your challenge starts ' + chDate(c.startDate) + '.</span></div>'
+      : c.status === 'completed' ? '<div class="chmake"><span>🏆 ' + CH_NAME + ' done</span><button type="button" class="chmini" data-a="go" data-v="journey">See it</button></div>'
+      : '<div class="chmake"><span>Make it a challenge: 30 days, all 5 every day.</span><button type="button" class="chmini gold" data-a="chintro">Start</button></div>';
+    return '<div class="card chhome"><button type="button" class="chtop" data-a="go" data-v="journey"><span class="chring" style="--p:' + (t.n / 5 * 100) + '"><b>' + t.n + '/5</b></span><span>' + top + '</span><i aria-hidden="true">›</i></button>' +
+      chChips(t, locked) + foot + '</div>';
   }
   function chDots() {
     var c = chS(), td = chToday(), out = '';
-    for (var i = 0; i < CH_DAYS; i++) { var iso = mmAdd(c.startDate, i), r = c.days[iso]; out += '<i class="' + (r && r.done ? 'on' : iso === td ? 'now' : '') + '"></i>'; }
+    for (var i = 0; i < CH_DAYS; i++) { var iso = mmAdd(c.startDate, i); out += '<i class="' + (iso <= td && D.full(P, iso) ? 'on' : iso === td ? 'now' : '') + '"></i>'; }
     return '<div class="chdots" role="img" aria-label="' + chStats().total + ' days done">' + out + '</div>';
   }
   function chTaskRow(key, on, body) {
@@ -1494,7 +1521,7 @@
   }
   function chToggle(act, on, text, locked) { return '<button type="button" class="chtgl' + (on ? ' on' : '') + '" role="checkbox" aria-checked="' + on + '" data-a="' + act + '"' + (locked ? ' disabled' : '') + '><span class="chcb" aria-hidden="true">' + (on ? '✓' : '') + '</span>' + text + '</button>'; }
   function chToday5() {
-    var td = chToday(), t = chTasks(td), r = chRec(td), n = chDayN(td), L = chLesson(n), lock = !!r.done, g = String(r.gratitude || '');
+    var td = chToday(), t = chTasks(td), r = chRec(td), live = chLive(), n = chDayN(td), L = dailyLesson(), lock = !chCanEdit(), g = String(r.gratitude || '');
     var log = '<div class="chsub"><span>' + (t.spent ? '✓ Purchases logged' : r.noSpend ? '✓ No spend today' : 'Purchases') + '</span>' +
         (t.spent ? '' : '<span class="chbtns">' + (r.noSpend ? '' : '<button type="button" class="chmini" data-a="scan">🧾 Add purchases</button>') + (lock ? '' : '<button type="button" class="chmini' + (r.noSpend ? ' on' : '') + '" data-a="chnospend">' + (r.noSpend ? 'Undo' : 'No spend today') + '</button>') + '</span>') + '</div>' +
       '<div class="chsub"><span>' + (r.balUpdated ? '✓ Balances updated' : r.balancesConfirmed ? '✓ Balances still right' : 'Balances') + '</span>' +
@@ -1506,9 +1533,9 @@
       chTaskRow('log', t.log, log) +
       chTaskRow('debt', t.debt, chToggle('chdebt', t.debt, 'I didn’t put anything on a credit card or buy-now-pay-later today.', lock)) +
       chTaskRow('eat', t.eat, chToggle('cheat', t.eat, 'I didn’t spend money eating out today.', lock) + (chEatOut(td) ? '<p class="chnote">You logged eating out today — does that break today’s rule?</p>' : '')) +
-      chTaskRow('lesson', t.lesson, '<button type="button" class="chlink" data-a="chlesson">Day ' + n + ' · ' + esc(L.title) + ' · ' + (L.minutes || 5) + ' min <span aria-hidden="true">›</span></button>') +
+      chTaskRow('lesson', t.lesson, '<button type="button" class="chlink" data-a="' + L.a + '" data-v="' + esc(L.v) + '">' + (t.lesson ? '✓ ' : live ? 'Day ' + n + ' · ' : '') + esc(L.title) + ' · ' + L.minutes + ' min <span aria-hidden="true">›</span></button>') +
       chTaskRow('grat', t.grat, grat) + '</div>' +
-      (r.done ? '<div class="chdone">' + confetti(14, 0) + '<b>✅ Day ' + n + ' done</b>' + (n < CH_DAYS ? '<small>Tomorrow: ' + esc(chLesson(n + 1).title) + '</small>' : '') + '</div>' : '');
+      (r.done ? '<div class="chdone">' + confetti(14, 0) + (live ? '<b>✅ Day ' + n + ' done</b>' + (n < CH_DAYS ? '<small>Tomorrow: ' + esc(chLesson(n + 1).title) + '</small>' : '') : '<b>✅ All 5 done</b><small>That’s a full day.</small>') + '</div>' : '');
   }
   function chLinks(quit) {
     var g = chStats().grateful;
@@ -1518,13 +1545,14 @@
   }
   function chIntro() {
     var first = chFirst();
-    return '<p class="chlead">Five small money habits, every day, for 30 days.</p>' +
+    return '<div class="chintro" id="chintro"><div class="eyebrow">Make it a challenge</div><h3>' + CH_NAME + '</h3><p class="chlead">All 5, every day, for 30 days.</p>' +
       '<div class="card chlist">' + CH_TASKS.map(function (x) { return '<div><span>' + x[1] + '</span>' + x[2] + '</div>'; }).join('') + '</div>' +
       '<p class="chrule">Miss one and you’re back to Day 1 — not back to zero. Your stats stay.</p>' +
-      '<div class="chstart"><button type="button" class="primary" data-a="ch30start" data-v="today">Start today</button><button type="button" class="outline" data-a="ch30start" data-v="first">Start ' + chDate(first) + '</button></div>';
+      '<div class="chstart"><button type="button" class="primary" data-a="ch30start" data-v="today">Start today</button><button type="button" class="outline" data-a="ch30start" data-v="first">Start ' + chDate(first) + '</button></div></div>';
   }
   function chScreen() {
-    var c = chS(), td = chToday(), head = function (title, sub) { return '<div class="chhead">' + mmGear() + '<div class="eyebrow">' + CH_NAME + ' · Level ' + (c.level || 1) + '</div><h2>' + title + '</h2>' + (sub || '') + '</div>'; };
+    var c = chS(), td = chToday(), head = function (title, sub, eb) { return '<div class="chhead">' + mmGear() + '<div class="eyebrow">' + (eb || CH_NAME + ' · Level ' + (c.level || 1)) + '</div><h2>' + title + '</h2>' + (sub || '') + '</div>'; };
+    var todayHead = function () { var t = chTasks(td); return head('Today', '<div class="chmeta"><span>' + chDate(td) + '</span><span>' + t.n + ' of 5</span></div>', 'Your 5 a day'); };
     if (c.status === 'restart') {
       return head(c.reached ? 'You showed up ' + plural(c.reached, 'day') + ' in a row.' : 'A fresh start.', '<p class="chlead">' + (c.reached ? 'That counts. ' : '') + 'Day 1 starts today.</p>') +
         '<button type="button" class="primary" data-a="chagain">Start again</button>' + chStatRow() + chLinks(false);
@@ -1533,35 +1561,44 @@
       return head('30 days. Done.', '<div class="chfinish">' + confetti(26, 0) + '<span class="chtrophy">🏆</span><b>Level 1 complete</b></div>') +
         '<div class="chstats"><div><b>30</b><small>days in a row</small></div><div><b>30</b><small>lessons</small></div><div><b>30</b><small>things you were grateful for</small></div></div>' +
         '<div class="chstart"><button type="button" class="primary" data-a="chshare">' + ICON.share + ' Share it</button>' + (CONFIG.communityUrl ? '<button type="button" class="outline" data-a="chpost">📣 Post it in the community</button>' : '') + '</div>' +
-        chLinks(false) + '<button type="button" class="textbtn" data-a="chagain">Do it again</button>';
+        '<button type="button" class="textbtn" data-a="chagain">Do it again</button><div class="chsec">Today</div>' + chToday5() + chLinks(false);
     }
-    if (c.status !== 'active') return head(CH_NAME) + chIntro() + chLinks(false);
-    if (c.startDate > td) return head('Starts ' + chDate(c.startDate), '<p class="chlead">Day 30 is ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '.</p>') +
-      '<div class="card chlist">' + CH_TASKS.map(function (x) { return '<div><span>' + x[1] + '</span>' + x[2] + '</div>'; }).join('') + '</div>' +
-      '<button type="button" class="outline" data-a="ch30start" data-v="today">Start today instead</button>' + chLinks(true);
+    // not in a challenge: today's 5 for everyone, then the offer to make it a challenge
+    if (c.status !== 'active') return todayHead() + chToday5() + chIntro() + chLinks(false);
+    if (c.startDate > td) return todayHead() + chToday5() +
+      '<div class="chintro"><div class="eyebrow">' + CH_NAME + '</div><h3>Starts ' + chDate(c.startDate) + '</h3><p class="chlead">Day 30 is ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '.</p>' +
+      '<button type="button" class="outline" data-a="ch30start" data-v="today">Start today instead</button></div>' + chLinks(true);
     var n = chDayN(td);
     return head('Day ' + n + ' of ' + CH_DAYS, chDots() + '<div class="chmeta"><span>' + (CH_DAYS - n) + ' to go</span><span>Ends ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '</span></div>') + chToday5() + chStatRow() + chLinks(true);
   }
   function chLessonScreen() {
-    var c = chS(), n = U.chLessonN || chDayN(), L = chLesson(n), isToday = chLive() && n === chDayN(), done = isToday && !!chRec(chToday()).lessonDone;
+    var n = U.chLessonN || chDayN() || 1, L = chLesson(n), dl = dailyLesson(), isToday = chCanEdit() && dl.ref === 'ch:' + n, done = isToday && !!chRec(chToday()).lessonDone;
     var isFile = L.videoUrl && /\.(mp4|webm|m4v|mov)(\?|#|$)/i.test(L.videoUrl), safe = L.videoUrl ? mmSafeUrl(L.videoUrl) : '';
     var media = L.type === 'video' && safe ? (isFile ? '<video id="chvid" class="chvideo" src="' + esc(safe) + '" controls playsinline preload="metadata"></video>' : '<iframe class="chvideo" src="' + esc(safe) + '" title="' + esc(L.title) + '" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>') : '';
     var body = L.body ? String(L.body).split(/\n\s*\n/).map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') : (L.placeholder || !media ? '<div class="note">' + ICON.info + '<span>Lesson coming soon. Tap “I read it” to check it off for now.</span></div>' : '');
     var btn = !isToday ? '' : done ? '<div class="chdone"><b>✓ Lesson done</b></div>' : media && isFile ? '<p class="chrule">Checks off when the video ends.</p>' : '<button type="button" class="primary" data-a="chread">' + (media ? 'I watched it' : 'I read it') + '</button>';
-    return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day ' + n + ' · ' + (L.minutes || 5) + ' minutes</div><h2>' + esc(L.title) + '</h2></div>' + media + '<div class="chbody">' + body + '</div>' + btn;
+    return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (chLive() ? 'Day ' : 'Lesson ') + n + ' · ' + (L.minutes || 5) + ' minutes</div><h2>' + esc(L.title) + '</h2></div>' + media + '<div class="chbody">' + body + '</div>' + btn;
   }
   function chJournal() {
-    var c = chS(), days = Object.keys(c.days).filter(function (k) { return String(c.days[k].gratitude || '').trim(); }).sort().reverse();
+    var dd = P.daily || {}, days = Object.keys(dd).filter(function (k) { return String(dd[k].gratitude || '').trim(); }).sort().reverse();
     return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + plural(days.length, 'entry') + '</div><h2>🙏 Gratitude journal</h2></div>' +
-      '<div class="card chjournal">' + (days.length ? days.map(function (k) { return '<div class="row"><div><small>' + chDate(k) + '</small><span>' + esc(c.days[k].gratitude) + '</span></div></div>'; }).join('') : '<div class="row"><span>Nothing yet.</span></div>') + '</div>';
+      '<div class="card chjournal">' + (days.length ? days.map(function (k) { return '<div class="row"><div><small>' + chDate(k) + '</small><span>' + esc(dd[k].gratitude) + '</span></div></div>'; }).join('') : '<div class="row"><span>Nothing yet.</span></div>') + '</div>';
   }
   // after a lesson video draws: it checks itself off when it plays to the end
   function chAfter() {
     var v = document.getElementById('chvid'); if (!v || v.chHooked) return; v.chHooked = true;
-    v.addEventListener('ended', function () { if (chLive() && (U.chLessonN || chDayN()) === chDayN()) { chRec(chToday(), true).lessonDone = true; save(); mmToast('🎧 Lesson done'); go('journey'); } });
+    v.addEventListener('ended', function () { var n = U.chLessonN || chDayN() || 1; if (dailyLesson().ref === 'ch:' + n && markLesson('ch:' + n)) { save(); mmToast('🎧 Lesson done'); go('journey'); } });
   }
   // copy the text, then open the community to paste it (Skool has no way to post from another site)
   function chPost(text, ev) { mmCopy(text, ev); if (CONFIG.communityUrl) window.open(CONFIG.communityUrl, '_blank', 'noopener'); }
+  // finished challenges (the 30-Day Challenge, and the older small ones) stay on the Milestones screen
+  function finishedChallenges() {
+    var c = chS(), old = (P.challenges || []).filter(function (x) { return x.ended === 'done' && F.challengeDef(x.id); }).slice().reverse();
+    if (!old.length && !c.completedAt) return '';
+    var row = function (title, when, act, v) { return '<div class="row"><div style="min-width:0">' + esc(title) + '<small>Completed ' + dayMonth(F.fromIso(when)) + '</small></div><button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="' + act + '" data-v="' + esc(v) + '">' + ICON.share + ' Share</button></div>'; };
+    return '<div class="card"><div class="row"><b>Finished challenges</b><span></span></div>' + (c.completedAt ? row(CH_NAME + ' · Level 1', c.completedAt, 'chshare', '') : '') +
+      old.map(function (x) { return row(F.challengeDef(x.id).title, x.endedOn, 'sharech', x.uid); }).join('') + '</div>';
+  }
   function ch30Card() {
     return { eyebrow: CH_NAME + ' · Level 1', title: '30 days in a row', sub: '30 lessons, 30 things I was grateful for, and no new debt.', chips: ['Level 1 complete'], caption: 'I finished the ' + CH_NAME + '! 30 days in a row.' };
   }
@@ -2256,27 +2293,13 @@
     return goals;
   }
   // ---------- the activity calendar ----------
-  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Weekly recap', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], chday: ['Challenge day done', 'cal-chd'], chnext: ['Challenge day', 'cal-chn'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
-  function calEvents(y, m) {
-    var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
-    // paydays: step from the next payday in both directions
-    var step = F.FREQS[P.freq].days, anchor = F.fromIso(P.nextPay), first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
-    var kMin = Math.floor(F.daysBetween(anchor, first) / step) - 1, kMax = Math.ceil(F.daysBetween(anchor, last) / step) + 1;
-    for (var k = kMin; k <= kMax; k++) add(F.isoDay(F.addDays(anchor, k * step)), 'payday', 'Payday' + (extraIncomes().length ? ' \u00b7 ' + (P.payLabel || 'You') : ''));
-    extraIncomes().forEach(function (x) {
-      var st2 = F.FREQS[x.freq || 'biweekly'].days, an2 = F.fromIso(x.nextPay || P.nextPay);
-      for (var k2 = Math.floor(F.daysBetween(an2, first) / st2) - 1; k2 <= Math.ceil(F.daysBetween(an2, last) / st2) + 1; k2++) add(F.isoDay(F.addDays(an2, k2 * st2)), 'payday', 'Payday \u00b7 ' + (x.label || 'Spouse'));
-    });
-    Object.keys(P.wk || {}).forEach(function (k) { if (P.wk[k].done) add(P.wk[k].done, 'checkin', 'Weekly recap'); });
-    Object.keys(P.badges || {}).forEach(function (id) { var b = BADGES.filter(function (x) { return x.id === id; })[0]; if (id === 'plan') add(P.badges[id], 'start', 'Started my plan'); else if (b) add(P.badges[id], 'milestone', b.title); });
-    (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
-    (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
-    // the 30-Day Challenge: days done, and today and the days still to come in this run
-    var cc = P.challenge;
-    if (cc && cc.days) Object.keys(cc.days).forEach(function (iso) { if (cc.days[iso].done) add(iso, 'chday', CH_NAME + ' · day done'); });
-    if (cc && cc.status === 'active' && cc.startDate) for (var ci = 0; ci < CH_DAYS; ci++) { var cd = mmAdd(cc.startDate, ci); if (cd >= chToday() && !(cc.days[cd] && cc.days[cd].done)) add(cd, 'chnext', CH_NAME + ' · Day ' + (ci + 1) + (cd === chToday() ? ' (today)' : '')); }
-    if (itemized()) P.bills.forEach(function (b) { billDates(b, first, last).forEach(function (iso) { add(iso, 'bill', (b.name || 'Bill') + ' due \u00b7 ' + money(dueAmount(b))); }); });
-    return ev;
+  // paydays in a month (they keep their ring on the calendar: the app runs on paydays)
+  function paydaySet(y, m) {
+    var out = {}, first = new Date(y, m, 1), last = new Date(y, m + 1, 0), add = function (iso) { var d = F.fromIso(iso); if (d.getFullYear() === y && d.getMonth() === m) out[iso] = 1; };
+    var walk = function (anchorIso, freq) { var step = F.FREQS[freq].days, an = F.fromIso(anchorIso); for (var k = Math.floor(F.daysBetween(an, first) / step) - 1; k <= Math.ceil(F.daysBetween(an, last) / step) + 1; k++) add(F.isoDay(F.addDays(an, k * step))); };
+    walk(P.nextPay, P.freq);
+    extraIncomes().forEach(function (x) { walk(x.nextPay || P.nextPay, x.freq || 'biweekly'); });
+    return out;
   }
   // purchases by day: { iso: [{ note, amount }] }
   function spendByDay(y, m) {
@@ -2285,32 +2308,38 @@
     (P.spends || []).forEach(function (x) { add(x.date, x.note || lines[x.key] || 'Purchase', x.amount); });
     return out;
   }
+  // the Activity calendar: each day's circle comes from the daily checklist (light = some done, dark = all 5),
+  // today is an open ring until it's full, paydays keep their ring. Never red, never an X, even on a challenge restart day.
   function calendarCard() {
-    var now = today(), cur = U.calMonth || [now.getFullYear(), now.getMonth()], y = cur[0], m = cur[1], ev = calEvents(y, m);
+    var now = today(), cur = U.calMonth || [now.getFullYear(), now.getMonth()], y = cur[0], m = cur[1];
     if (U.calTab === 'spend') return calSpendCard(now, y, m);
-    var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = (first.getDay() - weekDay0() + 7) % 7, todayIso = F.isoDay(now), cells = '';
-    for (var b = 0; b < lead; b++) cells += '<span></span>';
+    var pays = paydaySet(y, m), first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), todayIso = F.isoDay(now), cells = '', fullN = 0, mon = first.toLocaleDateString('en-US', { month: 'long' });
+    for (var b = 0; b < (first.getDay() - weekDay0() + 7) % 7; b++) cells += '<span></span>';
     for (var d = 1; d <= days; d++) {
-      var iso = F.isoDay(new Date(y, m, d)), e = ev[iso] || [], kinds = {}, isPay = e.some(function (x) { return x[0] === 'payday'; });
-      e.forEach(function (x) { if (x[0] !== 'payday') kinds[x[0]] = 1; });
-      var dots = Object.keys(kinds).slice(0, 3).map(function (k) { return '<i class="' + CAL_KINDS[k][1] + '"></i>'; }).join('');
-      var label = d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (e.length ? ': ' + e.map(function (x) { return x[1]; }).join(', ') : '');
-      cells += '<button type="button" class="cday' + (isPay ? ' pay' : '') + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(label) + '"><span>' + d + '</span><em>' + dots + '</em></button>';
+      var iso = F.isoDay(new Date(y, m, d)), st = D.state(P, iso, todayIso), n = st === 'future' ? 0 : D.tasks(P, iso).n;
+      if (st === 'full') fullN++;
+      var label = d + ' ' + mon + (st === 'future' ? '' : ': ' + n + ' of 5') + (pays[iso] ? ', payday' : '');
+      cells += '<button type="button" class="cday act s-' + st + (pays[iso] ? ' pay' : '') + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(label) + '"><span>' + d + '</span></button>';
     }
-    var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
-    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill' && x[0] !== 'chnext'; }).length; }, 0);
-    var soon = upcomingBills(14);
-    soon = soon.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; }).slice(0, 5);
-    var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="cal-bill"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + money(x.amt) + '</b></div>'; }).join('') + '</div>'
-      : (itemized() && !P.bills.some(function (b) { return b.due; }) ? '<button type="button" class="linkbtn" data-a="go" data-v="plan" style="align-self:flex-start;font-size:13px">Add due dates to your bills to see them here \u203a</button>' : '');
-    return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
-      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
-      '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
+    // a day's panel: read-only, its 5 tasks and its gratitude line
+    var sel = '';
+    if (U.calDay && U.calDay.slice(0, 7) === F.isoDay(first).slice(0, 7) && U.calDay <= todayIso) {
+      var t = D.tasks(P, U.calDay), g = String(chRec(U.calDay).gratitude || '').trim();
+      sel = '<div class="calsel"><b>' + chDate(U.calDay) + (pays[U.calDay] ? ' · Payday' : '') + '</b>' +
+        CH_TASKS.map(function (x) { return '<div class="' + (t[x[0]] ? 'on' : '') + '"><i aria-hidden="true">' + (t[x[0]] ? '✓' : '') + '</i>' + x[1] + ' ' + esc(x[2]) + '</div>'; }).join('') +
+        (g ? '<p class="chquote">“' + esc(g) + '”</p>' : '') +
+        (U.calDay === todayIso ? '<button type="button" class="linkbtn" data-a="go" data-v="journey">Open today ›</button>' : '') + '</div>';
+    }
+    var nb = upcomingBills(14).sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; })[0];
+    return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">‹</button>' +
+      '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (fullN ? plural(fullN, 'full day') + ' this month' : 'Your days show up here') + '</small></div>' +
+      '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">›</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + dowLetters().map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
-      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + '<span><i class="cal-check"></i>Weekly recap</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-chd"></i>Challenge day</span></div>' + soonHtml + '</div>';
+      '<div class="clegend"><span><i class="lg-full"></i>All 5</span><span><i class="lg-some"></i>Some</span><span><i class="cal-pay ring"></i>Payday</span></div>' +
+      (nb ? '<button type="button" class="linkbtn calbill" data-a="go" data-v="plan">Next bill: ' + esc(nb.name) + ' · ' + chDate(nb.iso) + ' · ' + money(nb.amt) + ' ›</button>' : '') + '</div>';
   }
-  function calTabs() { return '<div class="seg caltabs" role="group" aria-label="Calendar view">' + [['due', 'Due & wins'], ['spend', 'Spending']].map(function (t) { var on = (U.calTab || 'due') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="caltab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'; }
+  function calTabs() { return '<div class="seg caltabs" role="group" aria-label="Calendar view">' + [['due', 'Activity'], ['spend', 'Spending']].map(function (t) { var on = (U.calTab || 'due') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="caltab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'; }
   // the same month, with what was spent on each day
   function calSpendCard(now, y, m) {
     var by = spendByDay(y, m), first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), todayIso = F.isoDay(now), cells = '', total = 0;
@@ -2780,7 +2809,7 @@
 
     // the Challenge tab: the 30-Day Challenge, with Milestones behind it
     journey: function () {
-      if (U.jTab === 'milestones') return '<button type="button" class="back" data-a="jtab" data-v="ch" aria-label="Back">' + ICON.back + '</button>' + V.milestones() + goalsCard();
+      if (U.jTab === 'milestones') return '<button type="button" class="back" data-a="jtab" data-v="ch" aria-label="Back">' + ICON.back + '</button>' + V.milestones() + finishedChallenges() + goalsCard();
       return chScreen();
     },
     chlesson: function () { return chLessonScreen(); },
@@ -3140,7 +3169,7 @@
     var d = F.planDef('reset7').days[+m[1]], r = d.read.concat(['']);
     return { id: id, title: d.title, card1: r[0], card2: r[1], card3: r[2] || '', action: d.action[1], actionLabel: d.action[0], skoolUrl: '' };
   }
-  function lessonDone(id) { var m = /^reset7-(\d)$/.exec(id); if (m) { var run = P.plans.filter(function (p) { return p.id === 'reset7'; })[0]; return !!run && run.done.indexOf(+m[1]) >= 0; } return ((P.journey || {}).done || []).indexOf(id) >= 0; }
+  function lessonDone(id) { if (((P.journey || {}).done || []).indexOf(id) >= 0) return true; var m = /^reset7-(\d)$/.exec(id); if (m) { var run = P.plans.filter(function (p) { return p.id === 'reset7'; })[0]; return !!run && run.done.indexOf(+m[1]) >= 0; } return ((P.journey || {}).done || []).indexOf(id) >= 0; }
   // the step's progress: the gauge, dollars left in the middle, saved and goal under it (Home)
   function progGauge(o, p) {
     var pl = o.plan, step = o.step;
@@ -3369,7 +3398,7 @@
           else if (k === 'fund') funds().forEach(function (f) { if (f.id === el.getAttribute('data-v')) f.start = String(round2(num(val) - fundNet(f))); });
           else if (k === 'debt') P.debts.forEach(function (d) { if (d.id === el.getAttribute('data-v')) { d.bal = val; if (num(val) > num(d.orig)) d.orig = num(val); } });
         });
-        var res = recordBalances(before); wkMark('bal'); if (chLive()) chRec(chToday(), true).balUpdated = true; save(); track('balance-update'); U.sheet = null;
+        var res = recordBalances(before); wkMark('bal'); if (chCanEdit()) { if (!chRec(chToday()).balUpdated) track('daily-item'); chRec(chToday(), true).balUpdated = true; } save(); track('balance-update'); U.sheet = null;
         if (res.paid.length || res.goal) { U.result = res; go('wins'); } else render();
       })(); break;
       case 'stepsave': (function () { var el = app.querySelector('[data-stepin]'); if (el && el.value !== '') { P.stepAmt = String(round2(Math.max(0, num(el.value)) / F.FREQS[P.freq].perMonth)); save(); track('step-assign'); } U.sheet = null; render(); })(); break;
@@ -3470,7 +3499,8 @@
         var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0], fallback = F.isoDay(today());
         if (w && w.end < fallback) fallback = w.end;
         P.merchantMem = P.merchantMem || {};
-        keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: 'scan' }); P.merchantMem[merchKey(r.merchant)] = r.key; });
+        keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: r.src || 'scan' }); P.merchantMem[merchKey(r.merchant)] = r.key; });
+        markLogged(keep.map(function (r) { return r.date || fallback; }));
         weekDone(sc.week, 'saved'); track('scan-save');
         // the screenshot and what was read from it are dropped here
         U.scan = null; U.planToast = plural(keep.length, 'purchase') + ' saved to your budget.'; U.jTab = null; save(); go(U.scanBack === 'journey' || !U.scanBack ? 'journey' : U.scanBack);
@@ -3483,7 +3513,7 @@
         if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
         if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
         P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
-        U.lastSpendKey = U.form.key; wkMark('cat');
+        U.lastSpendKey = U.form.key; wkMark('cat'); markLogged([U.form.date || F.isoDay(today())]);
         if (U.spendBack === 'scan' && U.scan) { weekDone(U.scan.week, 'saved'); if (String(U.form.note || '').trim()) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(U.form.note)] = U.form.key; } }
         save(); track('spend-add');
         if (v === 'again') {
@@ -3669,15 +3699,16 @@
       case 'chagain': chStart('today'); track('challenge-start'); U.screen = 'journey'; U.jTab = null; window.scrollTo(0, 0); render(); break;
       case 'ch30quit': if (!U.chQuit) { U.chQuit = true; render(); break; } (function () { var c = chS(); c.status = 'notStarted'; c.startDate = null; U.chQuit = false; save(); track('challenge-quit'); render(); })(); break;
       case 'chnospend': case 'chbalok': case 'chdebt': case 'cheat': (function () {
-        if (!chLive()) return; var r = chRec(chToday(), true); if (r.done) return;
-        var k = { chnospend: 'noSpend', chbalok: 'balancesConfirmed', chdebt: 'noNewDebt', cheat: 'noEatingOut' }[a]; r[k] = !r[k]; save(); render();
+        if (!chCanEdit()) return; var r = chRec(chToday(), true);
+        var k = { chnospend: 'noSpend', chbalok: 'balancesConfirmed', chdebt: 'noNewDebt', cheat: 'noEatingOut' }[a]; r[k] = !r[k]; if (r[k]) track('daily-item'); save(); render();
       })(); break;
-      case 'chopen': if (v === 'lesson') { U.chLessonN = null; go('chlesson'); } else { U.jTab = null; go('journey'); if (v === 'grat') setTimeout(function () { var g = document.getElementById('chGrat'); if (g) { g.scrollIntoView({ block: 'center' }); g.focus(); } }, 60); } break;
-      case 'chlesson': U.chLessonN = null; go('chlesson'); break;
-      case 'chread': if (chLive()) { chRec(chToday(), true).lessonDone = true; save(); mmToast('🎧 Lesson done'); } U.jTab = null; go('journey'); break;
+      case 'chintro': U.jTab = null; go('journey'); setTimeout(function () { var el = document.getElementById('chintro'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); break;
+      case 'chopen': if (v === 'lesson') { var dlo = dailyLesson(); if (dlo.a === 'lessonopen') { U.lesson = { id: dlo.v }; U.lessonCard = 0; go('lesson'); } else { U.chLessonN = +dlo.v; go('chlesson'); } } else { U.jTab = null; go('journey'); if (v === 'grat') setTimeout(function () { var g = document.getElementById('chGrat'); if (g) { g.scrollIntoView({ block: 'center' }); g.focus(); } }, 60); } break;
+      case 'chlesson': U.chLessonN = v ? +v : null; go('chlesson'); break;
+      case 'chread': if (markLesson('ch:' + (U.chLessonN || chDayN() || 1))) { save(); mmToast('🎧 Lesson done'); } U.jTab = null; go('journey'); break;
       case 'chgsave': (function () {
-        var el = document.getElementById('chGrat'), t = String(el && el.value || '').trim().slice(0, 280); if (!t || !chLive()) return;
-        var r = chRec(chToday(), true); if (r.done) return; r.gratitude = t; U.chGEdit = false; save(); render();
+        var el = document.getElementById('chGrat'), t = String(el && el.value || '').trim().slice(0, 280); if (!t || !chCanEdit()) return;
+        var r = chRec(chToday(), true), was = !!String(r.gratitude || '').trim(); r.gratitude = t; U.chGEdit = false; if (!was) track('daily-item'); save(); render();
       })(); break;
       case 'chgedit': U.chGEdit = true; render(); setTimeout(function () { var g = document.getElementById('chGrat'); if (g) g.focus(); }, 30); break;
       case 'chgpost': chPost(String(chRec(chToday()).gratitude || ''), 'challenge-gratitude-shared'); break;
@@ -3686,6 +3717,7 @@
       case 'jtab': U.jTab = v; render(); window.scrollTo(0, 0); break;
       case 'lessondone': (function () {
         var id = U.lesson && U.lesson.id;
+        if (id && dailyLesson().ref === 'L:' + id) markLesson('L:' + id);
         if (id && !lessonDone(id)) { P.journey = P.journey || { done: [] }; P.journey.done.push(id); track('lesson-' + id); }
         save(); U.jTab = null; go('journey');
       })(); break;

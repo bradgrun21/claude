@@ -1504,3 +1504,29 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .wf-cg { gap: 3px 6px; font-size: 13px; }
 .wf-cg span { aspect-ratio: auto; height: 34px; width: 34px; justify-self: center; }
 .wf-lg { margin-top: 8px; }
+/* the daily checklist for everyone, and the Activity calendar */
+.chmake { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.06); font-size: 13px; color: var(--muted); font-weight: 600; }
+.chmake .chmini { flex: none; min-height: 36px; }
+.chintro { margin-top: 20px; background: var(--card); border-radius: 20px; padding: 16px; display: grid; gap: 8px; }
+.chintro h3 { font-size: 20px; margin: 0; }
+.chintro .chlist { background: var(--card2); }
+.chsec { margin: 22px 0 -4px; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.cday.act { aspect-ratio: 1; }
+.cday.act > span { width: 32px; height: 32px; }
+.cday.act.s-some > span { background: rgba(126,217,192,.28); color: var(--ink); }
+.cday.act.s-full > span { background: #2E9C7E; color: #fff; font-weight: 800; }
+.cday.act.today > span { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--green); font-weight: 800; }
+.cday.act.today.s-some > span { background: rgba(126,217,192,.28); }
+.cday.act.today.s-full > span { background: #2E9C7E; color: #fff; box-shadow: none; }
+.cday.act.pay > span { box-shadow: 0 0 0 2px #E8875F; }
+.cday.act.today.pay > span { box-shadow: inset 0 0 0 2px var(--green), 0 0 0 2px #E8875F; }
+.clegend i.lg-full { background: #2E9C7E; width: 9px; height: 9px; border-radius: 50%; }
+.clegend i.lg-some { background: rgba(126,217,192,.45); width: 9px; height: 9px; border-radius: 50%; }
+.calsel div { gap: 10px; color: var(--muted); }
+.calsel div.on { color: var(--ink); }
+.calsel div i { width: 18px !important; height: 18px !important; border-radius: 50% !important; display: inline-grid !important; place-items: center; font-style: normal; font-size: 11px; font-weight: 900; border: 1.5px solid #5a5955; color: #0f1d19; }
+.calsel div.on i { background: var(--green); border-color: var(--green); }
+.calbill { align-self: flex-start; font-size: 13px; text-align: left; }
+.cday.act.s-some > span, .cday.act.today.s-some > span { background: #A6E8D4; color: #0f1d19; font-weight: 700; }
+.clegend i.lg-some { background: #A6E8D4; }
+.wf-cg span.s { background: #A6E8D4; color: #0f1d19; } .wf-lg i.s { background: #A6E8D4; }
