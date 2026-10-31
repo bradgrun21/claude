@@ -1,7 +1,8 @@
-// Find Me the Money: bill reminders.
-// Runs every hour (see supabase/reminders.sql). For each saved plan whose person turned reminders on,
-// it checks the local time in their time zone, works out what is due today, and sends at most one
-// reminder a day through OneSignal. Messages never include amounts, names or anything from the budget.
+// Find Me the Money: bill reminders and the 30-Day Challenge's evening nudge.
+// Runs every hour (see supabase/reminders.sql). For each saved plan whose person turned reminders on, it checks the
+// local time in their time zone (P.tz) and sends through OneSignal at most one bill reminder (at their reminder hour,
+// when a bill is due tomorrow) and one challenge nudge (at their nudge hour, 6-10 pm, only on an unfinished challenge
+// day) a day. Messages never include amounts, names or anything from the budget, and never shame.
 //
 // Settings (Supabase -> Edge Functions -> Secrets):
 //   ONESIGNAL_APP_ID     the public App ID
@@ -9,9 +10,6 @@
 //   CRON_SECRET          any long random text; the scheduler sends it so nobody else can trigger this
 //   REMINDERS_MODE       off | dry | test | live   (start with dry)
 //   TEST_USER_IDS        comma-separated account ids that get real messages in test mode
-//   CHALLENGE_REMINDERS  on | off (default off): the 30-Day Challenge's 8 pm nudge when today's tasks aren't done.
-//                        It shares the one-a-day slot (notify_log is unique per person and day), so on a day a bill
-//                        reminder already went out, the nudge is skipped.
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 
 // --- due logic start (kept in step with core.js and app.js)
@@ -40,18 +38,17 @@ function pick(data: any, today: Date): { kind: string; title: string; body: stri
     return { kind: 'bills', title: 'A bill is due tomorrow', body: 'Open your plan to see what’s coming up.' };
   return null;
 }
-// the 30-Day Challenge's evening nudge: only while a run is on and today's 5 tasks aren't all done
-// (the same rules as chTasks in app.js)
+// the 30-Day Challenge's evening nudge: only while a run is on and today's 5 tasks aren't all done.
+// --- kept in step with daily.js (tasks) and app.js (chLive): the day's record is P.daily[YYYY-MM-DD]
 // deno-lint-ignore no-explicit-any
 function pickChallenge(data: any, today: Date): { kind: string; title: string; body: string } | null {
   const c = data && data.challenge; if (!c || c.status !== 'active' || !c.startDate || !data.setupDone) return null;
   const iso = isoDay(today); if (c.startDate > iso) return null;
-  const r = (c.days || {})[iso] || {}; if (r.done) return null;
-  const spent = (data.spends || []).some((s: { date?: string }) => s.date === iso);
-  const done = [(spent || r.noSpend) && (r.balUpdated || r.balancesConfirmed), r.noNewDebt, r.noEatingOut, r.lessonDone, String(r.gratitude || '').trim()].filter(Boolean).length;
+  const r = (data.daily || {})[iso] || {}; if (r.done) return null;
+  const done = [(r.logged || r.noSpend) && (r.balUpdated || r.balancesConfirmed), r.noNewDebt, r.noEatingOut, r.lessonDone, String(r.gratitude || '').trim()].filter(Boolean).length;
   if (done >= 5) return null;
   const n = daysBetween(fromIso(c.startDate), today) + 1, left = 5 - done;
-  return { kind: 'challenge', title: 'Day ' + n + ' isn’t done yet', body: left + (left === 1 ? ' task' : ' tasks') + ' left.' };
+  return { kind: 'challenge', title: 'Day ' + n + ' isn’t done yet.', body: left + (left === 1 ? ' task' : ' tasks') + ' left.' };
 }
 // local date and hour for a time zone
 function localNow(tz: string, now: Date) {
@@ -93,7 +90,9 @@ Deno.serve(async (req) => {
   }
   const now = new Date(), anyHour = !!url.searchParams.get('anyhour');
 
-  const plans = (await db('plans?select=user_id,data')) || [];
+  // only the fields the reminders read (plans can be large: meal photos and the rest of the budget)
+  const plans = ((await db('plans?select=user_id,remind:data->remind,tz:data->>tz,setupDone:data->setupDone,bills:data->bills,challenge:data->challenge,daily:data->daily')) || [])
+    .map((p: { user_id: string; remind?: unknown; tz?: string; setupDone?: boolean; bills?: unknown; challenge?: unknown; daily?: unknown }) => ({ user_id: p.user_id, data: { remind: p.remind, tz: p.tz, setupDone: p.setupDone, bills: p.bills, challenge: p.challenge, daily: p.daily } }));
   const members = (await db('plan_members?select=owner_id,member_id')) || [];
   const report: { user: string; kind: string; to: number; status: string }[] = [];
 
@@ -101,24 +100,26 @@ Deno.serve(async (req) => {
     const data = row.data || {}, r = data.remind;
     if (!r || !r.on) continue;
     const t = localNow(data.tz, now);
-    let msg: { kind: string; title: string; body: string } | null = null;
-    if (env('CHALLENGE_REMINDERS') === 'on' && r.challenge !== false && (anyHour || t.hour === 20)) msg = pickChallenge(data, t.day);
-    if (!msg && (anyHour || t.hour === (r.hour || 9))) msg = pick(data, t.day);
-    if (!msg) continue;
-    const to = [row.user_id].concat(members.filter((m: { owner_id: string }) => m.owner_id === row.user_id).map((m: { member_id: string }) => m.member_id));
-    const short = String(row.user_id).slice(0, 8);
-    if (mode === 'test' && !to.some((id: string) => testIds.includes(id))) { report.push({ user: short, kind: msg.kind, to: to.length, status: 'skipped (not a test user)' }); continue; }
-    if (mode === 'dry') { report.push({ user: short, kind: msg.kind, to: to.length, status: 'would send' }); continue; }
-    // one a day: the first insert for this plan and day wins
-    const ok = await db('notify_log?on_conflict=user_id,day', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: row.user_id, day: isoDay(t.day), kind: msg.kind }) });
-    if (!ok || !ok.length) { report.push({ user: short, kind: msg.kind, to: to.length, status: 'already sent today' }); continue; }
-    const ids = mode === 'test' ? to.filter((id: string) => testIds.includes(id)) : to;
-    const res = await fetch('https://api.onesignal.com/notifications?c=push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Key ' + env('ONESIGNAL_REST_KEY') },
-      body: JSON.stringify({ app_id: env('ONESIGNAL_APP_ID'), target_channel: 'push', include_aliases: { external_id: ids }, headings: { en: msg.title }, contents: { en: msg.body }, url: 'https://findmethemoney.netlify.app/' }),
-    });
-    report.push({ user: short, kind: msg.kind, to: ids.length, status: res.ok ? 'sent' : 'failed ' + res.status });
+    const msgs: { kind: string; title: string; body: string }[] = [];
+    if (anyHour || t.hour === (r.hour || 9)) { const m = pick(data, t.day); if (m) msgs.push(m); }
+    // the challenge nudge: 8 pm by default, or the 6-10 pm hour picked in Settings
+    if (r.challenge !== false && (anyHour || t.hour === (r.chHour || 20))) { const m = pickChallenge(data, t.day); if (m) msgs.push(m); }
+    for (const msg of msgs) {
+      const to = [row.user_id].concat(members.filter((m: { owner_id: string }) => m.owner_id === row.user_id).map((m: { member_id: string }) => m.member_id));
+      const short = String(row.user_id).slice(0, 8);
+      if (mode === 'test' && !to.some((id: string) => testIds.includes(id))) { report.push({ user: short, kind: msg.kind, to: to.length, status: 'skipped (not a test user)' }); continue; }
+      if (mode === 'dry') { report.push({ user: short, kind: msg.kind, to: to.length, status: 'would send' }); continue; }
+      // one of each kind a day: the first insert for this plan, day and kind wins
+      const ok = await db('notify_log?on_conflict=user_id,day,kind', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=representation' }, body: JSON.stringify({ user_id: row.user_id, day: isoDay(t.day), kind: msg.kind }) });
+      if (!ok || !ok.length) { report.push({ user: short, kind: msg.kind, to: to.length, status: 'already sent today' }); continue; }
+      const ids = mode === 'test' ? to.filter((id: string) => testIds.includes(id)) : to;
+      const res = await fetch('https://api.onesignal.com/notifications?c=push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Key ' + env('ONESIGNAL_REST_KEY') },
+        body: JSON.stringify({ app_id: env('ONESIGNAL_APP_ID'), target_channel: 'push', include_aliases: { external_id: ids }, headings: { en: msg.title }, contents: { en: msg.body }, url: 'https://findmethemoney.netlify.app/' }),
+      });
+      report.push({ user: short, kind: msg.kind, to: ids.length, status: res.ok ? 'sent' : 'failed ' + res.status });
+    }
   }
   console.log(JSON.stringify({ mode, at: now.toISOString(), report }));
   return Response.json({ mode, at: now.toISOString(), count: report.length, report });

@@ -1559,3 +1559,10 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .chatedit label { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 .chatedit input { font: inherit; font-size: 16px; color: var(--ink); background: var(--card2); border: 0; border-radius: 10px; padding: 10px; min-width: 0; width: 100%; }
 .chatedit input[type=date] { grid-column: 1 / -1; }
+/* delete my account and data; the challenge nudge offer */
+.wipebox { gap: 10px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px; }
+.wipebox > span { font-size: 14px; color: var(--muted); }
+.wipego { background: var(--warn) !important; color: #2a0f05 !important; }
+.chrem { display: grid; gap: 10px; padding: 14px 16px; margin-top: 12px; }
+.chrem .chbtns { display: flex; gap: 8px; }
+.wf-priv { display: block; text-align: center; margin-top: 6px; font-size: 13px; color: var(--faint); text-decoration: none; }

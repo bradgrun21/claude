@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31f';
+  var APP_VERSION = '10-31g';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -230,7 +230,7 @@
   function cloudWho() {
     return sb('/rest/v1/plan_members?select=owner_id,owner_email,member_id,member_email', { auth: true }).then(function (rows) {
       var mine = (rows || []).filter(function (r) { return r.member_id === S.uid; })[0], part = (rows || []).filter(function (r) { return r.owner_id === S.uid; })[0];
-      S.owner = mine ? mine.owner_id : S.uid; S.role = mine ? 'member' : 'owner'; S.partner = mine ? mine.owner_email : part ? part.member_email : null; S.shareReady = true; keepAuth();
+      S.owner = mine ? mine.owner_id : S.uid; S.role = mine ? 'member' : 'owner'; S.partner = mine ? mine.owner_email : part ? part.member_email : null; S.partnerId = part ? part.member_id : null; S.shareReady = true; keepAuth();
     }, function () { S.owner = S.uid; S.role = 'owner'; S.partner = null; S.shareReady = false; });
   }
   function shared() { return !!(S && S.partner); }
@@ -335,8 +335,8 @@
         return os.login(S.uid).then(function () { return os.User.PushSubscription.optIn(); });
       });
     }).then(function () {
-      P.remind = Object.assign({ payday: false, bills: true, hour: 9 }, P.remind || {}, { on: true }); P.tz = tz || P.tz || '';
-      save(); track('reminders-on'); U.toast = ['Reminders are on.', 'We\u2019ll nudge you on payday. Change it anytime in Settings.', true]; render();
+      P.remind = Object.assign({ payday: false, bills: true, hour: 9, challenge: true, chHour: 20 }, P.remind || {}, { on: true }, U.remWant || {}); P.tz = P.tz || tz || '';
+      U.remWant = null; save(); track('reminders-on'); U.toast = ['Reminders are on.', 'Change them anytime in Settings.', true]; render();
     }, function (er) {
       U.remErr = er && er.message === 'denied' ? 'Your phone said no to notifications. Turn them on for this app in your phone\u2019s settings, then try again.' : 'We couldn\u2019t turn on reminders right now. Check your connection and try again.';
       render();
@@ -361,8 +361,10 @@
     if (!r.on) return head + why + '<button type="button" class="primary" data-a="remindon">Turn on reminders</button>' + (U.remErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.remErr) + '</p>' : '') + '</div>';
     if (compact) return '';
     var tog = function (k, label) { var on = r[k] !== false; return '<div class="tglrow"><span>' + label + '</span><button type="button" role="switch" class="tgl' + (on ? ' on' : '') + '" aria-checked="' + on + '" aria-label="' + label + '" data-a="remindk" data-v="' + k + '"><i></i></button></div>'; };
-    return head + '<span style="font-size:14px;color:var(--muted)">\u2713 On for this phone. One reminder a day at most.</span>' +
-      '<div class="tgls">' + tog('bills', 'Bills due tomorrow') + '</div>' +
+    var chOn = r.challenge !== false, hr = r.chHour || 20;
+    return head + '<span style="font-size:14px;color:var(--muted)">\u2713 On for this phone. At most one bill reminder and one challenge nudge a day.</span>' +
+      '<div class="tgls">' + tog('bills', 'Bills due tomorrow') + tog('challenge', '30-Day Challenge nudge if today isn’t done') + '</div>' +
+      (chOn ? '<label class="setrow"><span>🌙 Nudge me at</span><select data-set="chHour" aria-label="Nudge time">' + [18, 19, 20, 21, 22].map(function (h) { return '<option value="' + h + '"' + (h === hr ? ' selected' : '') + '>' + (h - 12) + ' pm</option>'; }).join('') + '</select></label>' : '') +
       '<button type="button" class="textbtn" data-a="remindoff" style="align-self:flex-start;color:var(--warn)">Turn off reminders</button></div>';
   }
   function syncText() {
@@ -397,6 +399,26 @@
           '<button type="button" class="primary" data-a="csend">Email me a sign-in code</button>') +
       (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '');
   }
+  // Settings -> Delete my account and data: a backup first if they want it, then type DELETE. Signed in, the
+  // delete-account function removes every row and the sign-in; then the phone is cleared and the front page shows.
+  function wipeBox() {
+    if (!U.wipe) return '<button type="button" class="textbtn" style="color:var(--warn)" data-a="wipe">Delete my account and data</button>';
+    var member = S && S.role === 'member', partner = S && S.partner;
+    return '<div class="wipebox stack"><b>Delete my account and data</b><span>' + (S ? 'This deletes your plan, your account and everything saved with it, on this phone and in your account. It can’t be undone.' : 'This deletes your plan from this phone. It can’t be undone.') + '</span>' +
+      (member ? '<span>You’ll leave ' + esc(partner || 'your partner') + '’s budget. Their plan stays.</span>' : '') +
+      (S && !member && partner ? '<div class="note" role="alert"><span>Your partner will lose access to this plan.</span></div><label class="optin"><input type="checkbox" data-wipehand' + (U.wipeHand ? ' checked' : '') + '><span>Give the plan to ' + esc(partner) + ' instead</span></label>' : '') +
+      '<button type="button" class="outline" data-a="backup">Download a backup first</button>' +
+      '<label class="field">Type DELETE to confirm<input type="text" data-wipe autocomplete="off" autocapitalize="characters" spellcheck="false"></label>' + (U.wipeErr ? '<p role="alert" class="scerr">' + esc(U.wipeErr) + '</p>' : '') +
+      '<div class="grid2"><button type="button" class="outline" data-a="wipeno">Cancel</button><button type="button" class="primary wipego" data-a="wipeyes">Delete everything</button></div></div>';
+  }
+  // clear the phone: every fmtm.* key, the recipe photos, the reminder sign-in, then the front page
+  function wipePhone() {
+    try { if (OS.p) OS.p.then(function (os) { return os.logout(); }).catch(function () {}); } catch (e) {}
+    S = null; C.ready = false; C.state = 'idle';
+    try { Object.keys(localStorage).filter(function (k) { return /^fmtm/.test(k); }).forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+    try { if (window.indexedDB) indexedDB.deleteDatabase('fmtm-recipes'); } catch (e) {}
+    P = blank(); U.wipe = false; U.wipeErr = ''; U.wipeHand = false; U.toast = null; U.front = true; go('welcome');
+  }
   function accountCard() {
     if (!cloudOn()) return '';
     if (S) return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Your account</div><b>' + esc((firstName() ? firstName() + ' \u00b7 ' : '') + (S.email || 'Signed in')) + '</b>' +
@@ -404,8 +426,7 @@
       '<label class="optin"><input type="checkbox" data-meoptin' + (me().optIn === false ? '' : ' checked') + '><span>Send me money tips and updates from Brad</span></label>' +
       '<span style="font-size:14px;color:var(--muted)" data-live="sync">' + syncText() + '</span>' +
       '<span style="font-size:14px;color:var(--muted)">Sign in with this email on any phone, in Safari or the Home Screen app, and your plan is there.</span>' + shareBlock() + (U.err ? '<p role="alert" style="color:var(--warn);font-size:14px">' + esc(U.err) + '</p>' : '') +
-      (U.cdel ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This deletes the copy saved in your account and signs you out. Your plan stays on this phone.</span></div><div class="grid2"><button type="button" class="outline" data-a="cdelno">Keep it</button><button type="button" class="primary danger" data-a="cdelyes">Delete it</button></div>'
-        : '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn ghost" data-a="cout">Sign out</button><button type="button" class="sharebtn ghost" data-a="cdel" style="color:var(--warn)">Delete my account copy</button></div>') + '</div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="sharebtn ghost" data-a="cout">Sign out</button></div>' + '</div>';
     var st = U.cloudStep;
     return '<div class="card stack" style="padding:16px 18px;gap:10px"><div class="eyebrow">Save to an account</div><b>Keep your plan on every phone</b>' +
       '<span style="font-size:14px;color:var(--muted)">Free. Sign in with your email and your plan follows you to a new phone, Safari or the Home Screen app. No password.</span>' +
@@ -1481,7 +1502,15 @@
     // moving a start that hasn't come yet isn't a new attempt
     var c = chS(), moving = c.status === 'active' && c.startDate > chToday();
     c.status = 'active'; c.level = 1; c.startDate = when === 'first' ? chFirst() : chToday(); if (!moving) c.attempts = (c.attempts || 0) + 1;
-    c.reached = null; c.missed = null; c.completedAt = null; U.chQuit = false; save();
+    c.reached = null; c.missed = null; c.completedAt = null; U.chQuit = false;
+    // starting is a good moment to offer the evening nudge (once per start)
+    U.chRemAsk = !!CONFIG.oneSignalAppId && !(P.remind && P.remind.on && P.remind.challenge !== false);
+    save();
+  }
+  function chRemAsk() {
+    if (!U.chRemAsk) return '';
+    return '<div class="card chrem"><b>🌙 Want a nudge at 8 pm if today isn’t done?</b>' + (U.remErr ? '<small class="chnote">' + esc(U.remErr) + '</small>' : '') +
+      '<div class="chbtns"><button type="button" class="chmini gold" data-a="chremyes">Yes</button><button type="button" class="chmini" data-a="chremno">Not now</button></div></div>';
   }
   function chStats() {
     var c = chS(), k = D.counts(P);
@@ -1569,9 +1598,9 @@
     if (c.status !== 'active') return todayHead() + chToday5() + chIntro() + chLinks(false);
     if (c.startDate > td) return todayHead() + chToday5() +
       '<div class="chintro"><div class="eyebrow">' + CH_NAME + '</div><h3>Starts ' + chDate(c.startDate) + '</h3><p class="chlead">Day 30 is ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '.</p>' +
-      '<button type="button" class="outline" data-a="ch30start" data-v="today">Start today instead</button></div>' + chLinks(true);
+      '<button type="button" class="outline" data-a="ch30start" data-v="today">Start today instead</button></div>' + chRemAsk() + chLinks(true);
     var n = chDayN(td);
-    return head('Day ' + n + ' of ' + CH_DAYS, chDots() + '<div class="chmeta"><span>' + (CH_DAYS - n) + ' to go</span><span>Ends ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '</span></div>') + chToday5() + chStatRow() + chLinks(true);
+    return head('Day ' + n + ' of ' + CH_DAYS, chDots() + '<div class="chmeta"><span>' + (CH_DAYS - n) + ' to go</span><span>Ends ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '</span></div>') + chRemAsk() + chToday5() + chStatRow() + chLinks(true);
   }
   function chLessonScreen() {
     var n = U.chLessonN || chDayN() || 1, L = chLesson(n), dl = dailyLesson(), isToday = chCanEdit() && dl.ref === 'ch:' + n, done = isToday && !!chRec(chToday()).lessonDone;
@@ -1807,7 +1836,7 @@
       '</div><button type="button" class="wf-arrow" data-wf="1" aria-label="Next screen">' + chev('M9 5l7 7-7 7') + '</button></div></section>' +
       '<section class="wf-act">' + obBtn('Find my money', 'frontstart') +
       '<div class="wf-trust"><span>Free</span><span>No bank login</span><span>Made by a certified financial coach</span></div>' +
-      (cloudOn() ? '<div class="wf-signin">Already have an account? <button type="button" class="wf-link" data-a="go" data-v="account">Sign in</button></div>' : '') + '</section></div>';
+      (cloudOn() ? '<div class="wf-signin">Already have an account? <button type="button" class="wf-link" data-a="go" data-v="account">Sign in</button></div>' : '') + '<a class="wf-priv" href="privacy.html">Privacy</a></section></div>';
   }
   // the carousel runs on its own (no re-render): swipe, drag, arrows, dots, keys, and auto-advance until first touch
   var wf = { timer: null, cur: 0, swiped: false };
@@ -3104,8 +3133,7 @@
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
         '<button type="button" class="outline" data-a="copyplan">' + (U.copiedPlan ? '\u2713 Plan copied' : 'Copy my plan (to move it to the Home Screen app)') + '</button>' + (U.copiedPlan && U.planCode ? '<div class="stack" style="gap:6px"><small style="color:var(--green);font-weight:600">\u2713 Copied. This text is your whole plan:</small><textarea class="plancode" readonly rows="2" aria-label="Your copied plan">' + esc(U.planCode) + '</textarea><small style="color:var(--muted)">Now open the other app and tap <b>Sign in</b>, then <b>Have a backup file instead?</b> (or Settings \u2192 Bring a plan here), then <b>Paste my copied plan</b>. Nothing is deleted here.</small></div>' : '') +
         '<button type="button" class="outline" data-a="backup">Save a backup file</button><button type="button" class="outline" data-a="go" data-v="restore">Bring a plan here</button>' +
-        (U.confirmDelete ? '<div class="note" role="alert" style="border-color:rgba(138,58,30,.4)"><span>This erases your plan from this phone' + (S ? ' and signs you out. The copy in your account stays, so you can sign in again to get it back.' : '. It can’t be undone unless you have a backup.') + '</span></div><div class="grid2"><button type="button" class="outline" data-a="delno">Keep it</button><button type="button" class="primary danger" data-a="delyes">Erase everything</button></div>'
-          : '<button type="button" class="textbtn" style="color:var(--warn)" data-a="del">Delete everything</button>') + '</div>' +
+        wipeBox() + '</div>' +
         (CONFIG.feedbackUrl ? '<a class="outline" style="text-decoration:none;color:var(--ink)" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener">Send feedback</a>' : '') +
         '<a class="textbtn" style="text-align:center;text-decoration:none;display:block;padding-top:12px" href="privacy.html">Privacy</a>' +
         '<p class="fine">An educational budgeting tool, not financial, tax or investment advice. Beta \u00b7 version ' + APP_VERSION + '</p>';
@@ -3332,7 +3360,7 @@
     var len = [(d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + '-day challenge')];
     return { eyebrow: 'Challenge complete', title: d.title, sub: d.share, chips: len.concat(extra, streakChips()).slice(0, 3), chipsNoAmt: len.concat(streakChips()).slice(0, 3), caption: 'Challenge complete: ' + d.title + '!' };
   }
-  // ---------- Journey: lessons ----------
+  // ---------- lessons (lessons.json): the daily checklist reads them ----------
   var LESSONS = null;
   try { fetch('lessons.json', { cache: 'no-cache' }).then(function (r) { return r.json(); }).then(function (l) { LESSONS = {}; l.forEach(function (x) { LESSONS[x.id] = x; }); if (U.screen === 'lesson' || U.screen === 'journey') render(); }).catch(function () {}); } catch (e) {}
   // Step 1's lessons: all about the $1,000 emergency fund (text in lessons.json; titles here until it loads)
@@ -3668,6 +3696,17 @@
         else if (v === 'send') { st.report = 'sent'; if (S) aiCall('report', { what: 'chat', input: FMTMAI.maskDigits(st.text), output: st.cards.map(function (c) { return c.a; }) }).catch(function () {}); track('chat-report'); }
         render();
       })(); break;
+      case 'wipe': U.wipe = true; U.wipeErr = ''; U.wipeHand = false; render(); break;
+      case 'wipeno': U.wipe = false; U.wipeErr = ''; render(); break;
+      case 'wipeyes': (function () {
+        var el = app.querySelector('[data-wipe]');
+        if (String(el && el.value || '').trim().toUpperCase() !== 'DELETE') { U.wipeErr = 'Type DELETE to confirm.'; render(); return; }
+        track('account-delete');
+        if (!S) { wipePhone(); return; }
+        U.wipeErr = 'Deleting…'; render();
+        fresh().then(function () { return sb('/functions/v1/delete-account', { method: 'POST', auth: true, body: { handOver: !!U.wipeHand } }); })
+          .then(function () { wipePhone(); }, function () { U.wipeErr = 'We couldn’t reach your account, so nothing was deleted. Try again when you’re online.'; render(); });
+      })(); break;
       case 'altopen': U.altOpen = true; U.altMsg = ''; render(); break;
       case 'altsave': (function () {
         var el = app.querySelector('[data-alt]'), e = String(el && el.value || '').trim().toLowerCase();
@@ -3776,7 +3815,6 @@
       case 'goaldel': P.goals.splice(i, 1); save(); render(); break;
       case 'checkin': U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); break;
       case 'backup': download('find-me-the-money-backup-' + F.isoDay(today()) + '.json', 'application/json', JSON.stringify(P, null, 2)); break;
-      case 'del': U.confirmDelete = true; render(); break;
       case 'payvary': P.payVaries = !!v; if (P.payVaries && !(P.payHist || []).length) P.payHist = [{ id: uid(), amount: P.paycheck || '' }, { id: uid(), amount: '' }]; payFromHist(); save(); render(); break;
       case 'payhistadd': P.payHist = P.payHist || []; P.payHist.push({ id: uid(), amount: '' }); save(); render(); (function () { var el = app.querySelectorAll('[data-list=payHist]'); if (el.length) el[el.length - 1].focus(); })(); break;
       case 'paybasis': P.payBasis = v; payFromHist(); save(); render(); break;
@@ -3807,7 +3845,6 @@
       })(); break;
       case 'creset': U.cloudStep = null; U.err = ''; render(); break;
       case 'cout': if (OS.p) OS.p.then(function (os) { return os.logout(); }).catch(function () {}); if (S) sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; U.toast = ['Signed out.', 'Your plan stays on this phone.', true]; render(); break;
-      case 'cdel': U.cdel = true; render(); break;
       case 'cjoinopen': U.joinOpen = true; render(); var cj = app.querySelector('[data-cjoin]'); if (cj) cj.focus(); break;
       case 'cinvite': (function () {
         var A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', code = '';
@@ -3846,14 +3883,6 @@
         fresh().then(function () { return sb('/rest/v1/plan_members?owner_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
           .then(function () { S.partner = null; keepAuth(); U.toast = ['Sharing stopped.', 'The budget is just yours again.', true]; render(); }, function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
         break;
-      case 'cdelno': U.cdel = false; render(); break;
-      case 'cdelyes': (function () {
-        U.cdel = false;
-        fresh().then(function () { return sb('/rest/v1/plans?user_id=eq.' + S.uid, { method: 'DELETE', auth: true }); })
-          .then(function () { return Promise.all([sb('/rest/v1/activity?user_id=eq.' + S.uid, { method: 'DELETE', auth: true }), sb('/rest/v1/people?user_id=eq.' + S.uid, { method: 'DELETE', auth: true })]).catch(function () {}); })
-          .then(function () { sb('/auth/v1/logout', { method: 'POST', auth: true }).catch(function () {}); S = null; keepAuth(); C.ready = false; C.state = 'idle'; track('account-delete'); U.toast = ['Your account copy is deleted.', 'Your plan stays on this phone.', true]; render(); },
-            function () { U.err = 'We couldn\u2019t reach your account. Try again when you\u2019re online.'; render(); });
-      })(); break;
       case 'cpick': (function () {
         var pk = U.cloudPick; U.cloudPick = null; C.ready = true;
         if (v === 'cloud') adopt(pk.row);
@@ -3862,7 +3891,6 @@
         if (U.obAfter && !P.setupDone) { finishSetup(); U.obAfter = false; U.toast = null; go('steps'); return; }
         go(P.setupDone ? 'home' : 'welcome');
       })(); break;
-      case 'delno': U.confirmDelete = false; render(); break;
       case 'seen': markSeen(v); render(); break;
       case 'earnadd':
         var ea = app.querySelector('[data-earnamt="' + v + '"]'), en = app.querySelector('[data-earnnote="' + v + '"]'), amtE = ea ? num(ea.value) : 0;
@@ -3885,6 +3913,13 @@
       case 'chnospend': case 'chbalok': case 'chdebt': case 'cheat': (function () {
         if (!chCanEdit()) return; var r = chRec(chToday(), true);
         var k = { chnospend: 'noSpend', chbalok: 'balancesConfirmed', chdebt: 'noNewDebt', cheat: 'noEatingOut' }[a]; r[k] = !r[k]; if (r[k]) track('daily-item'); save(); render();
+      })(); break;
+      case 'chremno': U.chRemAsk = false; render(); break;
+      case 'chremyes': (function () {
+        track('reminder-optin-challenge'); U.chRemAsk = false;
+        if (P.remind && P.remind.on) { P.remind.challenge = true; P.remind.chHour = P.remind.chHour || 20; save(); U.toast = ['Nudge is on.', 'We’ll check in at 8 pm on days that aren’t done.', true]; render(); return; }
+        if (!S) { go('settings'); return; }
+        U.remWant = { challenge: true, chHour: 20 }; remindOn(); render();
       })(); break;
       case 'chintro': U.jTab = null; go('journey'); setTimeout(function () { var el = document.getElementById('chintro'); if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 60); break;
       case 'chopen': if (v === 'lesson') { var dlo = dailyLesson(); if (dlo.a === 'lessonopen') { U.lesson = { id: dlo.v }; U.lessonCard = 0; go('lesson'); } else { U.chLessonN = +dlo.v; go('chlesson'); } } else { U.jTab = null; go('journey'); if (v === 'grat') setTimeout(function () { var g = document.getElementById('chGrat'); if (g) { g.scrollIntoView({ block: 'center' }); g.focus(); } }, 60); } break;
@@ -3952,7 +3987,6 @@
         var ok = function () { U.copied = true; render(); };
         try { navigator.clipboard.writeText(txt).then(ok, function () { selectCaption(); }); } catch (err) { selectCaption(); }
         break;
-      case 'delyes': if (S) { S = null; keepAuth(); C.ready = false; } keepCopy(); try { localStorage.removeItem(CONFIG.storageKey); } catch (err) {} P = blank(); U.confirmDelete = false; U.toast = null; go('welcome'); break;
     }
   });
 
@@ -4050,11 +4084,13 @@
   app.addEventListener('change', function (e) {
     var t = e.target;
     if (t.hasAttribute('data-slide')) { save(); render(); return; }
+    if (t.getAttribute('data-set') === 'chHour') { var hv = +t.value; if (hv >= 18 && hv <= 22) { P.remind = P.remind || {}; P.remind.chHour = hv; save(); } return; }
     if (t.getAttribute('data-set') === 'tz') { if (F.validTz(t.value)) { P.tz = t.value; save(); track('set-tz'); render(); } return; }
     if (t.getAttribute('data-set') === 'weekStart') { var wsv = +t.value; if (wsv >= 0 && wsv <= 6) { P.weekStart = wsv; if (U.mm) U.mm.wk = mmWeek(mmToday()); save(); track('set-week-start'); render(); } return; }
     if (t.hasAttribute('data-mename')) { var nv = String(t.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (nv) { setMe({ name: nv }); peopleSave(); render(); } return; }
     if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
     if (t.getAttribute('data-file') === 'snap') { snapFiles(t); return; }
+    if (t.hasAttribute('data-wipehand')) { U.wipeHand = t.checked; return; }
     if (t.hasAttribute('data-cckey')) { var ck = U.chat && U.chat.cards[+t.getAttribute('data-cckey')]; if (ck) { ck.key = t.value; ck.err = ''; render(); } return; }
     if (t.hasAttribute('data-cc')) { var ce = U.chat && U.chat.cards[+t.getAttribute('data-cc')]; if (ce) { var f = t.getAttribute('data-ccf'); ce.a[f] = f === 'amount' ? round2(num(t.value)) : String(t.value).slice(0, 40); } return; }
     if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }

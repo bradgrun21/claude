@@ -16,7 +16,7 @@
 //   AI_MODE              off | test | live   (start with test; off turns snaps and chat off for everyone within a minute)
 //   TEST_USER_IDS        comma-separated account ids that get real AI calls in test mode (everyone else: paused)
 //   AI_MONTHLY_CAP_USD   the whole app's AI spend for a month (default 25); at the cap, AI rests until the 1st
-//   RESEND_API_KEY, ALERT_EMAIL (Brad), ALERT_FROM (optional sender, default onboarding@resend.dev)
+//   RESEND_API_KEY, ALERT_EMAIL (Brad), ALERT_FROM (optional sender, default noreply@findmethemoney.app, the domain verified in Resend)
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 import { checkSnap, checkChat, maskDigits, needsCare, cleanText, CHAT_MAX } from './guard.mjs';
 
@@ -61,7 +61,7 @@ async function email(subject: string, text: string) {
   try {
     await fetch('https://api.resend.com/emails', {
       method: 'POST', headers: { Authorization: 'Bearer ' + env('RESEND_API_KEY'), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env('ALERT_FROM') || 'Find Me the Money <onboarding@resend.dev>', to: [env('ALERT_EMAIL')], subject, text }),
+      body: JSON.stringify({ from: env('ALERT_FROM') || 'Find Me the Money <noreply@findmethemoney.app>', to: [env('ALERT_EMAIL')], subject, text }),
     });
   } catch { /* an alert that fails never blocks the person */ }
 }
