@@ -36,6 +36,7 @@ the phone and never uploaded. There is no server, no account and no database.
 - Budget starts with Income: every paycheck and other money, with + Add income
 - Challenges and milestones use bubble tabs: Suggested (3, with Show all), Food, Spending, Bills & debt, Saving, Earn more, Completed; milestones: Up next, Getting started, Saving, Debt, Streaks, Days back, Challenges & earning, Earned
 - Pay that changes: add recent paychecks and plan on your lowest (safest) or your average
+- Two tiers. **Free**: the app, the free course, the free community and onboarding calls. **$29 a month** (group coaching): 2 live coaching calls a month, an accountability group, budget feedback, unlimited AI snaps and the paid perks. There are no other tiers.
 - Community lives on Home (goal: move people to Skool): a card under the calendar titled "You don’t have to do this alone" with Free Community / Partner with a Coach bubbles; tapping one opens its benefits and join link, tapping it again closes them. The last tab is now Wins (streak, challenges, milestones). YouTube is an icon in the Home header
 - (earlier) Community tab had two sections: the free community and coaching (benefits: 2 live coaching calls a month, an accountability group, budget feedback; a short "Who's Brad?" card; Learn about coaching opens the Skool plans page; a small Founding Members note)
 - After saving with email, the Home Screen how-to shows next (it no longer shows on the first screen)
@@ -177,7 +178,7 @@ During setup, the expenses step starts with the monthly expenses from "Find my m
 
 ## Free community link and coach offer
 - The "We found" reveal has a small "Join the free community →" link under Reclaim my money (opens `communityUrl`).
-- Right after someone's first weekly recap, the recap shows "Want a coach in your corner?" once. The line uses their found money from "Find my money" (whole dollars): $100 a month or more says "You found $X a month. Founding Members pay $49."; less, $0 or a gap says "Not much found yet? That's exactly what coaching is for." Either button saves `fmtm.coach` on the phone so it never comes back.
+- Right after someone's first weekly recap, the recap shows "Want a coach in your corner?" once. The line uses their found money from "Find my money" (whole dollars): $100 a month or more says "You found $X a month. Founding Members pay $29."; less, $0 or a gap says "Not much found yet? That's exactly what coaching is for." Either button saves `fmtm.coach` on the phone so it never comes back.
 - To see it without a payday: open the app with `?coachtest` (uses their found money) or `?coachtest=500` / `?coachtest=60` / `?coachtest=0` / `?coachtest=-40` to try an amount. `?coachreset` clears the saved flag.
 
 ## Still to set up

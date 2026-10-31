@@ -3000,8 +3000,8 @@
   function coachCard(found) {
     var f = Math.round(found || 0);
     return '<div class="coachcard" role="region" aria-label="Coaching"><h3>Want a coach in your corner?</h3>' +
-      '<p>For $49 a month, get help deciding what to do with your money, or finding it if it\u2019s not there yet.</p>' +
-      '<p class="coachline">' + (f >= 100 ? 'You found ' + money(f) + ' a month. Founding Members pay $49.' : 'Not much found yet? That\u2019s exactly what coaching is for.') + '</p>' +
+      '<p>For $29 a month, get group coaching, people who check in with you, and unlimited snaps.</p>' +
+      '<p class="coachline">' + (f >= 100 ? 'You found ' + money(f) + ' a month. Founding Members pay $29.' : 'Not much found yet? That\u2019s exactly what coaching is for.') + '</p>' +
       '<a class="coachbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="coachgo">Become a Founding Member</a>' +
       '<button type="button" class="textbtn" data-a="coachlater">Maybe later</button></div>';
   }
@@ -3175,13 +3175,13 @@
     var url = CONFIG.communityUrl, curl = CONFIG.coachingUrl || url; if (!url) return '';
     var ct = U.commTab || '', coach = ct === 'coach';
     var items = coach
-      ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.']]
+      ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.'], ['Unlimited snaps', 'Snap every receipt and bank screenshot you want.']]
       : [['Weekly recaps, together', 'Share how your week went. Streaks are easier with company.'], ['Live challenges', 'Run a No-Spend Weekend or Emergency Fund Sprint with a group.'], ['Ask anything', 'Stuck on a bill or a tough month? Ask people on the same path.']];
     return '<div class="card stack commcard" style="padding:16px 18px;gap:10px"><b style="font-size:18px">You don\u2019t have to do this alone</b>' +
       tabChips('commtab', ct, [['free', 'Free Community'], ['coach', 'Partner with a Coach']]) + (!ct ? '</div>' :
       '<div class="stack" style="gap:8px">' + items.map(function (x) { return '<div><b style="font-size:15px">' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:14px">' + x[1] + '</small></div>'; }).join('') + '</div>' +
       (coach ? '<small style="color:var(--muted);font-size:13px"><b>Who\u2019s Brad?</b> I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</small>' +
-          '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">\ud83c\udf05 Founding Members: price locked for life, first 25 only</small>'
+          '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">\ud83c\udf05 Founding Members: $29 a month, price locked for life, first 25 only</small>'
         : '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (P.communityJoined ? 'Open the community' : 'Join the FREE community') + '</a>') +
       '</div>');
   }
