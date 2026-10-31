@@ -1,7 +1,7 @@
 {
   "name": "Find Me the Money",
   "short_name": "Find Money",
-  "description": "A payday plan, a debt snowball countdown and goals with real dates. Your numbers never leave your phone.",
+  "description": "A payday plan, a debt snowball countdown and goals with real dates. Your plan is private to you.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

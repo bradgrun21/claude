@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31d';
+  var APP_VERSION = '10-31e';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -609,7 +609,7 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Scan or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
+    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Snap or type them'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
       return '<button type="button" role="menuitem" data-a="' + x[0] + '"><span class="plusic" aria-hidden="true">' + x[1] + '</span><span class="plustx"><b>' + x[2] + '</b><small>' + x[3] + '</small></span></button>'; }).join('') + '</div>';
   }
@@ -1910,31 +1910,74 @@
   }
   function openScan(week) { U.scan = { week: week || weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.screen === 'scan' ? U.scanBack : U.screen; go('scan'); }
   // read picked screenshots on this phone, one at a time; nothing is uploaded or kept
-  function scanFiles(input) {
-    var picked = Array.prototype.slice.call(input.files || []), sc = U.scan; if (!picked.length || !sc) return;
-    if (!window.FMTMScan) { sc.err = 'The screenshot reader didn’t load. Check your connection and try again.'; render(); return; }
+  // ---------- AI snaps: a receipt or a bank screenshot, read by the ai Edge Function (signed-in accounts only) ----------
+  // 10 snaps a month in the app, 20 after joining the free community, unlimited with group coaching. Typing is always free.
+  function aiCall(route, body) { return fresh().then(function () { return sb('/functions/v1/ai/' + route, { method: 'POST', auth: true, body: body || {} }); }); }
+  function aiStatus(force) {
+    if (!S || !cloudOn()) { U.ai = null; return; }
+    if (U.ai && !force && Date.now() - U.ai.at < 60000) return;
+    U.ai = Object.assign(U.ai || {}, { at: Date.now() });
+    aiCall('status').then(function (r) { U.ai = Object.assign({ at: Date.now() }, r); if (U.screen === 'scan') render(); }, function () {});
+  }
+  function aiCats() { return spendLines().map(function (l) { return { key: l.key, label: l.label }; }); }
+  function snapFiles(input) {
+    var kind = input.getAttribute('data-kind') === 'bank' ? 'bank' : 'receipt', picked = Array.prototype.slice.call(input.files || []), sc = U.scan;
+    if (!picked.length || !sc) return;
+    if (!S || !window.FMTMAI) { sc.err = 'Sign in to use snaps.'; render(); return; }
     // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
     Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (files) {
-      input.value = ''; sc.total = files.length; sc.reading = 1; sc.err = ''; render();
-      var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMScan.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); }), empty = 0, failed = 0, found = 0;
+      input.value = ''; sc.total = files.length; sc.reading = 1; sc.err = ''; render(); track('snap-start');
+      var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMEntry.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); }), stop = false, found = 0, failed = 0;
       return files.reduce(function (chain, f, i) {
         return chain.then(function () {
+          if (stop) return;
           sc.reading = i + 1; render();
-          if (!f.size) { empty++; return; }
-          return FMTMScan.readImage(f).then(function (r) {
-            found += r.rows.length; var fresh = FMTMScan.dedupe(sc.rows.concat(r.rows), seen).slice(sc.rows.length);
-            fresh.forEach(function (row) { var g = row.skip ? { key: '', tag: '' } : suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = false; sc.rows.push(row); });
-          }, function () { failed++; });
+          return FMTMAI.prepare(f).then(function (images) {
+            return aiCall('snap', { images: images, kind: kind, categories: aiCats(), today: F.isoDay(today()) });
+          }).then(function (r) {
+            r = r || {};
+            if (r.paused) { stop = true; U.ai = Object.assign(U.ai || {}, { paused: true }); track('snap-paused'); return; }
+            if (r.limitReached) { stop = true; U.ai = Object.assign(U.ai || {}, { level: r.level, snaps: { used: r.used, limit: r.used } }); track(r.level === 'community' ? 'snap-limit-20' : 'snap-limit-10'); return; }
+            if (r.slow) { stop = true; sc.err = 'One moment. Try that one again in a minute.'; return; }
+            if (U.ai && U.ai.snaps && r.used != null) U.ai.snaps.used = r.used;
+            var rows = r.rows || []; found += rows.length; if (!rows.length) failed++;
+            FMTMEntry.dedupe(sc.rows.concat(rows), seen).slice(sc.rows.length).forEach(function (row) {
+              // a store they've categorized before wins, then the AI's category, then our own guess
+              var mem = (P.merchantMem || {})[merchKey(row.merchant)], g = row.skip ? { key: '', tag: '' } : suggestKey(row.merchant, lines);
+              row.key = row.skip ? '' : mem || row.key || g.key; if (!row.tag && !row.skip && !mem && !row.key) row.tag = g.tag;
+              row.ok = !row.skip && !row.low && !!row.key; row.src = 'ai'; sc.rows.push(row);
+            });
+            if (rows.length) track('snap-ok');
+          }, function (er) {
+            failed++;
+            if (er && er.status === 413) sc.err = 'That photo is too big. Try a screenshot of it instead.';
+            else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; sc.err = 'Sign in to use snaps.'; }
+          });
         });
       }, Promise.resolve()).then(function () {
         sc.reading = 0;
-        if (empty) sc.err = (empty === files.length ? 'That photo came through empty. ' : 'One photo came through empty. ') + 'On iPhone this happens when the photo is stored in iCloud. In Photos, tap Share → Save to Files, then tap Scan a screenshot → Choose File.';
-        else if (failed) sc.err = 'We couldn’t read ' + (failed === files.length ? 'that screenshot' : failed + ' of them') + '. Try a screenshot of your bank app’s transaction list, or add purchases by hand.';
-        else if (!sc.rows.length && found) sc.err = 'Everything in ' + (files.length > 1 ? 'those screenshots' : 'that screenshot') + ' is already saved.';
-        else if (!sc.rows.length) sc.err = 'We didn’t find any purchases in that screenshot. Try one that shows your bank app’s list of transactions.';
-        track('scan-read'); render();
+        if (!sc.err && failed && !sc.rows.length) sc.err = 'We couldn’t read purchases in that photo. Try again, or type them in.';
+        else if (!sc.err && !sc.rows.length && found) sc.err = 'Everything in that photo is already saved.';
+        aiStatus(true); render();
       });
     });
+  }
+  // what's on the Add purchases screen above the list: snap buttons and the count, or why snaps are resting
+  function snapArea() {
+    var ai = U.ai || {}, sn = ai.snaps || {}, lim = sn.limit, left = lim == null ? null : Math.max(0, lim - (sn.used || 0));
+    var typeLine = '<small class="snapfree">Or type it in. That’s always free.</small>';
+    var btn = function (k, label, cls) { return '<label class="' + cls + ' snapbtn">' + label + '<input type="file" accept="image/*" multiple data-file="snap" data-kind="' + k + '" class="sr"></label>'; };
+    if (!S) return '<div class="card snapcard"><b>📸 Snap a receipt or your bank app</b><span>Sign in to use snaps.</span><button type="button" class="outline" data-a="go" data-v="account">Sign in</button>' + typeLine + '</div>';
+    if (ai.paused) return '<div class="card snapcard"><b>😴 Snaps are resting until the 1st.</b><span>You can still type purchases in.</span></div>';
+    if (lim != null && left === 0) {
+      var alt = U.altOpen ? '<div class="typeit"><input type="email" data-alt autocomplete="email" placeholder="The email you joined with" aria-label="The email you joined the community with"><button type="button" class="sharebtn" data-a="altsave">Save</button></div>' + (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '')
+        : (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '<button type="button" class="linkbtn" data-a="altopen">Joined with a different email?</button>');
+      return ai.level === 'community'
+        ? '<div class="card snapcard"><b>You’ve used your 20 snaps this month.</b><span>Unlimited snaps come with group coaching ($29/mo).</span>' + (CONFIG.coachingUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + typeLine + '</div>'
+        : '<div class="card snapcard"><b>You’ve used your 10 snaps this month.</b><span>Join the free community and get 10 more.</span>' + (CONFIG.communityUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community</a>' : '') + alt + typeLine + '</div>';
+    }
+    return '<div class="snapgrid">' + btn('receipt', '🧾 Snap a receipt', 'primary') + btn('bank', '🏦 Snap a bank screenshot', 'outline') + '</div>' +
+      '<small class="snapleft">' + (ai.level === 'paid' ? 'Unlimited snaps' : lim != null ? left + ' of ' + lim + ' snaps left this month' : '') + '</small>';
   }
   function weekDone(ws, how) { wkMark('cat'); P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
   // ---------- the budget: spending categories, recurring expenses, everything else ----------
@@ -2825,31 +2868,30 @@
 
     scan: function () {
       var sc = U.scan; if (!sc) { U.scan = sc = { week: weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
+      aiStatus();
       var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow(), lines = spendLines();
-      var pick = function (label, cls) { return '<label class="' + cls + '" style="cursor:pointer;text-align:center">' + label + '<input type="file" accept="image/*" multiple data-file="scan" class="sr"></label>'; };
       var groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
       var select = function (r, i) {
         return '<select data-scan-key="' + i + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
           var m = lines.filter(function (l) { return l.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
         }).join('') + '</select>';
       };
-      var n = sc.rows.filter(function (r) { return r.ok; }).length, open = sc.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
+      var okRows = sc.rows.filter(function (r) { return r.ok; }), n = okRows.length, total = okRows.reduce(function (t, r) { return t + r.amount; }, 0), open = sc.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
       var rows = sc.rows.map(function (r, i) {
-        var sub = [r.date ? dayMonth(F.fromIso(r.date)) : 'No date found'].concat(r.flag ? ['<span class="sctag warn">' + esc(r.flag) + '</span>'] : []).concat(r.tag ? ['<span class="sctag">' + r.tag + '</span>'] : []).concat(r.low ? ['<span class="sctag warn">Double-check</span>'] : []);
+        var sub = [r.date ? dayMonth(F.fromIso(r.date)) : 'No date found'].concat(r.flag ? ['<span class="sctag warn">' + esc(r.flag) + '</span>'] : []).concat(r.tag ? ['<span class="sctag">' + r.tag + '</span>'] : []).concat(r.low && !r.flag ? ['<span class="sctag warn">Double-check</span>'] : []);
         return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
           '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, i) + '</div></div>';
       }).join('');
       return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2>' +
-        '<p>Scan your bank app or type them in.</p></div>' +
+        '<p>Snap a receipt or your bank app, or type them in.</p></div>' + (sc.reading ? '' : snapArea()) +
         '<div class="typeit"><input type="text" data-typed autocomplete="off" placeholder="Type it: coffee 5, gas $50 yesterday" aria-label="Type purchases"><button type="button" class="sharebtn" data-a="typedadd">Add</button></div>' +
-        (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'screenshot ' + sc.reading + ' of ' + sc.total : 'your screenshot') + '…</b><small>A few seconds each. The first one takes longer.</small></div>' : '') +
+        (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'photo ' + sc.reading + ' of ' + sc.total : 'your photo') + '…</b><small>A few seconds each.</small></div>' : '') +
         (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
         (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
-          '<small style="color:var(--muted)">Check the right ones and pick a category. Unchecked rows are skipped.</small></div>' +
+          '<small style="color:var(--muted)">Check the right ones and pick a category. Unchecked rows are skipped. AI can misread, so check before you save.</small></div>' +
           '<div class="card scl">' + rows + '</div>' +
-          '<div class="push"><button type="button" class="primary" data-a="scansave"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') : 'Check the purchases to save') + '</button>' + pick('Scan another screenshot', 'outline') + '<button type="button" class="textbtn" data-a="weekhand">Add one by hand</button></div>'
-          : sc.reading ? '' : '<div class="stack" style="gap:10px">' + pick('Scan a screenshot', 'primary') + '<button type="button" class="outline" data-a="weekhand">Add one by hand</button><button type="button" class="textbtn" data-a="weeknone">No purchases this week</button></div>' +
-            '<p style="font-size:13px;color:var(--muted)">On iPhone, if a photo won’t open, save it to Files and pick it from there.</p>');
+          '<div class="push"><button type="button" class="primary" data-a="scansave"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') + ' · ' + money2(total) : 'Check the purchases to save') + '</button>' + '<button type="button" class="textbtn" data-a="weekhand">Add one by hand</button></div>'
+          : sc.reading ? '' : '<div class="stack" style="gap:10px"><button type="button" class="outline" data-a="weekhand">Add one by hand</button></div>');
     },
     spendadd: function () {
       var f = U.form || {}, lines = spendLines(), last = f.key;
@@ -3482,14 +3524,21 @@
       case 'weekadd': openScan(v); break;
       case 'typedadd': (function () {
         var inp = app.querySelector('[data-typed]'), sc = U.scan, txt = inp ? inp.value : '';
-        if (!sc || !window.FMTMScan || !txt.trim()) return;
-        var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMScan.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); });
-        var found = FMTMScan.parseTyped(txt, today());
+        if (!sc || !window.FMTMEntry || !txt.trim()) return;
+        var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMEntry.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); });
+        var found = FMTMEntry.parseTyped(txt, today());
         if (!found.length) { sc.err = 'Add an amount, like “coffee 5” or “gas $50 yesterday”.'; render(); return; }
         // typed rows join the same list as scanned ones, checked, with a category guess
-        FMTMScan.dedupe(sc.rows.concat(found), seen).slice(sc.rows.length).forEach(function (row) { var g = suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = true; sc.rows.push(row); });
+        FMTMEntry.dedupe(sc.rows.concat(found), seen).slice(sc.rows.length).forEach(function (row) { var g = suggestKey(row.merchant, lines); row.key = g.key; row.tag = g.tag; row.ok = true; sc.rows.push(row); });
         sc.err = ''; track('typed-add'); render();
         var again = app.querySelector('[data-typed]'); if (again) again.focus();
+      })(); break;
+      case 'altopen': U.altOpen = true; U.altMsg = ''; render(); break;
+      case 'altsave': (function () {
+        var el = app.querySelector('[data-alt]'), e = String(el && el.value || '').trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { U.altMsg = 'Enter the email you joined with.'; render(); return; }
+        fresh().then(function () { return sb('/rest/v1/people?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.uid, alt_email: e } }); })
+          .then(function () { U.altMsg = 'Saved. Your extra snaps show up once the community has your email.'; U.altOpen = false; track('alt-email'); aiStatus(true); render(); }, function () { U.altMsg = 'That didn’t save. Try again.'; render(); });
       })(); break;
       case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
       case 'scansave': (function () {
@@ -3499,7 +3548,7 @@
         var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0], fallback = F.isoDay(today());
         if (w && w.end < fallback) fallback = w.end;
         P.merchantMem = P.merchantMem || {};
-        keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: r.src || 'scan' }); P.merchantMem[merchKey(r.merchant)] = r.key; });
+        keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: r.src || (r.typed ? 'typed' : 'scan') }); P.merchantMem[merchKey(r.merchant)] = r.key; });
         markLogged(keep.map(function (r) { return r.date || fallback; }));
         weekDone(sc.week, 'saved'); track('scan-save');
         // the screenshot and what was read from it are dropped here
@@ -3871,7 +3920,7 @@
     if (t.getAttribute('data-set') === 'weekStart') { var wsv = +t.value; if (wsv >= 0 && wsv <= 6) { P.weekStart = wsv; if (U.mm) U.mm.wk = mmWeek(mmToday()); save(); track('set-week-start'); render(); } return; }
     if (t.hasAttribute('data-mename')) { var nv = String(t.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (nv) { setMe({ name: nv }); peopleSave(); render(); } return; }
     if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
-    if (t.getAttribute('data-file') === 'scan') { scanFiles(t); return; }
+    if (t.getAttribute('data-file') === 'snap') { snapFiles(t); return; }
     if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }
     if (t.hasAttribute('data-scan-key')) { var sk = U.scan.rows[+t.getAttribute('data-scan-key')]; sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; U.scan.err = ''; render(); return; }
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {

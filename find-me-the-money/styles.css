@@ -1530,3 +1530,10 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .cday.act.s-some > span, .cday.act.today.s-some > span { background: #A6E8D4; color: #0f1d19; font-weight: 700; }
 .clegend i.lg-some { background: #A6E8D4; }
 .wf-cg span.s { background: #A6E8D4; color: #0f1d19; } .wf-lg i.s { background: #A6E8D4; }
+/* AI snaps */
+.snapgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.snapbtn { cursor: pointer; text-align: center; display: grid; place-items: center; min-height: 56px; font-size: 15px; padding: 8px 10px; line-height: 1.25; }
+.snapleft { display: block; text-align: center; color: var(--muted); font-size: 13px; margin-top: -2px; }
+.snapcard { display: grid; gap: 8px; padding: 16px 18px; }
+.snapcard b { font-size: 16px; } .snapcard > span { color: var(--muted); font-size: 14px; }
+.snapfree { display: block; color: var(--muted); font-size: 13px; text-align: center; }
