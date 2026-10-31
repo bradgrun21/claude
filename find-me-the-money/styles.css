@@ -1399,3 +1399,81 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 /* Meal Math: sides */
 .mm-sides { display: block; font-size: 12px; font-weight: 700; color: var(--ink); opacity: .8; margin-top: 1px; }
 .mm-kind { margin: 2px 0 12px; }
+
+/* 30-Day Challenge */
+.chhome { padding: 14px 16px; }
+.chrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; text-align: left; color: var(--ink); font: inherit; border: 0; cursor: pointer; }
+.chrow b, .chtop b { display: block; font-size: 16px; }
+.chrow small, .chtop small { color: var(--muted); font-size: 13px; }
+.chrow i, .chtop i { font-style: normal; color: var(--muted); font-size: 22px; }
+.chic { width: 40px; height: 40px; border-radius: 12px; background: var(--card2); display: grid; place-items: center; font-size: 22px; }
+.chtop { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; background: none; border: 0; padding: 0; text-align: left; color: var(--ink); font: inherit; cursor: pointer; }
+.chring { --p: 0; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--green) calc(var(--p) * 1%), rgba(255,255,255,.1) 0); position: relative; }
+.chring::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--card); }
+.chring b { position: relative; font-size: 14px !important; }
+.chchips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
+.chchip { position: relative; height: 48px; border-radius: 14px; border: 1px solid rgba(255,255,255,.1); background: var(--card2); font-size: 22px; cursor: pointer; display: grid; place-items: center; }
+.chchip.on { background: rgba(126,217,192,.16); border-color: var(--green); }
+.chchip i { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--green); color: #0f1d19; font-style: normal; font-size: 12px; font-weight: 900; display: grid; place-items: center; }
+.chchip:disabled { cursor: default; }
+.chhead { position: relative; margin-top: 8px; display: grid; gap: 6px; }
+.chhead .gearbtn { position: absolute; top: -4px; right: 0; }
+.chhead h2 { padding-right: 52px; }
+.chdots { display: grid; grid-template-columns: repeat(15, 1fr); gap: 6px; margin-top: 8px; }
+.chdots i { aspect-ratio: 1; border-radius: 50%; background: rgba(255,255,255,.1); }
+.chdots i.on { background: var(--green); }
+.chdots i.now { box-shadow: inset 0 0 0 2px var(--hi); }
+.chmeta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; }
+.chlead { font-size: 16px; color: var(--ink); }
+.chrule { font-size: 14px; color: var(--muted); }
+.chtasks { display: grid; gap: 10px; margin-top: 14px; }
+.chtask { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; background: var(--card); border-radius: 18px; padding: 14px; }
+.chtask.on { box-shadow: inset 0 0 0 1px rgba(126,217,192,.45); }
+.chbox { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #4a4945; display: grid; place-items: center; font-weight: 900; font-size: 14px; color: #0f1d19; margin-top: 1px; }
+.chtask.on .chbox { background: var(--green); border-color: var(--green); }
+.chtb { display: grid; gap: 8px; min-width: 0; }
+.chtb > b { font-size: 15px; }
+.chsub { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.chbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.chmini { min-height: 40px; border: 0; border-radius: 12px; background: var(--card2); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; padding: 0 14px; cursor: pointer; }
+.chmini.on { color: var(--muted); }
+.chmini.gold { background: var(--hi); color: #1a1408; justify-self: start; }
+.chtgl { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; text-align: left; background: var(--card2); color: var(--ink); border: 0; border-radius: 12px; padding: 12px; font: inherit; font-size: 14px; cursor: pointer; }
+.chtgl:disabled { cursor: default; }
+.chcb { width: 22px; height: 22px; border-radius: 7px; border: 2px solid #5a5955; display: grid; place-items: center; font-weight: 900; font-size: 13px; color: #0f1d19; }
+.chtgl.on .chcb { background: var(--green); border-color: var(--green); }
+.chnote { font-size: 13px; color: var(--warn); }
+.chlink { text-align: left; background: var(--card2); color: var(--ink); border: 0; border-radius: 12px; padding: 12px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.chlink span { color: var(--muted); float: right; }
+.chquote { font-size: 15px; color: var(--ink); font-style: italic; }
+.chgrat { width: 100%; min-height: 64px; resize: vertical; font: inherit; font-size: 16px; color: var(--ink); background: var(--card2); border: 1px solid transparent; border-radius: 12px; padding: 10px 12px; }
+.chgrat:focus { outline: none; border-color: var(--hi); }
+.chdone { position: relative; display: grid; gap: 2px; text-align: center; background: linear-gradient(160deg, #24312D, #1F1F1F 70%); border-radius: 18px; padding: 16px; margin-top: 12px; overflow: hidden; }
+.chdone b { font-size: 18px; color: var(--green); }
+.chdone small { color: var(--muted); font-size: 13px; }
+.chstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.chstats > div { background: var(--card); border-radius: 14px; padding: 12px 8px; text-align: center; display: grid; gap: 2px; }
+.chstats b { font-size: 22px; }
+.chstats small { font-size: 12px; color: var(--muted); }
+.chlinks { padding: 4px 16px; margin-top: 14px; }
+.chlinks .linkrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; width: 100%; min-height: 52px; background: none; border: 0; border-bottom: 1px solid rgba(255,255,255,.06); color: var(--ink); font: inherit; font-weight: 700; text-align: left; cursor: pointer; padding: 0; }
+.chlinks .linkrow:last-child { border-bottom: 0; }
+.chlinks .linkrow small { color: var(--muted); font-weight: 600; }
+.chlinks .linkrow i { font-style: normal; color: var(--muted); font-size: 20px; }
+.chlinks .chquit { color: var(--muted); font-weight: 600; }
+.chlist { padding: 6px 16px; display: grid; }
+.chlist > div { display: flex; gap: 12px; align-items: center; min-height: 46px; border-bottom: 1px solid rgba(255,255,255,.06); font-weight: 600; font-size: 15px; }
+.chlist > div:last-child { border-bottom: 0; }
+.chlist span { font-size: 20px; width: 28px; text-align: center; }
+.chstart { display: grid; gap: 10px; margin-top: 14px; }
+.chfinish { position: relative; display: grid; justify-items: center; gap: 4px; padding: 14px 0 4px; }
+.chfinish b { color: var(--hi); font-size: 16px; }
+.chtrophy { font-size: 64px; }
+.chvideo { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 16px; background: #000; margin-top: 12px; }
+.chbody { display: grid; gap: 12px; margin: 14px 0; font-size: 16px; line-height: 1.55; }
+.chjournal { padding: 4px 16px; }
+.chjournal .row > div { display: grid; gap: 2px; }
+.chjournal small { color: var(--muted); font-size: 12px; }
+.cal-chd { background: var(--green); }
+.cal-chn { background: transparent; box-shadow: inset 0 0 0 1.5px var(--green); }
+.chfinish b, .chtrophy { position: relative; z-index: 2; } .chfinish b { background: var(--bg); padding: 2px 10px; border-radius: 999px; }

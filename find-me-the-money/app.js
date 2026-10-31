@@ -3,9 +3,9 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-30y';
+  var APP_VERSION = '10-31a';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
-  var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); });
+  var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
   // ---------- settings for the beta ----------
   var CONFIG = {
@@ -504,10 +504,12 @@
   var U = { front: firstOpen && !P.setupDone, screen: P.setupDone ? 'home' : 'welcome', toast: null, form: null, formErr: '', err: '', sortHist: [], back: 'home', next: 'home', confirmDelete: false, filter: 'all', showHelp: false };
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
-  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Journey', 'flag'], ['meals', 'Meals', 'menu']];
-  function tabOf(screen) { return screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
+  var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Challenge', 'flag'], ['meals', 'Meals', 'menu']];
+  function tabOf(screen) { return screen === 'chlesson' || screen === 'chjournal' || screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
   function render() {
     autoColorMap = null; ensureIds();
+    chCheck();
+    if (P.challenge && P.challenge.status === 'restart' && !U.chRestartShown && U.screen === 'home' && !U.sheet) { U.chRestartShown = true; U.screen = 'journey'; U.jTab = null; }
     if (P.setupDone && P.journey && !P.journey.makeRoomDone) jCheckRoom();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
@@ -531,6 +533,7 @@
     var front = U.screen === 'welcome' && U.front; document.body.classList.toggle('is-front', front); if (front) frontInit(); else clearInterval(wf.timer);
     tourMaybe();
     csvAutoplay();
+    if (U.screen === 'chlesson') chAfter();
     document.body.classList.toggle('has-tabs', tabbed);
     document.body.classList.toggle('mm-editing', U.screen === 'meals' && mmSt().view === 'edit');
     if (U.screen !== 'recap') U.recapWk = null;
@@ -1105,8 +1108,8 @@
     var wk = mmSt().wk, todo = mmGItems(wk).filter(function (x) { return !x.done; });
     return todo.length ? '🛒 Grocery list · ' + mmWeekLabel(wk) + '\n' + todo.map(function (x) { return '☐ ' + x.name + (x.qty ? ' (' + x.qty + ')' : ''); }).join('\n') : '';
   }
-  function mmCopy(t) {
-    var done = function () { mmToast('📋 Copied'); track('grocery-copy'); };
+  function mmCopy(t, ev) {
+    var done = function () { mmToast('📋 Copied'); track(ev || 'grocery-copy'); };
     var old = function () { var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { mmToast('Couldn’t copy here'); } ta.remove(); };
     try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done, old); return; } } catch (e) {}
     old();
@@ -1394,6 +1397,167 @@
     if (t.id === 'mmPkg') { sh.f.packageAmount = t.value; mmCalcLive(); return; }
     if (t.id === 'mmUses') { sh.f.amountUsed = t.value; mmCalcLive(); return; }
   });
+  // ---------- the 30-Day Challenge (Level 1): 5 small things every day for 30 days; miss a day and it's back to Day 1 ----------
+  // P.challenge = { status: notStarted | active | restart | completed, level: 1, startDate, attempts, longestStreak, totalDaysCompleted, completedAt,
+  //   days: { iso: { noSpend, balUpdated, balancesConfirmed, noNewDebt, noEatingOut, lessonDone, gratitude, logged, done } } }
+  // 'restart' is the calm stop between a missed day and "Start again". Only today can be checked off; past days stay as they were.
+  // The lessons live in challenge-lessons.js (placeholders until the real ones are in).
+  var CH_NAME = '30-Day Challenge', CH_DAYS = 30;
+  var CH_TASKS = [['log', '🧾', 'Log purchases & update balances'], ['debt', '💳', 'No new debt'], ['eat', '🍽️', 'No eating out'], ['lesson', '🎧', 'Today’s 5-minute lesson'], ['grat', '🙏', 'One thing you’re grateful for']];
+  function chS() { var c = P.challenge || (P.challenge = { status: 'notStarted', level: 1, startDate: null, days: {}, attempts: 0, longestStreak: 0, totalDaysCompleted: 0, completedAt: null }); c.days = c.days || {}; return c; }
+  function chToday() { return F.isoDay(today()); }
+  function chRec(iso, make) { var c = chS(); if (make && !c.days[iso]) c.days[iso] = {}; return c.days[iso] || {}; }
+  function chDayN(iso) { var c = chS(); return c.startDate ? F.daysBetween(F.fromIso(c.startDate), F.fromIso(iso || chToday())) + 1 : 0; }
+  function chLive() { var c = chS(); return c.status === 'active' && !!c.startDate && c.startDate <= chToday(); }
+  function chFirst() { var d = today(); return F.isoDay(new Date(d.getFullYear(), d.getMonth() + 1, 1)); }
+  function chDate(iso) { return F.fromIso(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+  function chLesson(n) { return (window.FMTM_CH_LESSONS || []).filter(function (x) { return x.day === n; })[0] || { day: n, title: 'Lesson ' + n + ' — coming soon', type: 'text', videoUrl: null, body: null, minutes: 5, placeholder: true }; }
+  // a soft note only: a purchase in an eating-out kind of category, or a Meal Math "Eat out", that day
+  function chEatOut(iso) {
+    var lines = {}, re = /eat(ing)? out|restaurant|dining|take ?out|fast food|delivery/i; spendLines().forEach(function (l) { lines[l.key] = l.label; });
+    return (P.spends || []).some(function (s) { return s.date === iso && re.test(lines[s.key] || ''); }) || mmPlan().some(function (e) { return e.date === iso && e.type === 'eatOut'; });
+  }
+  function chTasks(iso) {
+    var r = chRec(iso), spent = (P.spends || []).some(function (s) { return s.date === iso; });
+    var t = { spent: spent, logA: spent || !!r.noSpend, logB: !!(r.balUpdated || r.balancesConfirmed), debt: !!r.noNewDebt, eat: !!r.noEatingOut, lesson: !!r.lessonDone, grat: !!String(r.gratitude || '').trim() };
+    t.log = t.logA && t.logB; t.n = [t.log, t.debt, t.eat, t.lesson, t.grat].filter(Boolean).length; return t;
+  }
+  // runs before every draw: a day left undone stops the run; a day with all 5 done counts
+  function chCheck() {
+    var c = P.challenge; if (!P.setupDone || !c || c.status !== 'active' || !c.startDate) return;
+    var td = chToday();
+    for (var d = c.startDate; d < td; d = mmAdd(d, 1)) {
+      if (c.days[d] && c.days[d].done) continue;
+      var reached = F.daysBetween(F.fromIso(c.startDate), F.fromIso(d));
+      c.status = 'restart'; c.reached = reached; c.missed = d; c.longestStreak = Math.max(c.longestStreak || 0, reached);
+      U.chRestartShown = false; track('challenge-restart-day-' + reached); save(); return;
+    }
+    if (c.startDate > td) return;
+    var t = chTasks(td), r = chRec(td);
+    if (t.n < 5 || r.done) return;
+    r = chRec(td, true); r.done = true; r.logged = t.spent;
+    var n = chDayN(td); c.totalDaysCompleted = (c.totalDaysCompleted || 0) + 1; c.longestStreak = Math.max(c.longestStreak || 0, n);
+    track('challenge-day-complete-' + n);
+    if (n >= CH_DAYS) { c.status = 'completed'; c.completedAt = td; track('challenge-complete'); }
+    else setTimeout(function () { mmToast('✅ Day ' + n + ' done · ' + (CH_DAYS - n) + ' to go'); }, 30);
+    save();
+  }
+  // a day can roll over while the app is open
+  var chDayNow = null;
+  setInterval(function () { var d = F.isoDay(today()); if (chDayNow && d !== chDayNow && P.setupDone) render(); chDayNow = d; }, 60000);
+  function chStart(when) {
+    // moving a start that hasn't come yet isn't a new attempt
+    var c = chS(), moving = c.status === 'active' && c.startDate > chToday();
+    c.status = 'active'; c.level = 1; c.startDate = when === 'first' ? chFirst() : chToday(); if (!moving) c.attempts = (c.attempts || 0) + 1;
+    c.reached = null; c.missed = null; c.completedAt = null; U.chQuit = false; save();
+  }
+  function chStats() {
+    var c = chS(), keys = Object.keys(c.days);
+    return { attempts: c.attempts || 0, longest: c.longestStreak || 0, total: c.totalDaysCompleted || 0,
+      lessons: keys.filter(function (k) { return c.days[k].lessonDone; }).length, grateful: keys.filter(function (k) { return String(c.days[k].gratitude || '').trim(); }).length };
+  }
+  function chStatRow() {
+    var s = chStats();
+    return '<div class="chstats"><div><b>' + s.longest + '</b><small>longest run</small></div><div><b>' + s.total + '</b><small>days done</small></div><div><b>' + s.attempts + '</b><small>' + (s.attempts === 1 ? 'attempt' : 'attempts') + '</small></div></div>';
+  }
+  // the card on Home: today's 5 tasks as chips, and a ring that fills as they get done
+  function chHome() {
+    var c = chS(), td = chToday();
+    if (!P.setupDone) return '';
+    if (c.status === 'restart') return '<div class="card chhome stack"><b>🌱 ' + (c.reached ? 'You showed up ' + plural(c.reached, 'day') + ' in a row. That counts.' : 'A fresh start.') + '</b><small>Day 1 starts today.</small><button type="button" class="primary" data-a="chagain">Start again</button></div>';
+    if (c.status === 'completed') return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🏆</span><span><b>' + CH_NAME + ' done</b><small>Level 1 complete</small></span><i aria-hidden="true">›</i></button>';
+    if (c.status !== 'active') return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🔥</span><span><b>' + CH_NAME + '</b><small>5 small things a day</small></span><i aria-hidden="true">›</i></button>';
+    if (c.startDate > td) return '<button type="button" class="card chhome chrow" data-a="go" data-v="journey"><span class="chic">🔥</span><span><b>' + CH_NAME + '</b><small>Starts ' + chDate(c.startDate) + '</small></span><i aria-hidden="true">›</i></button>';
+    var t = chTasks(td), n = chDayN(td), done = !!chRec(td).done;
+    return '<div class="card chhome"><button type="button" class="chtop" data-a="go" data-v="journey"><span class="chring" style="--p:' + (t.n / 5 * 100) + '"><b>' + t.n + '/5</b></span><span><b>Day ' + n + ' of ' + CH_DAYS + '</b><small>' + (t.n === 5 ? '✅ Done for today' : plural(5 - t.n, 'task') + ' left today') + '</small></span><i aria-hidden="true">›</i></button>' +
+      '<div class="chchips">' + CH_TASKS.map(function (x) {
+        var on = t[x[0]], act = x[0] === 'debt' ? 'chdebt' : x[0] === 'eat' ? 'cheat' : 'chopen';
+        return '<button type="button" class="chchip' + (on ? ' on' : '') + '" data-a="' + act + '" data-v="' + x[0] + '" aria-pressed="' + on + '" aria-label="' + esc(x[2]) + '"' + (done && act !== 'chopen' ? ' disabled' : '') + '><span>' + x[1] + '</span>' + (on ? '<i aria-hidden="true">✓</i>' : '') + '</button>';
+      }).join('') + '</div></div>';
+  }
+  function chDots() {
+    var c = chS(), td = chToday(), out = '';
+    for (var i = 0; i < CH_DAYS; i++) { var iso = mmAdd(c.startDate, i), r = c.days[iso]; out += '<i class="' + (r && r.done ? 'on' : iso === td ? 'now' : '') + '"></i>'; }
+    return '<div class="chdots" role="img" aria-label="' + chStats().total + ' days done">' + out + '</div>';
+  }
+  function chTaskRow(key, on, body) {
+    var x = CH_TASKS.filter(function (t) { return t[0] === key; })[0];
+    return '<div class="chtask' + (on ? ' on' : '') + '"><span class="chbox" aria-hidden="true">' + (on ? '✓' : '') + '</span><div class="chtb"><b>' + x[1] + ' ' + x[2] + '</b>' + body + '</div></div>';
+  }
+  function chToggle(act, on, text, locked) { return '<button type="button" class="chtgl' + (on ? ' on' : '') + '" role="checkbox" aria-checked="' + on + '" data-a="' + act + '"' + (locked ? ' disabled' : '') + '><span class="chcb" aria-hidden="true">' + (on ? '✓' : '') + '</span>' + text + '</button>'; }
+  function chToday5() {
+    var td = chToday(), t = chTasks(td), r = chRec(td), n = chDayN(td), L = chLesson(n), lock = !!r.done, g = String(r.gratitude || '');
+    var log = '<div class="chsub"><span>' + (t.spent ? '✓ Purchases logged' : r.noSpend ? '✓ No spend today' : 'Purchases') + '</span>' +
+        (t.spent ? '' : '<span class="chbtns">' + (r.noSpend ? '' : '<button type="button" class="chmini" data-a="scan">🧾 Add purchases</button>') + (lock ? '' : '<button type="button" class="chmini' + (r.noSpend ? ' on' : '') + '" data-a="chnospend">' + (r.noSpend ? 'Undo' : 'No spend today') + '</button>') + '</span>') + '</div>' +
+      '<div class="chsub"><span>' + (r.balUpdated ? '✓ Balances updated' : r.balancesConfirmed ? '✓ Balances still right' : 'Balances') + '</span>' +
+        (r.balUpdated ? '' : '<span class="chbtns">' + (r.balancesConfirmed ? '' : '<button type="button" class="chmini" data-a="sheetopen" data-v="bal">💰 Update</button>') + (lock ? '' : '<button type="button" class="chmini' + (r.balancesConfirmed ? ' on' : '') + '" data-a="chbalok">' + (r.balancesConfirmed ? 'Undo' : 'Balances still right ✓') + '</button>') + '</span>') + '</div>';
+    var grat = g.trim() && !U.chGEdit
+      ? '<p class="chquote">“' + esc(g) + '”</p><span class="chbtns">' + (lock ? '' : '<button type="button" class="chmini" data-a="chgedit">Edit</button>') + (CONFIG.communityUrl ? '<button type="button" class="chmini" data-a="chgpost">📣 Post it in the community</button>' : '') + '</span>'
+      : '<textarea id="chGrat" class="chgrat" maxlength="280" rows="2" placeholder="Today I’m grateful for…" aria-label="One thing you’re grateful for">' + esc(g) + '</textarea><button type="button" class="chmini gold" data-a="chgsave">Save</button>';
+    return '<div class="chtasks">' +
+      chTaskRow('log', t.log, log) +
+      chTaskRow('debt', t.debt, chToggle('chdebt', t.debt, 'I didn’t put anything on a credit card or buy-now-pay-later today.', lock)) +
+      chTaskRow('eat', t.eat, chToggle('cheat', t.eat, 'I didn’t spend money eating out today.', lock) + (chEatOut(td) ? '<p class="chnote">You logged eating out today — does that break today’s rule?</p>' : '')) +
+      chTaskRow('lesson', t.lesson, '<button type="button" class="chlink" data-a="chlesson">Day ' + n + ' · ' + esc(L.title) + ' · ' + (L.minutes || 5) + ' min <span aria-hidden="true">›</span></button>') +
+      chTaskRow('grat', t.grat, grat) + '</div>' +
+      (r.done ? '<div class="chdone">' + confetti(14, 0) + '<b>✅ Day ' + n + ' done</b>' + (n < CH_DAYS ? '<small>Tomorrow: ' + esc(chLesson(n + 1).title) + '</small>' : '') + '</div>' : '');
+  }
+  function chLinks(quit) {
+    var g = chStats().grateful;
+    return '<div class="card chlinks">' + (g ? '<button type="button" class="linkrow" data-a="go" data-v="chjournal"><span>🙏 Gratitude journal</span><small>' + g + '</small><i aria-hidden="true">›</i></button>' : '') +
+      '<button type="button" class="linkrow chms" data-a="jtab" data-v="milestones"><span>🏅 Milestones</span><small>' + Object.keys(P.badges || {}).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).length + '</small><i aria-hidden="true">›</i></button>' +
+      (quit ? '<button type="button" class="linkrow chquit" data-a="ch30quit"><span>' + (U.chQuit ? 'Tap again to quit' : 'Quit challenge') + '</span></button>' : '') + '</div>';
+  }
+  function chIntro() {
+    var first = chFirst();
+    return '<p class="chlead">Five small money habits, every day, for 30 days.</p>' +
+      '<div class="card chlist">' + CH_TASKS.map(function (x) { return '<div><span>' + x[1] + '</span>' + x[2] + '</div>'; }).join('') + '</div>' +
+      '<p class="chrule">Miss one and you’re back to Day 1 — not back to zero. Your stats stay.</p>' +
+      '<div class="chstart"><button type="button" class="primary" data-a="ch30start" data-v="today">Start today</button><button type="button" class="outline" data-a="ch30start" data-v="first">Start ' + chDate(first) + '</button></div>';
+  }
+  function chScreen() {
+    var c = chS(), td = chToday(), head = function (title, sub) { return '<div class="chhead">' + mmGear() + '<div class="eyebrow">' + CH_NAME + ' · Level ' + (c.level || 1) + '</div><h2>' + title + '</h2>' + (sub || '') + '</div>'; };
+    if (c.status === 'restart') {
+      return head(c.reached ? 'You showed up ' + plural(c.reached, 'day') + ' in a row.' : 'A fresh start.', '<p class="chlead">' + (c.reached ? 'That counts. ' : '') + 'Day 1 starts today.</p>') +
+        '<button type="button" class="primary" data-a="chagain">Start again</button>' + chStatRow() + chLinks(false);
+    }
+    if (c.status === 'completed') {
+      return head('30 days. Done.', '<div class="chfinish">' + confetti(26, 0) + '<span class="chtrophy">🏆</span><b>Level 1 complete</b></div>') +
+        '<div class="chstats"><div><b>30</b><small>days in a row</small></div><div><b>30</b><small>lessons</small></div><div><b>30</b><small>things you were grateful for</small></div></div>' +
+        '<div class="chstart"><button type="button" class="primary" data-a="chshare">' + ICON.share + ' Share it</button>' + (CONFIG.communityUrl ? '<button type="button" class="outline" data-a="chpost">📣 Post it in the community</button>' : '') + '</div>' +
+        chLinks(false) + '<button type="button" class="textbtn" data-a="chagain">Do it again</button>';
+    }
+    if (c.status !== 'active') return head(CH_NAME) + chIntro() + chLinks(false);
+    if (c.startDate > td) return head('Starts ' + chDate(c.startDate), '<p class="chlead">Day 30 is ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '.</p>') +
+      '<div class="card chlist">' + CH_TASKS.map(function (x) { return '<div><span>' + x[1] + '</span>' + x[2] + '</div>'; }).join('') + '</div>' +
+      '<button type="button" class="outline" data-a="ch30start" data-v="today">Start today instead</button>' + chLinks(true);
+    var n = chDayN(td);
+    return head('Day ' + n + ' of ' + CH_DAYS, chDots() + '<div class="chmeta"><span>' + (CH_DAYS - n) + ' to go</span><span>Ends ' + chDate(mmAdd(c.startDate, CH_DAYS - 1)) + '</span></div>') + chToday5() + chStatRow() + chLinks(true);
+  }
+  function chLessonScreen() {
+    var c = chS(), n = U.chLessonN || chDayN(), L = chLesson(n), isToday = chLive() && n === chDayN(), done = isToday && !!chRec(chToday()).lessonDone;
+    var isFile = L.videoUrl && /\.(mp4|webm|m4v|mov)(\?|#|$)/i.test(L.videoUrl), safe = L.videoUrl ? mmSafeUrl(L.videoUrl) : '';
+    var media = L.type === 'video' && safe ? (isFile ? '<video id="chvid" class="chvideo" src="' + esc(safe) + '" controls playsinline preload="metadata"></video>' : '<iframe class="chvideo" src="' + esc(safe) + '" title="' + esc(L.title) + '" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>') : '';
+    var body = L.body ? String(L.body).split(/\n\s*\n/).map(function (p) { return '<p>' + esc(p) + '</p>'; }).join('') : (L.placeholder || !media ? '<div class="note">' + ICON.info + '<span>Lesson coming soon. Tap “I read it” to check it off for now.</span></div>' : '');
+    var btn = !isToday ? '' : done ? '<div class="chdone"><b>✓ Lesson done</b></div>' : media && isFile ? '<p class="chrule">Checks off when the video ends.</p>' : '<button type="button" class="primary" data-a="chread">' + (media ? 'I watched it' : 'I read it') + '</button>';
+    return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day ' + n + ' · ' + (L.minutes || 5) + ' minutes</div><h2>' + esc(L.title) + '</h2></div>' + media + '<div class="chbody">' + body + '</div>' + btn;
+  }
+  function chJournal() {
+    var c = chS(), days = Object.keys(c.days).filter(function (k) { return String(c.days[k].gratitude || '').trim(); }).sort().reverse();
+    return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + plural(days.length, 'entry') + '</div><h2>🙏 Gratitude journal</h2></div>' +
+      '<div class="card chjournal">' + (days.length ? days.map(function (k) { return '<div class="row"><div><small>' + chDate(k) + '</small><span>' + esc(c.days[k].gratitude) + '</span></div></div>'; }).join('') : '<div class="row"><span>Nothing yet.</span></div>') + '</div>';
+  }
+  // after a lesson video draws: it checks itself off when it plays to the end
+  function chAfter() {
+    var v = document.getElementById('chvid'); if (!v || v.chHooked) return; v.chHooked = true;
+    v.addEventListener('ended', function () { if (chLive() && (U.chLessonN || chDayN()) === chDayN()) { chRec(chToday(), true).lessonDone = true; save(); mmToast('🎧 Lesson done'); go('journey'); } });
+  }
+  // copy the text, then open the community to paste it (Skool has no way to post from another site)
+  function chPost(text, ev) { mmCopy(text, ev); if (CONFIG.communityUrl) window.open(CONFIG.communityUrl, '_blank', 'noopener'); }
+  function ch30Card() {
+    return { eyebrow: CH_NAME + ' · Level 1', title: '30 days in a row', sub: '30 lessons, 30 things I was grateful for, and no new debt.', chips: ['Level 1 complete'], caption: 'I finished the ' + CH_NAME + '! 30 days in a row.' };
+  }
+
   // ---------- the guided tour: once per page, a spotlight on each feature with one short line ----------
   // Seen pages are kept on this phone (fmtm.tour), not in the plan, so a spouse sharing the budget gets their own.
   var TOUR_KEY = 'fmtm.tour';
@@ -1419,7 +1583,8 @@
   var TOUR = {
     home: [
       ['.hero', 'Your next goal', 'How much is left on the step you’re on. It fills as you save and pay down debt.'],
-      [function () { var h = app.querySelector('.hero'), n = h && h.nextElementSibling; return n && n.querySelector('[data-a=chquit]') ? n : null; }, 'Your challenge', 'A challenge you started. Log your progress right here.'],
+      ['.chhome', '30-Day Challenge', 'Today’s tasks at a glance. Tap to open the challenge.'],
+      [function () { return null; }, 'Your challenge', 'A challenge you started. Log your progress right here.'],
       ['.recaprow', 'Weekly recap', 'Your week at a glance: spending, balances and meals at home.'],
       ['.cal', 'Your month', 'Paydays, bills coming up and your wins. Tap a day to see it.'],
       ['.commcard', 'Your community', 'Free help from people on the same path, or a coach. Tap one to see more.'],
@@ -1438,10 +1603,9 @@
       [bySec('Smallest first'), 'Smallest first', 'Pay the smallest debt first, then roll that payment into the next one.']
     ],
     journey: [
-      ['.jhead', 'Your step', 'Where you are on the 7 steps, and how close you are to the next one.'],
-      ['.wkcard', 'Your week', 'Three steps each week: categorize, update balances, read your recap. Do all three to keep your streak.'],
-      ['.tabchips', 'Map, challenges, milestones', 'Lessons for your step, challenges to try, and the wins you’ve earned.'],
-      ['.mpath', 'Your map', 'Short lessons and checkpoints. Tap one to start.']
+      ['.chhead', '30-Day Challenge', 'Five small money habits a day for 30 days. Miss a day and you’re back to Day 1, not zero.'],
+      ['.chtasks', 'Today’s 5 tasks', 'Check each one off before midnight.'],
+      ['.chms', 'Milestones', 'Your wins and goals live here now.']
     ],
     meals: [
       ['.mm-seg', 'Week, meals and list', 'Plan the week, price out the meals you cook, and shop from your grocery list.'],
@@ -1524,7 +1688,7 @@
   function tourMaybe() {
     if (tourNow || !P.setupDone || U.sheet || U.plusOpen || U.coachTest != null) return;
     var page = U.screen; if (!TOUR[page] || tourSeen()[page]) return;
-    if (page === 'journey' && U.jTab && U.jTab !== 'map') return;
+    if (page === 'journey' && U.jTab === 'milestones') return;
     setTimeout(function () { if (U.screen === page && !tourNow && !tourSeen()[page] && !U.sheet && !U.plusOpen) tourStart(page); }, 450);
   }
   // ---------- the front page: first open only, before the intro ----------
@@ -1540,9 +1704,9 @@
   }
   function wfTabs(on) {
     var ic = { Home: '<path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/>', Budget: '<path d="M4 7a2 2 0 012-2h11v4"/><path d="M4 7v11a2 2 0 002 2h13a1 1 0 001-1V10a1 1 0 00-1-1H6a2 2 0 01-2-2z"/>',
-      Journey: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', Settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/>' };
+      Challenge: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', Meals: '<path d="M4 6h16M4 12h16M4 18h16"/>', Settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/>' };
     var svg = function (d, w) { return '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (w || 2) + '" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>'; };
-    return '<div class="wf-tabs">' + ['Home', 'Budget', '', 'Journey', 'Settings'].map(function (t) {
+    return '<div class="wf-tabs">' + ['Home', 'Budget', '', 'Challenge', 'Meals'].map(function (t) {
       return t ? '<div' + (t === on ? ' class="on"' : '') + '>' + svg(ic[t]) + '<span>' + t + '</span></div>' : '<div class="wf-fab">' + svg('<path d="M12 5v14M5 12h14"/>', 2.6) + '</div>';
     }).join('') + '</div>';
   }
@@ -1573,8 +1737,8 @@
       '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Categorize transactions</span><em>Done</em></div>' +
       '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Update balances</span><em>Done</em></div>' +
       '<div class="wf-tsk"><i></i><span>Read your weekly recap</span><u>Go</u></div></div>' +
-      '<div class="wf-chips"><div class="on">Map</div><div>Challenges</div><div>Milestones</div></div>' + wfTabs('Journey');
-    var labels = ['1 of 3: Maya found $842 a month', '2 of 3: November budget, $1,370 left to spend', '3 of 3: Journey, $421 saved toward $1,000'];
+      '<div class="wf-chips"><div class="on">Map</div><div>Challenges</div><div>Milestones</div></div>' + wfTabs('Challenge');
+    var labels = ['1 of 3: Maya found $842 a month', '2 of 3: November budget, $1,370 left to spend', '3 of 3: Your step, $421 saved toward $1,000'];
     return [reveal, budget, journey].map(function (h, i) { return '<div class="wf-slide" role="group" aria-roledescription="slide" aria-label="' + labels[i] + '"><div class="wf-cv">' + h + '</div></div>'; }).join('');
   }
   function frontPage() {
@@ -2078,7 +2242,7 @@
     return goals;
   }
   // ---------- the activity calendar ----------
-  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Weekly recap', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
+  var CAL_KINDS = { bill: ['Bill due', 'cal-bill'], payday: ['Payday', 'cal-pay'], checkin: ['Weekly recap', 'cal-check'], milestone: ['Milestone', 'cal-mile'], challenge: ['Challenge done', 'cal-ch'], chday: ['Challenge day done', 'cal-chd'], chnext: ['Challenge day', 'cal-chn'], plan: ['Plan finished', 'cal-plan'], start: ['Started my plan', 'cal-start'] };
   function calEvents(y, m) {
     var ev = {}, add = function (iso, kind, text) { if (!iso) return; var d = F.fromIso(iso); if (d.getFullYear() !== y || d.getMonth() !== m) return; (ev[iso] = ev[iso] || []).push([kind, text]); };
     // paydays: step from the next payday in both directions
@@ -2093,6 +2257,10 @@
     Object.keys(P.badges || {}).forEach(function (id) { var b = BADGES.filter(function (x) { return x.id === id; })[0]; if (id === 'plan') add(P.badges[id], 'start', 'Started my plan'); else if (b) add(P.badges[id], 'milestone', b.title); });
     (P.challenges || []).forEach(function (c) { if (c.ended === 'done') add(c.endedOn, 'challenge', F.challengeDef(c.id).title); });
     (P.plans || []).forEach(function (pl) { if (pl.ended === 'done') add(pl.endedOn, 'plan', F.planDef(pl.id).title); });
+    // the 30-Day Challenge: days done, and today and the days still to come in this run
+    var cc = P.challenge;
+    if (cc && cc.days) Object.keys(cc.days).forEach(function (iso) { if (cc.days[iso].done) add(iso, 'chday', CH_NAME + ' · day done'); });
+    if (cc && cc.status === 'active' && cc.startDate) for (var ci = 0; ci < CH_DAYS; ci++) { var cd = mmAdd(cc.startDate, ci); if (cd >= chToday() && !(cc.days[cd] && cc.days[cd].done)) add(cd, 'chnext', CH_NAME + ' · Day ' + (ci + 1) + (cd === chToday() ? ' (today)' : '')); }
     if (itemized()) P.bills.forEach(function (b) { billDates(b, first, last).forEach(function (iso) { add(iso, 'bill', (b.name || 'Bill') + ' due \u00b7 ' + money(dueAmount(b))); }); });
     return ev;
   }
@@ -2116,7 +2284,7 @@
       cells += '<button type="button" class="cday' + (isPay ? ' pay' : '') + (iso === todayIso ? ' today' : '') + (U.calDay === iso ? ' sel' : '') + (iso > todayIso ? ' future' : '') + '" data-a="calday" data-v="' + iso + '" aria-label="' + esc(label) + '"><span>' + d + '</span><em>' + dots + '</em></button>';
     }
     var sel = U.calDay && ev[U.calDay] ? '<div class="calsel"><b>' + dayMonth(F.fromIso(U.calDay)) + '</b>' + ev[U.calDay].map(function (x) { return '<div><i class="' + CAL_KINDS[x[0]][1] + '"></i>' + esc(x[1]) + '</div>'; }).join('') + '</div>' : '';
-    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill'; }).length; }, 0);
+    var count = Object.keys(ev).reduce(function (t, k) { return t + ev[k].filter(function (x) { return x[0] !== 'payday' && x[0] !== 'bill' && x[0] !== 'chnext'; }).length; }, 0);
     var soon = upcomingBills(14);
     soon = soon.sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; }).slice(0, 5);
     var soonHtml = soon.length ? '<div class="soon"><div class="eyebrow">Coming up</div>' + soon.map(function (x) { return '<div class="row" style="padding:7px 0"><span><i class="cal-bill"></i>' + esc(x.name) + '<small>' + dayMonth(F.fromIso(x.iso)) + '</small></span><b>' + money(x.amt) + '</b></div>'; }).join('') + '</div>'
@@ -2126,7 +2294,7 @@
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
       '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
-      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + '<span><i class="cal-check"></i>Weekly recap</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-ch"></i>Challenge</span></div>' + soonHtml + '</div>';
+      '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + '<span><i class="cal-check"></i>Weekly recap</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-chd"></i>Challenge day</span></div>' + soonHtml + '</div>';
   }
   function calTabs() { return '<div class="seg caltabs" role="group" aria-label="Calendar view">' + [['due', 'Due & wins'], ['spend', 'Spending']].map(function (t) { var on = (U.calTab || 'due') === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="caltab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'; }
   // the same month, with what was spent on each day
@@ -2556,7 +2724,7 @@
       var stepChip = '<span class="hchip">Step ' + Math.min(step, 7) + ' · ' + F.STEPS[Math.min(step, 7) - 1][0] + '</span>';
       // one big number: dollars left to the current goal (no dates: paydays can bring more or less)
       var hero = '<div class="hero">' + stepChip + progGauge(o, p) + '</div>';
-      return homeTop(toast) + hero + activeChallenges() + '<button type="button" class="card recaprow" data-a="recapopen"><span>\uD83D\uDCCA</span><b>Weekly recap</b><small>' + weekLabel({ start: weekOf(today())[0], end: weekOf(today())[1] }) + '</small><i aria-hidden="true">\u203a</i></button>' + homeRest();
+      return homeTop(toast) + hero + chHome() + '<button type="button" class="card recaprow" data-a="recapopen"><span>\uD83D\uDCCA</span><b>Weekly recap</b><small>' + weekLabel({ start: weekOf(today())[0], end: weekOf(today())[1] }) + '</small><i aria-hidden="true">\u203a</i></button>' + homeRest();
     },
 
     recap: function () {
@@ -2632,7 +2800,14 @@
         tabChips('chtab', tab, [['suggested', 'Suggested'], ['Food', 'Food'], ['Spending', 'Spending'], ['bills', 'Bills & debt'], ['Savings', 'Saving'], ['earn', 'Earn more'], ['done', 'Completed' + (allDone.length ? ' (' + allDone.length + ')' : '')]]) + body;
     },
 
+    // the Challenge tab: the 30-Day Challenge, with Milestones behind it
     journey: function () {
+      if (U.jTab === 'milestones') return '<button type="button" class="back" data-a="jtab" data-v="ch" aria-label="Back">' + ICON.back + '</button>' + V.milestones() + goalsCard();
+      return chScreen();
+    },
+    chlesson: function () { return chLessonScreen(); },
+    chjournal: function () { return chJournal(); },
+    journeyOld: function () {
       var t = U.jTab || 'map';
       var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
       var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + x + '</b></div>'; })() : '';
@@ -2949,7 +3124,7 @@
       streakBest: wkBest(), savings: p.savings, debtsPaid: P.debts.filter(function (d) { return num(d.orig) > 0 && num(d.bal) <= 0; }).length,
       debtPaidTotal: P.totals.debtPaid, daysBack: P.totals.daysBack, debtFree: P.debts.length > 0 && !open && P.debts.some(function (d) { return num(d.orig) > 0; }),
       safetyNet: !open && p.savings >= pl.safetyNet, goalsFunded: P.goals.filter(function (g) { return num(g.saved) >= g.amount; }).length, challengesDone: P.challengesDone || 0,
-      earned: num(P.totals.earned), plansDone: P.plansDone || 0, shares: P.shares || 0 };
+      earned: num(P.totals.earned), plansDone: P.plansDone || 0, ch30done: !!(P.challenge && P.challenge.completedAt), shares: P.shares || 0 };
   }
   // finishes challenges and awards milestones; new ones wait in P.unseen until celebrated
   function refresh() {
@@ -3523,7 +3698,7 @@
           else if (k === 'fund') funds().forEach(function (f) { if (f.id === el.getAttribute('data-v')) f.start = String(round2(num(val) - fundNet(f))); });
           else if (k === 'debt') P.debts.forEach(function (d) { if (d.id === el.getAttribute('data-v')) { d.bal = val; if (num(val) > num(d.orig)) d.orig = num(val); } });
         });
-        var res = recordBalances(before); wkMark('bal'); save(); track('balance-update'); U.sheet = null;
+        var res = recordBalances(before); wkMark('bal'); if (chLive()) chRec(chToday(), true).balUpdated = true; save(); track('balance-update'); U.sheet = null;
         if (res.paid.length || res.goal) { U.result = res; go('wins'); } else render();
       })(); break;
       case 'stepsave': (function () { var el = app.querySelector('[data-stepin]'); if (el && el.value !== '') { P.stepAmt = String(round2(Math.max(0, num(el.value)) / F.FREQS[P.freq].perMonth)); save(); track('step-assign'); } U.sheet = null; render(); })(); break;
@@ -3875,6 +4050,24 @@
       })(); break;
       case 'quizend': U.quiz = null; U.jTab = 'map'; go('journey'); break;
       case 'jstep': U.jStep = +v; U.jAllPast = false; U.jTab = 'map'; render(); break;
+      case 'ch30start': if (!(chS().status === 'active' && chS().startDate > chToday())) track('challenge-start'); chStart(v); window.scrollTo(0, 0); render(); break;
+      case 'chagain': chStart('today'); track('challenge-start'); U.screen = 'journey'; U.jTab = null; window.scrollTo(0, 0); render(); break;
+      case 'ch30quit': if (!U.chQuit) { U.chQuit = true; render(); break; } (function () { var c = chS(); c.status = 'notStarted'; c.startDate = null; U.chQuit = false; save(); track('challenge-quit'); render(); })(); break;
+      case 'chnospend': case 'chbalok': case 'chdebt': case 'cheat': (function () {
+        if (!chLive()) return; var r = chRec(chToday(), true); if (r.done) return;
+        var k = { chnospend: 'noSpend', chbalok: 'balancesConfirmed', chdebt: 'noNewDebt', cheat: 'noEatingOut' }[a]; r[k] = !r[k]; save(); render();
+      })(); break;
+      case 'chopen': if (v === 'lesson') { U.chLessonN = null; go('chlesson'); } else { U.jTab = null; go('journey'); if (v === 'grat') setTimeout(function () { var g = document.getElementById('chGrat'); if (g) { g.scrollIntoView({ block: 'center' }); g.focus(); } }, 60); } break;
+      case 'chlesson': U.chLessonN = null; go('chlesson'); break;
+      case 'chread': if (chLive()) { chRec(chToday(), true).lessonDone = true; save(); mmToast('🎧 Lesson done'); } U.jTab = null; go('journey'); break;
+      case 'chgsave': (function () {
+        var el = document.getElementById('chGrat'), t = String(el && el.value || '').trim().slice(0, 280); if (!t || !chLive()) return;
+        var r = chRec(chToday(), true); if (r.done) return; r.gratitude = t; U.chGEdit = false; save(); render();
+      })(); break;
+      case 'chgedit': U.chGEdit = true; render(); setTimeout(function () { var g = document.getElementById('chGrat'); if (g) g.focus(); }, 30); break;
+      case 'chgpost': chPost(String(chRec(chToday()).gratitude || ''), 'challenge-gratitude-shared'); break;
+      case 'chshare': openShare(ch30Card()); break;
+      case 'chpost': chPost(ch30Card().caption, 'challenge-complete-shared'); break;
       case 'jtab': U.jTab = v; if (v === 'challenges' || v === 'milestones') U.winsView = v; render(); break;
       case 'lessondone': (function () {
         var id = U.lesson && U.lesson.id, m = /^reset7-(\d)$/.exec(id || '');
