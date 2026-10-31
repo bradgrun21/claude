@@ -232,3 +232,6 @@ Lessons are in `challenge-lessons.js` (30 placeholders, "Lesson N — coming soo
 Evening nudge: the reminders function has `pickChallenge` (8 pm local, only when today's tasks aren't all done: "Day 12 isn't done yet · 2 tasks left."). It's off until the `CHALLENGE_REMINDERS=on` secret is set and the function is redeployed, and it shares the one-a-day slot with bill reminders.
 
 Parked (not built): Level 2 and 3, the 90 Club, level skins, accountability partners.
+
+## Safe to spend in your first month
+The month someone starts in only counts from their start date: setting up on Oct 25 with $3,200 a month of spending gives Oct 25–31, so 7/31 of it ($722.58), not the whole $3,200 for the last week. Each spending category is counted the same way (Groceries $620 → $140), and "On track / Spending fast" paces from that date. If purchases from earlier in that month are logged (say a scan of the whole month), it counts from the earliest one instead. The Spending card says "Counting from Oct 25, when you started" (or "…, your first purchase"). The next month is a full month. The start date is `P.startedOn` (set at setup; older plans use the date their plan was built). Code: `budFrom()` in app.js.

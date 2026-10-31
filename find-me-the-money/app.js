@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31a';
+  var APP_VERSION = '10-31b';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -759,7 +759,7 @@
   }
   // ---------- end of setup: the plan is built ----------
   function finishSetup() {
-    P.setupDone = true; P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
+    P.setupDone = true; P.startedOn = P.startedOn || F.isoDay(today()); P.badges.plan = P.badges.plan || F.isoDay(today()); P.topStep = F.outlook(profile(), today()).step;
     if (!P.plans.some(function (p) { return p.id === 'reset7'; })) P.plans.push({ uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] });
     snapshot(); save(); track('setup-done');
     U.toast = ['Your plan is ready.', 'Start with the next step below. It takes 2 minutes.', true];
@@ -2110,18 +2110,29 @@
       '<div class="inc-left' + (mm.left < -0.5 ? ' over' : Math.abs(mm.left) < 0.5 ? ' zero' : '') + '"><span>Left to budget</span><b>' + (mm.left < -0.5 ? '−' + money(-mm.left) : money(mm.left)) + '</b></div>' +
       (chips.length ? '<div class="inc-types">' + chips.map(function (t) { return '<span class="t-' + t[0] + '"><i></i>' + t[1] + ' ' + money(mm.by[t[0]]) + '</span>'; }).join('') + '</div>' : '') + '</div>';
   }
+  // the month a plan starts in only counts from the start date (or the earliest purchase logged that month, if earlier):
+  // someone who sets up on the 25th hasn't logged the 1st to the 24th, so the whole month's budget isn't theirs to spend
+  function budFrom(ym) {
+    var dim = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(), st = P.startedOn || (P.badges || {}).plan, from = 1;
+    if (st && monthOf(st) === ym) {
+      from = +st.slice(8, 10);
+      (P.spends || []).forEach(function (x) { if (monthOf(x.date) === ym) from = Math.min(from, +String(x.date).slice(8, 10)); });
+    }
+    return { from: from, dim: dim, share: (dim - from + 1) / dim, started: !!st && monthOf(st) === ym && from === +st.slice(8, 10) };
+  }
   function budSpend(ym) {
     var m = spentMap(ym), lines = spendLines().filter(function (l) { return l.grp === 'spend'; }), now = today(), isNow = ym === monthOf(F.isoDay(now));
-    var yy = +ym.slice(0, 4), mo = +ym.slice(5, 7) - 1, monOf = function (l) { return l.per === 'week' ? l.amt * weeksIn(yy, mo) : l.mon; };
+    var bf = budFrom(ym), yy = +ym.slice(0, 4), mo = +ym.slice(5, 7) - 1, monOf = function (l) { return (l.per === 'week' ? l.amt * weeksIn(yy, mo) : l.mon) * bf.share; };
     var budget = lines.reduce(function (t, l) { return t + monOf(l); }, 0), spent = lines.reduce(function (t, l) { return t + (m[l.key] || 0); }, 0), left = budget - spent;
     var dl = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1, perDay = isNow && left > 0 ? left / dl : 0;
     // on track = spending at or under where the month's pace says it should be
-    var dim = new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate(), pace = isNow ? budget * now.getDate() / dim : budget;
+    var pace = isNow ? budget * Math.max(1, now.getDate() - bf.from + 1) / (bf.dim - bf.from + 1) : budget;
     var status = !budget ? '' : spent > budget + 0.5 ? 'over' : isNow && spent > pace * 1.1 + 1 ? 'fast' : 'ok';
     var top = '<div class="card bud-top">' + (status ? '<span class="bstat ' + status + '">' + (status === 'over' ? 'Over budget' : status === 'fast' ? 'Spending fast' : 'On track') + '</span>' : '') +
       gauge(budget ? Math.max(0, left) / budget : 0, status) +
       '<div class="gmid"><small>' + (isNow ? 'Left to spend' : 'Spent') + '</small><div class="bud-big' + (left < -0.5 ? ' over' : '') + '">' + (isNow ? (left < -0.5 ? '−' + money2(-left) : money2(left)) : money2(spent)) + '</div></div>' +
-      '<div class="bud-safe">' + (isNow ? (left < -0.5 ? money(-left) + ' over this month. It happens: next month is a fresh start.' : '<b>' + money2(perDay) + '/day</b> safe to spend · ' + plural(dl, 'day') + ' left') : money(spent) + ' of ' + money(budget) + ' budgeted') + '</div></div>';
+      '<div class="bud-safe">' + (isNow ? (left < -0.5 ? money(-left) + ' over this month. It happens: next month is a fresh start.' : '<b>' + money2(perDay) + '/day</b> safe to spend · ' + plural(dl, 'day') + ' left') : money(spent) + ' of ' + money(budget) + ' budgeted') + '</div>' +
+      (bf.from > 1 ? '<small class="bud-from">Counting from ' + F.fromIso(ym + '-' + String(bf.from).padStart(2, '0')).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (bf.started ? ', when you started' : ', your first purchase') + '</small>' : '') + '</div>';
     var cards = lines.map(function (l) {
       var wk = l.per === 'week' && isNow ? weekOf(now) : null;
       var sp = wk ? (P.spends || []).filter(function (x) { return x.key === l.key && x.date >= wk[0] && x.date <= wk[1]; }).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
