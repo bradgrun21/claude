@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31b';
+  var APP_VERSION = '10-31c';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -38,7 +38,25 @@
   function num(v) { var n = parseFloat(String(v).replace(/[$,\s]/g, '')); return isNaN(n) ? 0 : n; }
   function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
   function uid() { return Math.random().toString(36).slice(2, 9); }
-  function today() { var d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  // "today" is the date in the plan's time zone (Settings), so the daily checklist, the calendar and safe-to-spend
+  // all turn over at the person's own midnight
+  function today() { return F.fromIso(F.dayIn(typeof P !== 'undefined' && P ? P.tz : null, new Date())); }
+  // Settings: the time zone (pre-filled from the phone) and the day weeks start on
+  var TZ_US = ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu'];
+  function tzName(z) { return String(z).replace(/^.*\//, '').replace(/_/g, ' ') + ' (' + z.split('/')[0] + ')'; }
+  function daysCard() {
+    var all = []; try { all = Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : []; } catch (e) {}
+    var list = TZ_US.concat([P.tz, phoneTz()]).concat(all).filter(function (z, i, a) { return z && a.indexOf(z) === i; });
+    return '<div class="card stack" style="padding:16px 18px;gap:12px"><b>Your days</b>' +
+      '<label class="setrow"><span>🕰️ Time zone</span><select data-set="tz" aria-label="Time zone">' + list.map(function (z) { return '<option value="' + esc(z) + '"' + (z === P.tz ? ' selected' : '') + '>' + esc(i18nTz(z)) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="setrow"><span>📅 My week starts on</span><select data-set="weekStart" aria-label="My week starts on">' + DOW.map(function (d, i) { return '<option value="' + i + '"' + (i === weekDay0() ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select></label></div>';
+  }
+  function i18nTz(z) { var n = { 'America/New_York': 'Eastern', 'America/Chicago': 'Central', 'America/Denver': 'Mountain', 'America/Phoenix': 'Arizona', 'America/Los_Angeles': 'Pacific', 'America/Anchorage': 'Alaska', 'Pacific/Honolulu': 'Hawaii' }[z]; return n ? n + ' time' : tzName(z); }
+  function phoneTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago'; } catch (e) { return 'America/Chicago'; } }
+  // one week for the whole app, starting on the day picked in Settings (0 Sunday ... 6 Saturday)
+  function weekDay0() { return typeof P !== 'undefined' && P && P.weekStart >= 0 && P.weekStart <= 6 ? +P.weekStart : 0; }
+  var DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function dowLetters() { var l = ['S', 'M', 'T', 'W', 'T', 'F', 'S'], w = weekDay0(); return l.slice(w).concat(l.slice(0, w)); }
   function shortDate(d) { return d ? d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : ''; }
   function longDate(d) { return d ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''; }
   function dayMonth(d) { return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
@@ -139,6 +157,8 @@
     } catch (e) { storageOk = false; }
   }
   var P = load();
+  if (!F.validTz(P.tz)) P.tz = phoneTz();
+  if (!(P.weekStart >= 0 && P.weekStart <= 6)) P.weekStart = 0;
   lastJ = JSON.stringify(Object.assign({}, P, { savedAt: 0 }));
 
   // ---------- account and sync (Supabase, optional) ----------
@@ -510,15 +530,12 @@
     autoColorMap = null; ensureIds();
     chCheck();
     if (P.challenge && P.challenge.status === 'restart' && !U.chRestartShown && U.screen === 'home' && !U.sheet) { U.chRestartShown = true; U.screen = 'journey'; U.jTab = null; }
-    if (P.setupDone && P.journey && !P.journey.makeRoomDone) jCheckRoom();
     if (P.setupDone && (U.screen === 'wins' || TABS.some(function (t) { return t[0] === tabOf(U.screen); }))) refresh();
     var u = P.unlocked || {};
     var tabs = TABS;
     var tabbed = P.setupDone && U.screen !== 'wins' && !(U.screen === 'meals' && mmSt().view === 'edit') && tabs.some(function (t) { return t[0] === tabOf(U.screen); });
-    if (U.screen === 'plans' || U.screen === 'planday' || U.screen === 'journey' || U.screen === 'lesson') U.planCtx = null;
     var html = (V[U.screen] || V.home)();
     if (U.sheet) html += sheetHtml();
-    if (U.planCtx) html = planBar() + html;
     // beta: a small Feedback tab on every screen
     if (CONFIG.feedbackUrl && U.screen !== 'welcome' && U.screen !== 'steps') html += '<a class="fbtab" href="' + esc(CONFIG.feedbackUrl) + '" target="_blank" rel="noopener" data-a="feedback" aria-label="Send feedback">Feedback</a>';
     if (tabbed) {
@@ -581,19 +598,10 @@
       U.gStep[key] = ((U.gStep[key] || 0) + 1) % GUIDES[key].length; el.innerHTML = guideScene(key, U.gStep[key]);
     }, 4200);
   }
-  // "‹ Day 1 · Find your number  ○": a way back to today's plan, and a check to finish it from here
-  function planBar() {
-    var run = P.plans.filter(function (p) { return p.uid === U.planCtx.uid; })[0]; if (!run) { U.planCtx = null; return ''; }
-    var d = F.planDef(run.id).days[U.planCtx.day], done = (run.done || []).indexOf(U.planCtx.day) >= 0;
-    return '<div class="planbar"><button type="button" class="pb-back" data-a="planback"><span aria-hidden="true">\u2039</span><span><small>Back to your lesson</small>' + d.title + '</span></button>' +
-      '<button type="button" class="pb-check' + (done ? ' on' : '') + '" data-a="planmark" aria-label="Mark ' + d.title + ' done">' + ICON.check(done ? '#141414' : '#7ED9C0', 16) + '<span>Done</span></button></div>';
-  }
   function go(s) {
     U.plusOpen = false;
-    // the old Plans & Goals and Wins screens now live inside Journey
-    var J = { plans: 'map', community: 'challenges', challenges: 'challenges', milestones: 'milestones', planday: null };
-    if (s in J && s !== 'planday') { U.jTab = J[s]; if (s === 'challenges' || s === 'milestones') U.winsView = s; s = 'journey'; }
-    if (s === 'planday') s = 'lesson';
+    // old screens land on the Challenge tab (Milestones behind it)
+    if (s === 'plans' || s === 'community' || s === 'challenges' || s === 'milestones' || s === 'planday' || s === 'quiz') { U.jTab = s === 'milestones' ? 'milestones' : null; s = 'journey'; }
     U.screen = s; U.err = ''; U.sheet = null; render();
     window.scrollTo(0, 0);
   }
@@ -830,7 +838,7 @@
   // dates (local, Sunday to Saturday)
   function mmToday() { return F.isoDay(today()); }
   function mmAdd(s, n) { return F.isoDay(F.addDays(F.fromIso(s), n)); }
-  function mmWeek(s) { var d = F.fromIso(s); return F.isoDay(F.addDays(d, -d.getDay())); }
+  function mmWeek(s) { return F.weekStartOf(s, weekDay0()); }
   function mmDay(s) { return F.fromIso(s).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
   function mmWeekLabel(ws) { return weekLabel({ start: ws, end: mmAdd(ws, 6) }); }
   // what a stretch of days added up to: entries dated today or earlier count as eaten; later ones are planned
@@ -1696,7 +1704,7 @@
   // $2,100 twice a month = $4,200; 4,200 - 2,610 - 748 = $842 a month, $10,104 a year, $421 a payday.
   var WF_CAPS = [['Find it', 'See the money you didn’t know you had', 'Four numbers and you’ll know what you can take back each month.'],
     ['Plan it', 'Give every dollar a job', 'Know what’s safe to spend today, all the way to payday.'],
-    ['Live it', 'One payday at a time', 'Small weekly steps toward your first $1,000, then debt-free.']];
+    ['Live it', 'Five small things a day', 'Log it, skip new debt, learn a little, and watch your days fill in.']];
   function wfGauge(lit, big) {
     var out = '';
     for (var i = 0; i < 22; i++) { var a = Math.PI - i / 21 * Math.PI; out += '<line x1="' + (110 + 74 * Math.cos(a)).toFixed(1) + '" y1="' + (104 - 74 * Math.sin(a)).toFixed(1) + '" x2="' + (110 + 96 * Math.cos(a)).toFixed(1) + '" y2="' + (104 - 96 * Math.sin(a)).toFixed(1) + '"' + (i < lit ? ' class="on"' : '') + '/>'; }
@@ -1728,17 +1736,17 @@
       '<div class="wf-seg"><div class="on">Spending</div><div>Saving</div><div>Debt</div></div>' +
       '<div class="wf-card wf-spend"><div class="wf-ok">On track</div><div class="wf-gw">' + wfGauge(12) + '<div class="wf-gm"><div class="wf-mut" style="font-size:15px">Left to spend</div><div class="wf-v">$1,370.00</div></div></div>' +
       '<div class="wf-safe"><b>$91.33/day</b> safe to spend · 15 days left</div></div>' + wfTabs('Budget');
-    var journey = '<div class="wf-jh"><div class="wf-mut" style="font-size:13px">Step 1 of 7</div><b class="wf-jt">$1,000 Emergency Fund</b>' +
-      '<div class="wf-gw">' + wfGauge(9, true) + '<div class="wf-gm"><div class="wf-v" style="font-size:44px">$579</div></div></div>' +
-      '<div class="wf-mut" style="font-size:13px;text-align:center;margin-top:6px">left to your $1,000 Emergency Fund</div>' +
-      '<div class="wf-jstat"><span>$421 saved</span><b>42%</b><span>$1,000 goal</span></div></div>' +
-      '<div class="wf-card wf-streak"><div class="wf-sh"><div class="wf-fl"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFC97E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c4 0 7-2.7 7-6.6 0-3.9-3-6.4-4.2-9.4-.8 2-2 3-3.3 3.6.3-2.6-.6-5-2.5-6.6C9.6 6.8 5 9.5 5 15.4 5 19.3 8 22 12 22z"/></svg></div>' +
-      '<div><b>Weekly streak</b><span class="wf-mut" style="font-size:13px;display:block">Nov 15–21</span></div></div>' +
-      '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Categorize transactions</span><em>Done</em></div>' +
-      '<div class="wf-tsk"><i class="y">' + check + '</i><span class="done">Update balances</span><em>Done</em></div>' +
-      '<div class="wf-tsk"><i></i><span>Read your weekly recap</span><u>Go</u></div></div>' +
-      '<div class="wf-chips"><div class="on">Map</div><div>Challenges</div><div>Milestones</div></div>' + wfTabs('Challenge');
-    var labels = ['1 of 3: Maya found $842 a month', '2 of 3: November budget, $1,370 left to spend', '3 of 3: Your step, $421 saved toward $1,000'];
+    // screen 3: Home's Today card and the activity calendar (Sun Nov 16, 2026; paydays Nov 6 and 20)
+    var full = [1, 2, 3, 5, 6, 7, 9, 10, 12, 13, 14], some = [4, 8, 11, 15], cal = '';
+    for (var dn = 1; dn <= 30; dn++) cal += '<span class="' + (full.indexOf(dn) >= 0 ? 'f' : some.indexOf(dn) >= 0 ? 's' : '') + (dn === 6 || dn === 20 ? ' p' : '') + (dn === 16 ? ' t' : '') + '">' + dn + '</span>';
+    var task = function (ic, t, on) { return '<div class="wf-tsk"><i class="' + (on ? 'y' : '') + '">' + (on ? check : '') + '</i><span class="' + (on ? 'done' : '') + '">' + ic + ' ' + t + '</span></div>'; };
+    var journey = '<div class="wf-card wf-today"><div class="wf-th"><b>Today</b><span>3 of 5</span></div>' +
+      task('🧾', 'Log purchases', true) + task('💳', 'No new debt', true) + task('🍽️', 'No eating out', true) + task('🎧', 'Today’s lesson', false) + task('🙏', 'One thing I’m grateful for', false) +
+      '<div class="wf-mk"><span>Make it a challenge: 30 days, all 5 every day.</span><u>Start</u></div></div>' +
+      '<div class="wf-card wf-act"><div class="wf-ah"><b>November 2026</b><span class="wf-mut">11 full days this month</span></div>' +
+      '<div class="wf-cg">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<em>' + x + '</em>'; }).join('') + cal + '</div>' +
+      '<div class="wf-lg"><span><i class="f"></i>All 5</span><span><i class="s"></i>Some</span><span><i class="p"></i>Payday</span></div></div>' + wfTabs('Home');
+    var labels = ['1 of 3: Maya found $842 a month', '2 of 3: November budget, $1,370 left to spend', '3 of 3: Today, 3 of 5 done, 11 full days this month'];
     return [reveal, budget, journey].map(function (h, i) { return '<div class="wf-slide" role="group" aria-roledescription="slide" aria-label="' + labels[i] + '"><div class="wf-cv">' + h + '</div></div>'; }).join('');
   }
   function frontPage() {
@@ -1834,16 +1842,10 @@
   function obBtn(label, a, v) { return '<button type="button" class="obbtn" data-a="' + a + '"' + (v ? ' data-v="' + v + '"' : '') + '><span>' + label + '</span>' + obArrow() + '</button>'; }
   function obInput(key, ph, pre) { return '<label class="obin">' + (pre ? '<span>' + pre + '</span>' : '') + '<input type="number" inputmode="decimal" min="0" data-f="' + key + '" value="' + esc(P[key]) + '" placeholder="' + ph + '" autocomplete="off"></label>'; }
   // ---------- weekly purchases: scan a bank app screenshot, or add by hand ----------
-  // the weeks of the current payday period (two for every-two-weeks pay, one for weekly)
+  // the week we're in (the app's one kind of week)
   function payWeeks() {
-    var t = today(), np = F.rollPayday(P.nextPay, P.freq, t), len = F.FREQS[P.freq].days;
-    if (F.daysBetween(t, F.fromIso(np)) === 0) np = F.nextAfter(np, P.freq);
-    var start = F.addDays(F.fromIso(np), -len), n = Math.max(1, Math.round(len / 7)), out = [];
-    for (var k = 0; k < n; k++) {
-      var ws = F.addDays(start, k * 7), we = k === n - 1 ? F.addDays(F.fromIso(np), -1) : F.addDays(ws, 6);
-      out.push({ start: F.isoDay(ws), end: F.isoDay(we), open: F.daysBetween(ws, t) >= 0, now: F.daysBetween(ws, t) >= 0 && F.daysBetween(t, we) >= 0, done: !!(P.weeks || {})[F.isoDay(ws)] });
-    }
-    return out;
+    var w = weekOf(today());
+    return [{ start: w[0], end: w[1], open: true, now: true, done: !!(P.weeks || {})[w[0]] }];
   }
   function weekNow() { var w = payWeeks(); return w.filter(function (x) { return x.now; })[0] || w[w.length - 1]; }
   function weekLabel(w) { var a = F.fromIso(w.start), b = F.fromIso(w.end), m = function (d) { return d.toLocaleDateString('en-US', { month: 'short' }); }; return m(a) + ' ' + a.getDate() + '–' + (m(a) === m(b) ? '' : m(b) + ' ') + b.getDate(); }
@@ -1959,7 +1961,7 @@
   function catMonthly(c) { return num(c.amount) * (c.per === 'week' ? 52 / 12 : 1); }
   function catsMonthly() { return cats().reduce(function (t, c) { return t + catMonthly(c); }, 0); }
   // Sunday to Saturday around a day
-  function weekOf(d) { var s0 = F.addDays(d, -d.getDay()); return [F.isoDay(s0), F.isoDay(F.addDays(s0, 6))]; }
+  function weekOf(d) { var s0 = F.fromIso(F.weekStartOf(F.isoDay(d), weekDay0())); return [F.isoDay(s0), F.isoDay(F.addDays(s0, 6))]; }
   // giving each month, whether it's set as a percent or a dollar amount
   function giveMonthly() { return giveAmt() ? giveAmt() : P.givingPct ? Math.round(monthlyIncome() * num(P.givingPct) / 100) : 0; }
   function funMonthly() { return funSet() ? num(P.fun) : 0; }
@@ -2085,7 +2087,8 @@
     return F.billMonthly(b);
   }
   // weeks (Sunday to Saturday) that start in a month: a weekly category or fund counts once for each
-  function weeksIn(y, m) { var n = 0, dim = new Date(y, m + 1, 0).getDate(); for (var d = 1; d <= dim; d++) if (new Date(y, m, d).getDay() === 0) n++; return n; }
+  // how many weeks start in a month (a weekly category's spending month)
+  function weeksIn(y, m) { var n = 0, dim = new Date(y, m + 1, 0).getDate(), w = weekDay0(); for (var d = 1; d <= dim; d++) if (new Date(y, m, d).getDay() === w) n++; return n; }
   function catInMonth(c, y, m) { return c.per === 'week' ? num(c.amount) * weeksIn(y, m) : catMonthly(c); }
   function fundInMonth(f, y, m) { return f.per === 'week' ? num(f.amount) * weeksIn(y, m) : fundMonthly(f); }
   // this month's income (pay x paychecks that land in it) and what's left after everything with a job
@@ -2285,7 +2288,7 @@
   function calendarCard() {
     var now = today(), cur = U.calMonth || [now.getFullYear(), now.getMonth()], y = cur[0], m = cur[1], ev = calEvents(y, m);
     if (U.calTab === 'spend') return calSpendCard(now, y, m);
-    var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = first.getDay(), todayIso = F.isoDay(now), cells = '';
+    var first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), lead = (first.getDay() - weekDay0() + 7) % 7, todayIso = F.isoDay(now), cells = '';
     for (var b = 0; b < lead; b++) cells += '<span></span>';
     for (var d = 1; d <= days; d++) {
       var iso = F.isoDay(new Date(y, m, d)), e = ev[iso] || [], kinds = {}, isPay = e.some(function (x) { return x[0] === 'payday'; });
@@ -2303,7 +2306,7 @@
     return '<div class="card stack cal" style="padding:16px 18px;gap:10px">' + calTabs() + '<div style="display:flex;justify-content:space-between;align-items:center"><button type="button" class="back calnav" data-a="calmove" data-v="-1" aria-label="Previous month">\u2039</button>' +
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (count ? plural(count, 'win') + ' this month' : 'Your activity shows up here') + '</small></div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">\u203a</button></div>' +
-      '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="cgrid" aria-hidden="true">' + dowLetters().map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel +
       '<div class="clegend"><span><i class="cal-pay ring"></i>Payday</span><span><i class="cal-bill"></i>Bill due</span>' + '<span><i class="cal-check"></i>Weekly recap</span><span><i class="cal-mile"></i>Milestone</span><span><i class="cal-chd"></i>Challenge day</span></div>' + soonHtml + '</div>';
   }
@@ -2311,7 +2314,7 @@
   // the same month, with what was spent on each day
   function calSpendCard(now, y, m) {
     var by = spendByDay(y, m), first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), todayIso = F.isoDay(now), cells = '', total = 0;
-    for (var b = 0; b < first.getDay(); b++) cells += '<span></span>';
+    for (var b = 0; b < (first.getDay() - weekDay0() + 7) % 7; b++) cells += '<span></span>';
     for (var d = 1; d <= days; d++) {
       var iso = F.isoDay(new Date(y, m, d)), list = by[iso] || [], sum = list.reduce(function (t, x) { return t + x.amount; }, 0); total += sum;
       cells += '<button type="button" class="cday sp' + (iso === todayIso ? ' today' : '') + (iso > todayIso ? ' future' : '') + '" data-a="spday" data-v="' + iso + '" aria-label="' + esc(d + ' ' + first.toLocaleDateString('en-US', { month: 'long' }) + (sum ? ': ' + money(sum) + ' spent' : '')) + '"><span>' + d + '</span><em class="spamt">' + (sum ? '$' + (sum >= 1000 ? (sum / 1000).toFixed(1) + 'k' : Math.round(sum)) : '') + '</em></button>';
@@ -2322,7 +2325,7 @@
       '<div style="text-align:center"><b>' + first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + '</b><small style="display:block;color:var(--faint);font-size:12px">' + (total ? money(total) + ' spent' : 'Purchases you add show up here') + '</small>' +
         (vs != null ? '<span class="calvs ' + (vs <= 0 ? 'down' : 'up') + '">' + (vs <= 0 ? '↓ ' : '↑ ') + Math.abs(vs) + '% vs ' + pmName + '</span>' : '') + '</div>' +
       '<button type="button" class="back calnav" data-a="calmove" data-v="1" aria-label="Next month">›</button></div>' +
-      '<div class="cgrid" aria-hidden="true">' + ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
+      '<div class="cgrid" aria-hidden="true">' + dowLetters().map(function (x) { return '<span class="cdow">' + x + '</span>'; }).join('') + '</div>' +
       '<div class="cgrid">' + cells + '</div>' + sel + '</div>';
   }
   // ---------- bill due dates, repeating, shown on the calendar ----------
@@ -2701,13 +2704,6 @@
         '<p style="font-size:14px">Your data stays in the browser you use now, so add it from this same browser.</p>' +
         '<div class="push"><button type="button" class="primary" data-a="installdone">Done</button><button type="button" class="outline" data-a="backup">Save a backup file too</button></div>';
     },
-    habit: function () {
-      return back('planday') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day 7 \u00b7 Make it a weekly habit</div><h2>Ten minutes, once a week</h2></div>' +
-        '<button type="button" class="choice best" data-a="go" data-v="recap"><div class="ic">' + ICON.flame + '</div><div><b>Do this week\u2019s recap</b><span class="d">Categorize, update balances, read your recap.</span></div></button>' +
-        (standalone() ? '' : '<button type="button" class="choice" data-a="edit" data-v="install"><div class="ic">' + ICON.home + '</div><div><b>Add the app to my Home Screen</b><span class="d">One tap away, and your plan stays safe.</span></div></button>') +
-        '<button type="button" class="choice" data-a="backup"><div class="ic">' + ICON.file + '</div><div><b>Save a backup file</b><span class="d">In case you ever switch phones.</span></div></button>' +
-        '<div class="push"><button type="button" class="outline" data-a="go" data-v="planday">Back to day 7</button></div>';
-    },
 
     plan: function () {
       var tab = U.bTab || 'spend', ym = curSpendMonth(), a = ym.split('-'), mname = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -2781,35 +2777,6 @@
         '<div class="row"><span style="color:var(--muted)">Debt paid</span><b>' + money(t.debtPaid) + '</b></div><div class="row"><span style="color:var(--muted)">Money saved</span><b>' + money(t.saved) + '</b></div></div>' +
         '<div class="push"><button type="button" class="outline" data-a="winsdone">Back to my plan</button></div>';
     },
-    challenges: function () {
-      var f = facts(), now = today(), active = P.challenges.filter(function (c) { return !c.ended; }), activeIds = active.map(function (c) { return c.id; });
-      var done = P.challenges.filter(function (c) { return c.ended; }).slice(-8).reverse();
-      var card = function (c) { return chCard(c, now, f); };
-      var pick = F.CHALLENGES.filter(function (d) { return activeIds.indexOf(d.id) < 0; });
-      var startCard = function (d) {
-        return '<div class="card stack" style="padding:14px 18px;gap:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>' + d.title + '</b><span class="tag" style="margin:0">' + (d.kind === 'count' ? d.target + ' in ' + d.days + ' days' : d.days + ' days') + '</span></div>' +
-          '<span style="font-size:14px;color:var(--muted)">' + d.blurb + '</span>' +
-          '<button type="button" class="outline" style="min-height:42px;font-size:15px;margin-top:4px" data-a="chstart" data-v="' + d.id + '"' + (active.length >= 3 ? ' disabled' : '') + '>Start</button></div>';
-      };
-
-      var allDone = P.challenges.filter(function (c) { return c.ended === 'done'; }).reverse();
-      var tab = U.chTab || 'suggested';
-      var inTab = function (d) { return tab === 'bills' ? d.tag === 'Bills' || d.tag === 'Debt' : tab === 'earn' ? d.tag === 'Earn' || d.tag === 'Income' : d.tag === tab; };
-      var easy = pick.slice().sort(function (a, b) { return (a.days || 99) - (b.days || 99); });
-      var list = tab === 'suggested' ? (U.chAllSug ? easy : easy.slice(0, 3)) : pick.filter(inTab);
-      var body = tab === 'done'
-        ? (allDone.length ? '<div class="card">' + allDone.map(function (c) {
-            var d = F.challengeDef(c.id);
-            return '<div class="row"><div style="min-width:0">' + d.title + '<small>Completed ' + dayMonth(F.fromIso(c.endedOn)) + (c.note ? ' · ' + esc(c.note) : '') + '</small></div>' +
-              '<button type="button" class="textbtn" style="min-height:36px;padding:0 4px" data-a="sharech" data-v="' + c.uid + '">' + ICON.share + ' Share</button></div>';
-          }).join('') + '</div>' : '<div class="note">' + ICON.info + '<span>Finished challenges land here, each with a card to share.</span></div>')
-        : (tab === 'earn' ? '<p style="font-size:14px">Cutting has a limit. Earning doesn’t.</p>' : '') + (list.length ? list.map(startCard).join('') : '<div class="note">' + ICON.info + '<span>You’re running every challenge in this group.</span></div>') +
-          (tab === 'suggested' && !U.chAllSug && easy.length > 3 ? '<button type="button" class="outline" style="min-height:44px;font-size:15px" data-a="challsug">Show all ' + easy.length + '</button>' : '');
-      return '<div style="margin-top:8px"><div class="eyebrow">Small, winnable sprints</div><h2>Challenges</h2><p style="margin-top:6px">Pick up to 3 at a time. Finish one and you get a card to share.</p></div>' + (U.pitw ? pitwHtml() : '') + celebration(1, 'challenge') +
-        (active.length ? active.map(card).join('') : '') +
-        (active.length >= 3 ? '<p style="margin-top:10px">You’re running 3. Finish or stop one to start another.</p>' : '') +
-        tabChips('chtab', tab, [['suggested', 'Suggested'], ['Food', 'Food'], ['Spending', 'Spending'], ['bills', 'Bills & debt'], ['Savings', 'Saving'], ['earn', 'Earn more'], ['done', 'Completed' + (allDone.length ? ' (' + allDone.length + ')' : '')]]) + body;
-    },
 
     // the Challenge tab: the 30-Day Challenge, with Milestones behind it
     journey: function () {
@@ -2818,72 +2785,13 @@
     },
     chlesson: function () { return chLessonScreen(); },
     chjournal: function () { return chJournal(); },
-    journeyOld: function () {
-      var t = U.jTab || 'map';
-      var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
-      var toast = U.planToast ? (function () { var x = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + x + '</b></div>'; })() : '';
-      return journeyHead() + toast + celebration(2, ['plan', 'unlock']) + (P.setupDone ? weekCard() : '') + tabChips('jtab', t, [['map', 'Map'], ['challenges', 'Challenges'], ['milestones', 'Milestones']]) +
-        (t === 'map' ? journeyMap()
-          : t === 'challenges' ? V.challenges()
-          : (P.setupDone ? weekCard() : '') + V.milestones() + (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') + goalsCard());
-    },
-    quiz: function () {
-      var z = U.quiz; if (!z) { U.jTab = 'map'; return V.journey(); }
-      var head = back('journey');
-      if (z.i >= z.qs.length) {
-        return head + '<div class="stack quizdone" style="gap:10px;margin-top:12px;text-align:center;align-items:center"><span class="qburst">' + ICON.check('#fff', 30) + confetti(22, 0) + '</span>' +
-          '<div class="eyebrow">' + (z.retry ? 'Review done' : 'Step ' + z.step + ' checkpoint') + '</div><h2>' + (z.retry ? 'Got them all' : z.firstTry ? 'Passed on the first try' : 'Checkpoint passed') + '</h2>' +
-          '<p>' + (z.retry ? 'Those answers are yours now.' : z.newStars ? '' + (z.firstTry ? 'You know this step.' : 'Every miss was a chance to learn it.') : 'You passed this one before. Nice refresher.') + '</p></div>' +
-          '<div class="push"><button type="button" class="primary" data-a="quizend">Back to my map</button></div>';
-      }
-      var q = z.qs[z.i], st = z.state || {};
-      return head + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (z.retry ? 'Quick review' : 'Step ' + z.step + ' checkpoint') + ' · Question ' + (z.i + 1) + ' of ' + z.qs.length + '</div><h2 class="qtext">' + q.q + '</h2></div>' +
-        '<div class="ldots">' + z.qs.map(function (_, n) { return '<i class="' + (n <= z.i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
-        '<div class="stack" style="gap:10px">' + q.choices.map(function (c, n) {
-          var cls = st.right && n === q.answer ? ' right' : (st.wrong || []).indexOf(n) >= 0 ? ' wrong' : '';
-          return '<button type="button" class="opt qopt' + cls + '" data-a="quizpick" data-v="' + n + '"' + (st.right || (st.wrong || []).indexOf(n) >= 0 ? ' disabled' : '') + '>' + c + '</button>'; }).join('') + '</div>' +
-        (st.right ? '<p class="qnote ok" role="status"><b>' + ((st.wrong || []).length ? 'There it is.' : 'Right.') + '</b> ' + q.why + '</p>' : (st.wrong || []).length ? '<p class="qnote" role="status"><b>Not quite.</b> ' + q.why + ' Try again.</p>' : '') +
-        (st.right ? '<div class="push"><button type="button" class="primary" data-a="quiznext">' + (z.i === z.qs.length - 1 ? 'Finish' : 'Next question') + '</button></div>' : '');
-    },
     lesson: function () {
       var L = U.lesson || {}, l = lessonFor(L.id) || { title: 'Lesson', card1: '', card2: '', card3: '' }, cards = [l.card1, l.card2, l.card3].filter(Boolean), i = Math.min(U.lessonCard || 0, cards.length - 1), last = i === cards.length - 1, done = lessonDone(L.id);
       return back('journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">Lesson \u00b7 1 minute</div><h2>' + esc(l.title) + '</h2></div>' +
         '<div class="card lessoncard">' + esc(cards[i] || '') + '</div><div class="ldots">' + cards.map(function (_, n) { return '<i class="' + (n <= i ? 'on' : '') + '"></i>'; }).join('') + '</div>' +
         (last && l.skoolUrl ? '<p style="font-size:14px">Want more? <a href="' + esc(l.skoolUrl) + '" target="_blank" rel="noopener" style="color:var(--green);font-weight:600">Watch the video in the community</a></p>' : '') +
         (last && l.action ? '<button type="button" class="outline" data-a="lessonact" data-v="' + esc(l.action) + '">' + esc(l.actionLabel || 'Do it now') + ' \u203a</button>' : '') +
-        '<div class="push"><button type="button" class="primary" data-a="' + (last ? 'lessondone' : 'lessonnext') + '">' + (last ? (done ? 'Back to my map' : 'Got it') : 'Next') + '</button></div>';
-    },
-    plans: function () {
-      var now = today(), list = F.PLANS.map(function (def) {
-        var run = P.plans.filter(function (p) { return p.id === def.id && !p.ended; })[0];
-        if (!run) {
-          var finished = P.plans.filter(function (p) { return p.id === def.id && p.ended === 'done'; }).length;
-          return '<div class="card stack" style="padding:16px 18px;gap:8px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + def.title + '</h3><span class="tag" style="margin:0">' + def.days.length + ' days</span></div>' +
-            '<span style="font-size:14px;color:var(--muted)">' + def.blurb + '</span>' + (finished ? '<span style="font-size:13px;color:var(--sun-ink)">Finished ' + plural(finished, 'time') + '</span>' : '') +
-            '<button type="button" class="primary" style="min-height:48px;margin-top:4px" data-a="planstart" data-v="' + def.id + '">' + (finished ? 'Start again' : 'Start the plan') + '</button></div>';
-        }
-        var st = F.planStatus(run, now);
-        return '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3>' + def.title + '</h3><span style="font-size:13px;color:var(--faint)">' + st.doneCount + ' of ' + def.days.length + '</span></div>' +
-          '<div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(2, st.progress * 100) + '%"></i></div>' +
-          '<div>' + st.days.map(function (d, i) {
-            var when = d.done ? 'Done' : i === st.next ? 'Up next' : 'Open';
-            var inner = '<span class="dot' + (d.done ? ' on' : '') + (d.open && !d.done ? ' today' : '') + (!d.open ? ' future' : '') + '" aria-hidden="true">' + (d.done ? ICON.check('#fff', 12) : i + 1) + '</span><span style="flex:1;min-width:0"><span style="display:block;font-weight:600">Day ' + (i + 1) + ': ' + d.title + '</span><small style="color:var(--faint)">' + when + '</small></span>';
-            return d.open ? '<button type="button" class="planrow" data-a="planopen" data-v="' + run.uid + '" data-i="' + i + '">' + inner + '<span aria-hidden="true">\u203a</span></button>' : '<div class="planrow locked">' + inner + '</div>';
-          }).join('') + '</div></div>';
-      }).join('');
-      return '<div style="margin-top:8px"><h2>Plans & Goals</h2><p style="margin-top:6px">Give your money a destination, and build the habit one small step a day.</p></div>' +
-        (U.planToast ? (function () { var t = U.planToast; U.planToast = null; return '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + t + '</b></div>'; })() : '') +
-        celebration(2, ['plan', 'unlock']) + goalsCard() + (function () { var o = F.outlook(profile(), today()); return pathCard(o, o.step); })() +
-        '<div class="stack" style="gap:6px;margin-top:6px"><div class="eyebrow">Reading plans</div><p style="font-size:14px">A short read and one action each day. A new day opens every morning, and you can always catch up.</p></div>' + list + '<p class="fine">More plans are coming.</p>';
-    },
-    planday: function () {
-      var run = P.plans.filter(function (p) { return p.uid === U.planUid; })[0], def = F.planDef(run.id), i = U.planDay, d = def.days[i], done = (run.done || []).indexOf(i) >= 0;
-      return back('plans') + '<div class="stack" style="gap:6px"><div class="eyebrow">Day ' + (i + 1) + ' of ' + def.days.length + ' \u00b7 ' + def.title + '</div><h2>' + d.title + '</h2></div>' +
-        '<div class="card stack" style="padding:18px;gap:12px;font-size:17px;line-height:1.6">' + d.read.map(function (para) { return '<p style="color:var(--ink)">' + para + '</p>'; }).join('') + '</div>' +
-        '<div class="eyebrow" style="margin-top:6px">Today\u2019s one action</div>' +
-        '<button type="button" class="outline" data-a="planact" data-v="' + d.action[1] + '">' + d.action[0] + ' \u203a</button>' +
-        '<div class="push">' + (done ? '<div class="left"><span>Day ' + (i + 1) + ' complete</span><span>\u2713</span></div><button type="button" class="textbtn" data-a="go" data-v="plans">Back to the plan</button>'
-          : '<button type="button" class="primary" data-a="planmark">Mark day ' + (i + 1) + ' complete</button>') + '</div>';
+        '<div class="push"><button type="button" class="primary" data-a="' + (last ? 'lessondone' : 'lessonnext') + '">' + (last ? (done ? 'Back' : 'Got it') : 'Next') + '</button></div>';
     },
 
     scan: function () {
@@ -2945,14 +2853,6 @@
           }).join('') + '</div>';
         }).join('') : '<p style="padding:8px 0">Nothing yet this month.</p>');
     },
-    community: function () {
-      var latest = Object.keys(P.badges).filter(function (k) { return BADGES.some(function (b) { return b.id === k; }); }).sort(function (a, b) { return P.badges[a] < P.badges[b] ? 1 : -1; })[0];
-      return '<div id="wins" class="stack" style="gap:10px;margin-top:8px;scroll-margin-top:16px"><div class="eyebrow">Your wins</div><h2>Wins</h2>' + (P.setupDone ? weekCard() : '') +
-        (latest && CONFIG.communityUrl ? '<button type="button" class="outline" data-a="sharebadge" data-v="' + latest + '">Post your latest win in the community</button>' : '') +
-        '<div class="seg wins-seg" role="group" aria-label="Wins" style="align-self:flex-start">' + [['challenges', 'Challenges'], ['milestones', 'Milestones']].map(function (o) {
-          var on = (U.winsView || 'challenges') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="winsview" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>' +
-        (U.winsView === 'milestones' ? V.milestones() : V.challenges());
-    },
     milestones: function () {
       var f = facts(), earned = BADGES.filter(function (b) { return P.badges[b.id]; }), locked = BADGES.filter(function (b) { return !P.badges[b.id]; });
       var o = F.outlook(profile(), today()), st = Math.min(o.step, 7), mt = U.msTab || 'next';
@@ -2992,7 +2892,7 @@
         (U.shareErr ? '<p role="status" style="font-size:14px;color:var(--muted)">' + U.shareErr + '</p>' : '');
     },
     settings: function () {
-      return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) +
+      return back('home') + '<h2>Settings</h2>' + accountCard() + remindCard(false) + daysCard() +
         '<div class="card">' + [['install', 'Add to Home Screen', 'edit'], ['', 'Show me around again', 'tourreplay']].map(function (x) {
           return '<button type="button" class="row linkrow" data-a="' + x[2] + '" data-v="' + x[0] + '"><span>' + x[1] + '</span><span aria-hidden="true">›</span></button>'; }).join('') + '</div>' +
         '<div class="card stack" style="padding:16px 18px;gap:10px"><b>Your data</b><p style="font-size:14px">' + (S ? 'Your plan is on this phone and saved to your account.' : 'Everything is saved only on this phone. Sign in at the top, or save a backup file now and then, in case you switch phones or clear your browser.') + '</p>' +
@@ -3127,7 +3027,6 @@
     P.lastFree = free ? F.isoDay(free) : null;
     P.prevBalances = cur.debts; P.prevSavings = cur.savings; P.prevGoals = cur.goals;
   }
-  var ACTION = { lunch10: 'Packed a lunch', sell3: 'Sold one', nofees30: 'A late fee happened', nooverdraft30: 'I overdrafted', nocard30: 'I added card debt', cancel1: 'I cancelled one', boost50: 'I paid the extra $50' };
   // what the milestones and challenges look at
   function facts() {
     var p = profile(), pl = F.plan(p), open = p.debts.some(function (d) { return d.bal > 0; });
@@ -3159,7 +3058,7 @@
     reset.forEach(function (p) { rdone = rdone.concat(p.done || []); });
     P.unlocked = P.unlocked || {};
     if (!P.unlocked.milestones && (rdone.indexOf(1) >= 0 || f.checkins >= 1)) { P.unlocked.milestones = true; P.unseen.push({ type: 'unlock', id: 'milestones' }); changed = true; }
-    if (!P.unlocked.challenges && (rdone.indexOf(3) >= 0 || f.checkins >= 1 || P.challenges.length)) { P.unlocked.challenges = true; P.unseen.push({ type: 'unlock', id: 'challenges' }); changed = true; }
+    // (the old small challenges are gone, so they no longer unlock)
     // a new step on the path is the biggest win of all
     var stepNow = F.outlook(profile(), now).step;
     if (P.topStep == null) P.topStep = stepNow;
@@ -3189,21 +3088,6 @@
         '<div style="display:flex;gap:10px;margin-top:4px"><button type="button" class="sharebtn" data-a="' + it.share + '" data-v="' + it.v + '">' + (it.label || ICON.share + ' Share') + '</button><button type="button" class="sharebtn ghost" data-a="seen" data-v="' + x[0].type + ':' + x[0].id + '">Nice!</button></div>' +
         (i === items.length - 1 && more > 0 && max === 1 ? '<span style="font-size:13px">+' + more + ' more in Milestones</span>' : '') + '</div>';
     }).join('');
-  }
-  function pitwHtml() {
-    var amt = U.pitw.amt, target = P.debts.filter(function (d) { return num(d.bal) > 0; }).sort(function (a, b) { return num(a.bal) - num(b.bal); })[0];
-    var goals = P.goals.filter(function (g) { return num(g.saved) < g.amount; }).slice(0, 2);
-    return '<div class="toast win stack" style="gap:8px"><b>+' + money(amt) + '. Nice work.</b><span>Put it to work before it disappears:</span><div class="stack" style="gap:8px">' +
-      '<button type="button" class="sharebtn" data-a="pitw" data-v="savings">Add to my emergency savings</button>' +
-      (target ? '<button type="button" class="sharebtn" data-a="pitw" data-v="debt">Pay down ' + esc(target.name) + '</button>' : '') +
-      goals.map(function (g) { return '<button type="button" class="sharebtn" data-a="pitw" data-v="goal:' + g.id + '">Add to ' + esc(g.name) + '</button>'; }).join('') +
-      '<button type="button" class="sharebtn ghost" data-a="pitw" data-v="later">Decide later</button></div></div>';
-  }
-  function partnerHtml(d) {
-    var pt = d.partner && CONFIG.partners[d.partner];
-    return (d.tips ? '<p style="font-size:13px">' + d.tips + '</p>' : '') +
-      (pt && pt.url ? '<a class="outline" style="text-decoration:none;color:var(--ink);min-height:44px;font-size:15px" href="' + esc(pt.url) + '" target="_blank" rel="noopener sponsored">' + esc(pt.label) + ' \u203a</a>' +
-        '<p style="font-size:12px;color:var(--faint)">We may earn money if you sign up through this link. We only list places we\u2019d recommend anyway.</p>' : '');
   }
   function markSeen(key) { P.unseen = P.unseen.filter(function (u) { return u.type + ':' + u.id !== key; }); save(); }
   function caption() {
@@ -3256,214 +3140,8 @@
     var d = F.planDef('reset7').days[+m[1]], r = d.read.concat(['']);
     return { id: id, title: d.title, card1: r[0], card2: r[1], card3: r[2] || '', action: d.action[1], actionLabel: d.action[0], skoolUrl: '' };
   }
-  function resetRun() { var run = P.plans.filter(function (p) { return p.id === 'reset7' && !p.ended; })[0]; if (!run) { run = { uid: uid(), id: 'reset7', start: F.isoDay(today()), done: [] }; P.plans.push(run); } return run; }
   function lessonDone(id) { var m = /^reset7-(\d)$/.exec(id); if (m) { var run = P.plans.filter(function (p) { return p.id === 'reset7'; })[0]; return !!run && run.done.indexOf(+m[1]) >= 0; } return ((P.journey || {}).done || []).indexOf(id) >= 0; }
-  // ---------- Journey: the map ----------
-  function jState() {
-    var p = profile(), o = F.outlook(p, today()), pm = Math.max(0, o.plan.extra), sv = num(P.savings);
-    var toCushion = Math.max(0, F.CUSHION - sv), paydays = pm > 0.5 ? Math.ceil(toCushion / pm) : Infinity;
-    P.journey = P.journey || { done: [], makeRoomDone: false };
-    var makeRoom = !P.journey.makeRoomDone && o.step === 1 && (pm <= 0.5 || paydays > 13);
-    return { o: o, step: o.step, pm: pm, sv: sv, paydays: paydays, makeRoom: makeRoom };
-  }
-  // Make room runs once: when its three nodes are done, it's done for good
-  function jCheckRoom() {
-    P.journey = P.journey || { done: [] };
-    if (!P.journey.makeRoomDone && lessonDone('M1') && funSet() && P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; })) { P.journey.makeRoomDone = true; save(); track('make-room-done'); }
-  }
-  function jNode(o) {
-    var cls = 'mnode' + (o.done ? ' done' : o.locked ? ' locked' : ' open') + (o.kind ? ' ' + o.kind : '');
-    var live = o.a && !o.locked && (!o.done || o.again), tag = live ? 'button type="button"' : 'div';
-    return '<' + tag + ' class="' + cls + '" style="--o:' + (o.off || 0) + '"' + (live ? ' data-a="' + o.a + '"' + (o.v != null ? ' data-v="' + o.v + '"' : '') : '') + '>' +
-      '<span class="orb">' + (o.done ? ICON.check('currentColor', 20) : o.icon) + '</span><span class="jt"><b>' + o.t + '</b><small>' + o.s + '</small></span></' + tag.split(' ')[0] + '>';
-  }
-  // ---------- checkpoint quizzes: 3 questions per step, with the person's own numbers where possible ----------
-  // question text lives in lessons.json (chapter "quiz"); numbers questions are filled in and answered here
-  function quizRows(step) { return LESSONS ? Object.keys(LESSONS).map(function (k) { return LESSONS[k]; }).filter(function (x) { return x.chapter === 'quiz' && x.step === step; }).sort(function (a, b) { return a.order - b.order; }) : []; }
-  function quizPassed(step) { return !!((P.journey || {}).quizzes || {})['S' + step]; }
-  function fill(t, v) { return String(t || '').replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? v[k] : m; }); }
-  // a few wrong answers near the right one, in a steady order
-  function numChoices(ans, alts, fmt) {
-    var out = [ans]; alts.forEach(function (a) { if (a > 0 && out.indexOf(a) < 0 && out.length < 3) out.push(a); });
-    for (var d = 1; out.length < 3; d++) if (out.indexOf(ans + d) < 0) out.push(ans + d);
-    out.sort(function (a, b) { return a - b; }); return { choices: out.map(fmt), answer: out.indexOf(ans) };
-  }
-  // word answers in a different order each day, so the right one isn't always in the same spot
-  function mix(q, id) {
-    var seed = 0, key = id + F.isoDay(today()); for (var i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) % 9973;
-    var order = q.choices.map(function (_, n) { return n; }).sort(function (a, b) { return ((a + 1) * seed) % 7 - ((b + 1) * seed) % 7 || a - b; });
-    q.choices = order.map(function (n) { return q.choices[n]; }); q.answer = order.indexOf(q.answer);
-  }
-  function buildQuestion(row) {
-    var j = jState(), pm = j.pm > 0.5 ? Math.round(j.pm) : 200, v = { planPerPayday: money(pm) }, q = { id: row.id, why: row.why };
-    if (row.compute === 'cushionLeft' || row.compute === 'cushionPaydays') {
-      var sv = j.sv > 0 && j.sv < F.CUSHION ? Math.round(j.sv) : 350, left = F.CUSHION - sv;
-      v.savings = money(sv); v.left = money(left);
-      if (row.compute === 'cushionLeft') { var c1 = numChoices(left, [left + 250, F.CUSHION, Math.max(50, left - 150)], money); q.choices = c1.choices; q.answer = c1.answer; v.answer = money(left); }
-      else { var n = Math.ceil(left / pm); v.exact = (left / pm).toFixed(1); var c2 = numChoices(n, [Math.floor(left / pm), n * 2], function (x) { return plural(x, 'payday'); }); q.choices = c2.choices; q.answer = c2.answer; }
-    } else if (row.compute === 'firstDebt') {
-      var ds = P.debts.filter(function (d) { return num(d.bal) > 0; }).map(function (d) { return { name: d.name || 'Debt', bal: num(d.bal), apr: num(d.apr) }; });
-      if (ds.length < 2) ds = [{ name: 'Medical bill', bal: 350, apr: 0 }, { name: 'Credit card', bal: 2400, apr: 24 }, { name: 'Car loan', bal: 9000, apr: 7 }];
-      ds.sort(function (a, b) { return a.bal - b.bal; });
-      var pickd = [ds[0]].concat(ds.slice(1).sort(function (a, b) { return b.apr - a.apr || b.bal - a.bal; }).slice(0, 2));
-      q.choices = pickd.map(function (d) { return esc(d.name) + ' (' + money(d.bal) + (d.apr ? ', ' + d.apr + '%' : '') + ')'; }); q.answer = 0; mix(q, row.id);
-    } else if (row.compute === 'smallestPaydays') {
-      var t = j.o.target, bal = t ? Math.round(t.bal) : 600, n2 = Math.ceil(bal / pm);
-      v.smallestBalance = money(bal); v.exact = (bal / pm).toFixed(1);
-      var c3 = numChoices(n2, [Math.floor(bal / pm), n2 * 2], function (x) { return plural(x, 'payday'); }); q.choices = c3.choices; q.answer = c3.answer;
-    } else { q.choices = [row.choice1, row.choice2, row.choice3].filter(Boolean).map(esc); q.answer = (+row.answer || 1) - 1; mix(q, row.id); }
-    q.q = esc(fill(row.title, v)); q.why = esc(fill(row.why, v));
-    return q;
-  }
-  // questions answered wrong come back after the next weekly recap
-  function quizRetries() {
-    var r = ((P.journey || {}).retry || []), last = Object.keys(P.wk || {}).filter(function (k) { return P.wk[k].done; }).map(function (k) { return P.wk[k].done; }).sort().pop() || null;
-    return r.filter(function (x) { return last && x.on < last && LESSONS && LESSONS[x.id]; });
-  }
-  function journeyMap() {
-    var j = jState(), cur = Math.min(j.step, 7), view = Math.max(1, Math.min(U.jStep || cur, cur + 1, 7)), nodes = [], off = [0, 1, 1.6, 1, 0, -1, -1.6, -1], k = 0, add = function (n) { n.off = off[k++ % 8]; nodes.push(n); };
-    var bk = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h6a2 2 0 0 1 2 2v12a2 2 0 0 0-2-2H4z"/><path d="M20 5h-6a2 2 0 0 0-2 2v12a2 2 0 0 1 2-2h6z"/></svg>';
-    var room = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>';
-    var sun = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="15" r="4"/><path d="M3 19h18M12 5v3M5.5 8.5l2 2M18.5 8.5l-2 2"/></svg>';
-    var mark = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4h11l-2 4 2 4H5"/></svg>';
-    var cart = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H6.2"/><circle cx="9" cy="19.5" r="1.3"/><circle cx="17" cy="19.5" r="1.3"/></svg>';
-    var quizNode = function (step) {
-      var ok = quizPassed(step);
-      return { icon: '<span style="font-size:19px;font-weight:700">?</span>', kind: ok ? '' : 'quiz', t: 'Step ' + step + ' checkpoint', s: ok ? 'Passed \u00b7 take it again' : '3 questions', a: 'quizopen', v: String(step), done: ok, again: true };
-    };
-    var lessonNodes = function (set, lock) {
-      // all lessons stay open (go at your own pace) and can be read again; the next one is highlighted
-      // the first-open answer picks which lesson is up next; after that, the next one not done
-      var pref = { 1: { cushion: 'C1', debt: 'C1', payday: 'C4', same: 'C4' }, 2: { cushion: 'D1', debt: 'D1', payday: 'D3', same: 'D2' } }[view] || {}, want = pref[(P.intro || {}).first];
-      var nextId = view !== cur || lock ? null : want && !lessonDone(want) && set.some(function (x) { return x[0] === want; }) ? want : (set.filter(function (x) { return !lessonDone(x[0]); })[0] || [])[0];
-      set.forEach(function (x) {
-        var id = x[0], l = lessonFor(id), dn = lessonDone(id), next = id === nextId;
-        add({ icon: bk, t: l.title, s: dn ? 'Lesson done · read again' : lock ? 'Opens after Make room' : next ? 'Up next · 1 minute' : 'Lesson, 1 minute', a: 'lessonopen', v: id, done: dn, again: true, locked: lock && !dn, kind: next || dn || lock ? '' : 'later' });
-      });
-    };
-    // a way to look back at earlier steps (and peek at the next one)
-    var stepTabs = [];
-    for (var st = 1; st <= Math.min(7, cur + 1); st++) stepTabs.push([String(st), st < cur ? '✓ Step ' + st : st === cur ? 'Step ' + st + ' · now' : 'Step ' + st + ' · next']);
-    var html = cur > 1 || view !== cur ? tabChips('jstep', String(view), stepTabs) : '';
-    var badgeDate = function (id) { return P.badges[id] ? ' on ' + dayMonth(F.fromIso(P.badges[id])) : ''; };
-
-    // ----- a step that's finished: what happened, lessons to read again -----
-    if (view < cur) {
-      if (view === 1) {
-        html += '<div class="jworld done"><b>✓ Step 1 · $1,000 Emergency Fund</b><small>Done' + badgeDate('cushion') + '. Your $1,000 is in place.</small></div>';
-        if ((P.journey || {}).makeRoomDone) add({ icon: room, t: 'Make room', s: 'Done', done: true });
-        lessonNodes(CUSHION_LESSONS, false);
-        add(quizNode(1));
-        add({ icon: ICON.medal, kind: 'gold', t: '$1,000 Emergency Fund', s: 'Milestone' + badgeDate('cushion'), done: false, a: P.badges.cushion ? 'sharebadge' : '', v: 'cushion' });
-      } else if (view === 2) {
-        html += '<div class="jworld done"><b>✓ Step 2 · Debt Snowball</b><small>Done' + badgeDate('debt-free') + '. Every debt but the house is paid off.</small></div>';
-        P.debts.filter(function (d) { return num(d.orig) > 0; }).forEach(function (d) { add({ icon: mark, t: esc(d.name || 'Debt') + ' paid off', s: money(num(d.orig)) + ' gone', done: true }); });
-        lessonNodes(SNOWBALL_LESSONS, false);
-        add(quizNode(2));
-      } else html += '<div class="jworld done"><b>✓ Step ' + view + ' · ' + F.STEPS[view - 1][0] + '</b><small>Done.</small></div>';
-      return html + (nodes.length ? '<div class="mpath">' + nodes.map(jNode).join('') + '</div>' : '') + '<button type="button" class="outline" data-a="jstep" data-v="' + cur + '">Back to Step ' + cur + '</button>';
-    }
-    // ----- the next step: a peek, nothing to do yet -----
-    if (view > cur) {
-      html += '<div class="jworld"><b>Step ' + view + ' · ' + F.STEPS[view - 1][0] + '</b><small>' + (cur === 1 ? 'Opens when your $1,000 emergency fund is in place.' : cur === 2 ? 'Opens when every debt but the house is paid off.' : 'Opens when this step is done.') +
-'</small></div>';
-      return html + '<button type="button" class="outline" data-a="jstep" data-v="' + cur + '">Back to Step ' + cur + '</button>';
-    }
-
-    // ----- the current step -----
-    // Make room comes first when the plan is short or the emergency fund is a long way off
-    if (j.makeRoom) {
-      var funOk = funSet(), sub = P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; }), subOn = P.challenges.some(function (c) { return c.id === 'cancel1' && !c.ended; });
-      html += '<div class="jchap"><div class="eyebrow">Chapter · Make room</div><small>' + (j.pm <= 0.5 ? 'Find room in your budget so your emergency fund can start.' : 'Your emergency fund is ' + (j.paydays === Infinity ? 'a long way' : j.paydays + ' paydays') + ' away. Let’s find room to speed it up.') + '</small></div>';
-      add({ icon: bk, t: 'Needs vs wants', s: lessonDone('M1') ? 'Lesson done · read again' : 'Lesson, 1 minute', a: 'lessonopen', v: 'M1', done: lessonDone('M1'), again: true });
-      add({ icon: room, t: 'Set a fun-money limit', s: funOk ? 'Limit set' : 'A limit for the Wants group', a: 'jfun', done: funOk });
-      add({ icon: room, t: 'Cancel One Subscription', s: subOn ? 'In progress: mark it done when you cancel' : 'Find room for the plan', a: 'jsub', done: sub });
-      add({ icon: '<span style="font-size:20px">⚡</span>', kind: 'side', t: 'Earn a little extra', s: 'Side quest, optional', a: 'jside', v: 'earn' });
-    }
-    var ahead = '', checkpoints = [];
-    if (cur === 1) {
-      var ld = CUSHION_LESSONS.filter(function (x) { return lessonDone(x[0]); }).length, nl = CUSHION_LESSONS.length;
-      html += '<div class="jchap"><div class="eyebrow">Step 1 · $1,000 Emergency Fund</div>' +
-        '<div class="jtrack"><span><b>Your emergency fund</b><small>' + money(j.sv) + ' of $1,000.</small></span><span class="jpct">' + Math.min(100, Math.round(j.sv / 10)) + '%</span></div>' +
-        '<div class="jtrack"><span><b>Emergency fund lessons</b><small>' + (j.makeRoom ? 'Open after Make room.' : ld + ' of ' + nl + ' done. One minute each.') + '</small></span><span class="jpct">' + ld + '/' + nl + '</span></div></div>';
-      ahead = j.makeRoom ? 'Finish Make room to start your emergency fund.' : money(Math.max(0, F.CUSHION - j.sv)) + ' left to your $1,000 Emergency Fund.';
-    } else if (cur === 2) {
-      // each debt is a chapter, smallest balance first
-      var po = j.o.payoffs || [], now = po[0], d0 = now && P.debts.filter(function (d) { return d.id === now.id; })[0], orig = d0 ? Math.max(num(d0.orig), num(d0.bal)) : 0;
-      var gone = P.debts.filter(function (d) { return num(d.bal) <= 0 && num(d.orig) > 0; });
-      html += '<div class="jchap"><div class="eyebrow">Step 2 · Debt Snowball</div><small>Smallest balance first. When one is paid off, its payment rolls into the next.</small>' +
-        (gone.length ? '<div class="jgone">' + gone.map(function (d) { return '<span>✓ ' + esc(d.name || 'Debt') + '</span>'; }).join('') + '</div>' : '') +
-        (now ? '<div class="jtrack"><span><b>Chapter ' + (gone.length + 1) + ' · ' + esc(now.name || 'Debt') + '</b><small>' + money(now.bal) + ' left' + (orig > now.bal ? ' of ' + money(orig) : '') + '.</small></span><span class="jpct">' + (orig ? Math.round((1 - now.bal / orig) * 100) : 0) + '%</span></div>' : '') + '</div>';
-      if (now) {
-        // a long chapter gets checkpoints so it never feels endless
-        if (now.n !== Infinity && now.n > 8 && orig > 0) {
-          var parts = Math.ceil(now.n / 6), stepAmt = orig / parts;
-          for (var c = 1; c < parts; c++) {
-            var line = Math.max(50, Math.round((orig - stepAmt * c) / 50) * 50), reached = now.bal <= line;
-            checkpoints.push({ icon: mark, t: esc(now.name || 'Debt') + ' under ' + money(line), s: reached ? 'Checkpoint reached' : 'Checkpoint', done: reached });
-          }
-        }
-        ahead = money(now.bal) + ' left on ' + esc(now.name || 'this debt') + '.';
-      }
-    } else {
-      html += '<div class="jchap"><div class="eyebrow">Step ' + cur + ' · ' + F.STEPS[cur - 1][0] + '</div><small>The map for this step is on the way. Keep up your weekly recaps.</small></div>';
-    }
-    // this payday period's weekly "Add this week's purchases" nodes
-    payWeeks().forEach(function (w) {
-      add({ icon: cart, t: w.now ? 'Add this week’s purchases' : w.open ? 'Purchases, ' + weekLabel(w) : 'Purchases, week of ' + weekLabel(w), s: w.done ? (P.weeks[w.start] === 'none' ? 'No purchases that week' : 'Added · tap to add more') : w.open ? 'Scan a screenshot or add by hand' : 'Opens ' + dayMonth(F.fromIso(w.start)), a: 'weekadd', v: w.start, done: w.done, again: true, locked: !w.open });
-    });
-    if (quizRetries().length) add({ icon: '<span style="font-size:20px">?</span>', kind: 'side', t: 'Quick review', s: plural(quizRetries().length, 'question') + ' from your last checkpoint', a: 'quizopen', v: 'retry' });
-    if (cur === 1) { lessonNodes(CUSHION_LESSONS, j.makeRoom); add(quizNode(1)); }
-    if (cur === 2) {
-      lessonNodes(SNOWBALL_LESSONS, false);
-      add(quizNode(2));
-      checkpoints.forEach(add);
-      var po2 = j.o.payoffs || [];
-      if (po2[0]) add({ icon: ICON.medal, kind: 'gold', t: esc(po2[0].name || 'Debt') + ' paid off', s: money(po2[0].bal) + ' to go', done: false });
-    }
-    // milestones earned this week land on the path
-    var wk0 = wkStart();
-    BADGES.filter(function (b) { return P.badges[b.id] && P.badges[b.id] >= wk0; }).slice(-3).forEach(function (b) { add({ icon: ICON.medal, kind: 'gold', t: b.title, s: 'Milestone earned', done: false, a: 'sharebadge', v: b.id }); });
-    html += '<div class="mpath">' + nodes.map(jNode).join('') + '</div>';
-    // the chapters after this one, smallest first
-    if (cur === 2 && (j.o.payoffs || []).length > 1) html += '<div class="card jnext"><b>Up next in the snowball</b>' + j.o.payoffs.slice(1).map(function (d, i) {
-      return '<div class="row"><span>Chapter ' + (P.debts.filter(function (x) { return num(x.bal) <= 0 && num(x.orig) > 0; }).length + i + 2) + ' · ' + esc(d.name || 'Debt') + '</span><span class="pill">' + money(d.bal) + '</span></div>'; }).join('') + '</div>';
-    // dated goals as flags
-    var flags = [].filter(function (g) { return g.by; }).map(function (g) { return '<span class="jflag">' + ICON.flag + ' ' + esc(g.name) + ' · ' + shortDate(F.fromIso(g.by)) + '</span>'; }).join('');
-    html += '<p class="jahead">' + ahead + '</p>' + (flags ? '<div class="jflags">' + flags + '</div>' : '');
-    return html + pathCard(j.o, j.step);
-  }
-  // one running challenge with its own buttons to log progress (Challenges tab, and Home right under the hero)
-  function chCard(c, now, f) {
-    var st = F.challengeStatus(c, now, f), d = st.def, act = ACTION[d.id] || '';
-    var body = '';
-    if (d.kind === 'daily') body = '<div class="dots" role="group" aria-label="Days">' + st.dots.map(function (x, i) {
-      var tap = true;
-      return tap ? '<button type="button" class="dot' + (x.done ? ' on' : '') + (x.today ? ' today' : '') + '" aria-pressed="' + x.done + '" aria-label="Day ' + (i + 1) + (x.done ? ', done' : '') + '" data-a="chdot" data-v="' + c.uid + '" data-d="' + x.iso + '">' + (x.done ? ICON.check('#fff', 12) : i + 1) + '</button>'
-        : '<span class="dot' + (x.done ? ' on' : '') + (x.future ? ' future' : '') + '" aria-label="Day ' + (i + 1) + (x.done ? ', done' : '') + '">' + (x.done ? ICON.check('#fff', 12) : i + 1) + '</span>';
-    }).join('') + '</div>' + (st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chdot" data-v="' + c.uid + '" data-d="' + F.isoDay(now) + '">I did it today</button>' : st.marked && st.canMark ? '<p style="font-size:13px">Today\u2019s checked. Tap any other day above to check it off.</p>' : '');
-    else if (d.kind === 'count') body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chplus" data-v="' + c.uid + '">+1 \u00b7 ' + act + '</button>' : '';
-    else if (d.kind === 'clean') body = U.slip === c.uid ? '<div class="grid2"><button type="button" class="outline" data-a="chslipno">Never mind</button><button type="button" class="primary danger" data-a="chslip" data-v="' + c.uid + '">Yes, it happened</button></div>'
-      : '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><button type="button" class="textbtn" style="min-height:36px;padding:0" data-a="chslipask" data-v="' + c.uid + '">' + act + '</button>' +
-        '<button type="button" class="sharebtn" data-a="chcomplete" data-v="' + c.uid + '">' + ICON.check('#7ED9C0', 14) + ' I made it</button></div>';
-    else if (d.kind === 'earn') {
-      var log = c.log || [];
-      body = ('<div class="rowedit" style="grid-template-columns:minmax(0,1fr) 96px auto"><input type="text" aria-label="What you earned it from" placeholder="From what?" data-earnnote="' + c.uid + '"><input type="number" inputmode="decimal" aria-label="Amount earned" placeholder="$0" data-earnamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="earnadd" data-v="' + c.uid + '">Add</button></div>') +
-        (log.length ? '<div>' + log.slice(-3).reverse().map(function (x) { return '<div class="row" style="padding:6px 0;font-size:14px"><span>' + esc(x.note || 'Earned') + ' <span style="color:var(--faint)">' + dayMonth(F.fromIso(x.date)) + '</span></span><b style="color:var(--sun-ink)">+' + money(x.amt) + '</b></div>'; }).join('') + '</div>' : '') +
-        partnerHtml(d) + '<p style="font-size:12px;color:var(--faint)">Side income is usually taxable, and many apps don\u2019t hold anything back. Set some aside for taxes and ask a tax pro how much.</p>';
-    }
-    else if (d.kind === 'amount') body = '<div class="rowedit" style="grid-template-columns:minmax(0,1fr) auto"><input type="number" inputmode="decimal" aria-label="Amount found" placeholder="$ found" data-chamt="' + c.uid + '"><button type="button" class="primary" style="min-height:46px;width:auto" data-a="chadd" data-v="' + c.uid + '">Add</button></div>';
-    else if (d.kind === 'cushion') body = '<button type="button" class="outline" style="min-height:46px" data-a="checkin">Update my savings</button>';
-    else body = st.canMark ? '<button type="button" class="primary" style="min-height:48px" data-a="chonce" data-v="' + c.uid + '">' + act + '</button>' : '';
-    return '<div class="card stack" style="padding:16px 18px;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="tag" style="margin:0">' + d.tag + '</span><span style="font-size:13px;color:var(--faint)">' + plural(st.daysLeft, 'day') + ' left</span></div>' +
-      '<h3>' + d.title + '</h3><div class="bar goalbar" style="flex:none"><i style="width:' + Math.max(2, st.progress * 100) + '%"></i></div><div style="font-size:14px;color:var(--muted)">' + st.label + '</div>' + body +
-      '<button type="button" class="textbtn" style="align-self:flex-end;min-height:30px;padding:0;font-size:13px" data-a="chquit" data-v="' + c.uid + '">Stop this challenge</button></div>';
-  }
-  function activeChallenges() {
-    var now = today(), f = facts();
-    return P.challenges.filter(function (c) { return !c.ended; }).map(function (c) { return chCard(c, now, f); }).join('');
-  }
-  // the step's progress: the gauge, dollars left in the middle, saved and goal under it (Home and Journey)
+  // the step's progress: the gauge, dollars left in the middle, saved and goal under it (Home)
   function progGauge(o, p) {
     var pl = o.plan, step = o.step;
     var prog = '';
@@ -3476,16 +3154,6 @@
       (step <= 3 ? '<div class="hmid"><div class="hbig' + (money(left).length > 6 ? ' word' : '') + '">' + money(left) + '</div><small>' + leftText + '</small></div>'
         : '<div class="hmid"><div class="hbig" style="font-size:30px">Debt-free</div><small>with a full safety net</small></div>') +
       (prog ? '<div class="hpill"><span>' + prog[1] + '</span><b>' + Math.round(Math.min(1, prog[0]) * 100) + '%</b><span>' + prog[2] + '</span></div>' : '');
-  }
-  function journeyHead() {
-    var j = jState(), st = Math.min(j.step, 7), pct, l1, l2;
-    if (j.makeRoom) { var n = [lessonDone('M1'), funSet(), P.challenges.some(function (c) { return c.id === 'cancel1' && c.ended === 'done'; })].filter(Boolean).length; pct = n / 3; l1 = 'Make room'; l2 = n + ' of 3 done'; }
-    else if (st === 1) { pct = j.sv / F.CUSHION; l1 = money(j.sv) + ' saved'; l2 = 'of $1,000'; }
-    else if (st === 2) { var orig = 0, bal = 0; P.debts.forEach(function (d) { orig += Math.max(num(d.orig), num(d.bal)); bal += num(d.bal); }); pct = orig ? 1 - bal / orig : 0; l1 = money(orig - bal) + ' paid'; l2 = money(bal) + ' left'; }
-    else { pct = stepProgress(j.o); l1 = 'Step ' + st; l2 = ''; }
-    return '<div class="jhead">' + mmGear() + '<div class="jmeta"><span>Step ' + st + ' of 7</span><span>' + (wkStreak() ? plural(wkStreak(), 'week') + ' in a row' : '') + '</span></div><h2>' + (j.makeRoom ? 'Make room' : F.STEPS[st - 1][0]) + '</h2>' +
-      (j.makeRoom ? '<div class="pbar jbar"><i style="width:' + Math.max(2, Math.min(100, pct * 100)) + '%"></i></div><div class="jsub"><span>' + l1 + '</span><span>' + l2 + '</span></div>' : '<div class="jgauge">' + progGauge(j.o, profile()) + '</div>') +
-      (j.makeRoom ? '<div class="jrow"><div class="chips"><span class="chip" style="min-height:30px;font-size:13px">Make room first</span></div></div>' : '') + '</div>';
   }
   // a row of bubble tabs that scrolls sideways
   function tabChips(action, cur, opts) {
@@ -3564,14 +3232,6 @@
   function wkCheck(on, label, act, v) {
     return '<div class="wkstep' + (on ? ' on' : '') + '"><span class="wkc">' + (on ? ICON.check('#141414', 14) : '') + '</span><span class="wkl">' + label + '</span>' + (on || !act ? '' : '<button type="button" class="sharebtn" data-a="' + act + '"' + (v ? ' data-v="' + v + '"' : '') + '>Go</button>') + '</div>';
   }
-  // the card on Journey and Wins: this week's 3 steps and the streak
-  function weekCard() {
-    var r = wkRec(), n = wkStreak(), wk = weekOf(today());
-    return '<div class="card stack wkcard" style="padding:16px 18px;gap:10px"><div style="display:flex;align-items:center;gap:12px"><span class="flame' + (n ? ' lit' : '') + '">' + ICON.flame + '</span>' +
-      '<div style="flex:1;min-width:0"><b style="font-size:17px">' + (n ? plural(n, 'week') + ' in a row' : 'Weekly streak') + '</b><small style="display:block;color:var(--muted);font-size:13px">' + weekLabel({ start: wk[0], end: wk[1] }) + '</small></div></div>' +
-      wkCheck(!!r.cat, 'Categorize transactions', 'recapgo', 'cat') + wkCheck(!!r.bal, 'Update balances', 'recapgo', 'bal') + wkCheck(!!r.done, 'Read your weekly recap', 'go', 'recap') +
-      (r.done ? '<button type="button" class="textbtn" style="align-self:flex-start;min-height:32px;padding:0" data-a="go" data-v="recap">See this week’s recap ›</button>' : '') + '</div>';
-  }
   function selectCaption() { var el = document.getElementById('caption'); if (!el) return; var r = document.createRange(); r.selectNodeContents(el); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
   function download(name, type, text) {
     var blob = text instanceof Blob ? text : new Blob([text], { type: type }), url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -3604,7 +3264,7 @@
       clearTimeout(U.confirmTimer); U.confirmDel = null; U.confirmEl = null;
     } else resetConfirm();
     switch (a) {
-      case 'go': if (v === 'journey' && b.closest('.tabbar')) { U.jTab = 'map'; U.jStep = null; U.jAllPast = false; } if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
+      case 'go': if (v === 'journey' && b.closest('.tabbar')) U.jTab = null; if (v === 'savings' && U.screen === 'path') track('setup-start'); if (v === 'sort') U.sortHist = []; U.confirmDelete = false; if (v === 'found') U.limit = null; go(v); break;
       case 'freq': P.freq = v; save(); render(); break;
       case 'givemode': (function () {
         var inc = monthlyIncome();
@@ -3667,7 +3327,7 @@
       case 'mmnew': U.plusOpen = false; mmStartEdit(null, 'meals'); break;
       case 'recapwk': U.recapWk = mmAdd(U.recapWk || weekOf(today())[0], +v); render(); break;
       case 'recapopen': U.recapBack = U.screen; U.recapWk = null; go('recap'); break;
-      case 'tourreplay': try { localStorage.removeItem(TOUR_KEY); } catch (e) {} track('tour-replay'); U.bTab = 'spend'; U.jTab = 'map'; go('home'); break;
+      case 'tourreplay': try { localStorage.removeItem(TOUR_KEY); } catch (e) {} track('tour-replay'); U.bTab = 'spend'; U.jTab = null; go('home'); break;
       case 'frontstart': U.front = false; clearInterval(wf.timer); track('welcome-start'); U.ob = OB[0]; render(); window.scrollTo(0, 0); break;
       case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
       case 'recapdone': U.recapCoach = !coachSeen() && !!CONFIG.communityUrl && !Object.keys(P.wk || {}).some(function (k) { return P.wk[k].done; }); wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
@@ -3813,9 +3473,9 @@
         keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: 'scan' }); P.merchantMem[merchKey(r.merchant)] = r.key; });
         weekDone(sc.week, 'saved'); track('scan-save');
         // the screenshot and what was read from it are dropped here
-        U.scan = null; U.planToast = plural(keep.length, 'purchase') + ' saved to your budget.'; U.jTab = 'map'; save(); go(U.scanBack === 'journey' || !U.scanBack ? 'journey' : U.scanBack);
+        U.scan = null; U.planToast = plural(keep.length, 'purchase') + ' saved to your budget.'; U.jTab = null; save(); go(U.scanBack === 'journey' || !U.scanBack ? 'journey' : U.scanBack);
       })(); break;
-      case 'weeknone': weekDone(U.scan.week, 'none'); track('scan-none'); U.planToast = 'Got it: no purchases this week.'; U.scan = null; U.jTab = 'map'; save(); go('journey'); break;
+      case 'weeknone': weekDone(U.scan.week, 'none'); track('scan-none'); U.planToast = 'Got it: no purchases this week.'; U.scan = null; U.jTab = null; save(); go('journey'); break;
       case 'weekhand': U.spendBack = 'scan'; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendcat': U.form.key = v; U.formErr = ''; render(); break;
@@ -3837,7 +3497,6 @@
       case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); render(); break;
       case 'plusmenu': U.plusOpen = !U.plusOpen; render(); break;
       case 'plusclose': U.plusOpen = false; render(); break;
-      case 'winsview': U.winsView = v; render(); break;
       case 'copyplan': (function () {
         var code = 'FMTM1:' + btoa(unescape(encodeURIComponent(JSON.stringify(P))));
         U.planCode = code;
@@ -3911,8 +3570,6 @@
       case 'remindon': remindOn(); break;
       case 'remindoff': remindOff(); break;
       case 'remindk': P.remind = P.remind || {}; P.remind[v] = P.remind[v] === false; save(); render(); break;
-      case 'chtab': U.chTab = v; U.chAllSug = false; render(); break;
-      case 'challsug': U.chAllSug = true; render(); break;
       case 'mstab': U.msTab = v; U.msAll = false; render(); break;
       case 'msall': U.msAll = true; render(); break;
       case 'csend': (function () {
@@ -3992,27 +3649,6 @@
         go(P.setupDone ? 'home' : 'welcome');
       })(); break;
       case 'delno': U.confirmDelete = false; render(); break;
-      case 'chstart':
-        if (P.challenges.filter(function (c) { return !c.ended; }).length >= 3) break;
-        P.challenges.push({ uid: uid(), id: v, start: F.isoDay(today()), marks: [], amount: 0 }); save(); track('challenge-start'); render(); break;
-      case 'chdot':
-        var cd = P.challenges.filter(function (c) { return c.uid === v; })[0], dd = b.getAttribute('data-d'), at = cd.marks.indexOf(dd);
-        if (at >= 0) cd.marks.splice(at, 1); else cd.marks.push(dd);
-        save(); render(); break;
-      case 'chplus': var cp = P.challenges.filter(function (c) { return c.uid === v; })[0]; cp.marks.push(F.isoDay(today()) + '#' + cp.marks.length); save(); render(); break;
-      case 'chcomplete': P.challenges.filter(function (c) { return c.uid === v; })[0].complete = F.isoDay(today()); save(); render(); break;
-      case 'chonce': P.challenges.filter(function (c) { return c.uid === v; })[0].done = F.isoDay(today()); save(); render(); break;
-      case 'chadd':
-        var inp = app.querySelector('[data-chamt="' + v + '"]'), add = inp ? num(inp.value) : 0;
-        if (add > 0) { var ca = P.challenges.filter(function (c) { return c.uid === v; })[0]; ca.amount = (ca.amount || 0) + add; save(); }
-        render(); break;
-      case 'chslipask': U.slip = v; render(); break;
-      case 'chslipno': U.slip = null; render(); break;
-      case 'chslip':
-        var cs = P.challenges.filter(function (c) { return c.uid === v; })[0], stS = F.challengeStatus(cs, today(), facts());
-        cs.slipped = F.isoDay(today()); cs.ended = 'slipped'; cs.endedOn = cs.slipped; cs.note = F.challengeStatus(cs, today(), facts()).label; U.slip = null;
-        save(); render(); break;
-      case 'chquit': var cq = P.challenges.filter(function (c) { return c.uid === v; })[0]; cq.ended = 'quit'; cq.endedOn = F.isoDay(today()); save(); render(); break;
       case 'seen': markSeen(v); render(); break;
       case 'earnadd':
         var ea = app.querySelector('[data-earnamt="' + v + '"]'), en = app.querySelector('[data-earnnote="' + v + '"]'), amtE = ea ? num(ea.value) : 0;
@@ -4027,40 +3663,8 @@
         else if (v === 'debt') { var tgt = P.debts.filter(function (d) { return num(d.bal) > 0; }).sort(function (a, b) { return num(a.bal) - num(b.bal); })[0]; if (tgt) tgt.bal = String(Math.max(0, num(tgt.bal) - amtP)); }
         else if (v.indexOf('goal:') === 0) { var gp = P.goals.filter(function (g) { return g.id === v.slice(5); })[0]; if (gp) gp.saved = num(gp.saved) + amtP; }
         U.pitw = null; save(); render(); break;
-      case 'planstart': P.plans.push({ uid: uid(), id: v, start: F.isoDay(today()), done: [] }); save(); track('plan-start'); render(); break;
-      case 'planopen': U.lesson = { id: 'reset7-' + i }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonopen': U.lesson = { id: v }; U.lessonCard = 0; go('lesson'); break;
       case 'lessonnext': U.lessonCard = (U.lessonCard || 0) + 1; render(); break;
-      case 'quizopen': (function () {
-        if (!LESSONS) { U.planToast = 'One moment: the questions are still loading.'; render(); return; }
-        var retry = v === 'retry', rows = retry ? quizRetries().map(function (x) { return LESSONS[x.id]; }) : quizRows(+v);
-        if (!rows.length) return;
-        U.quiz = { step: retry ? 0 : +v, retry: retry, qs: rows.map(buildQuestion), i: 0, state: {}, misses: 0 }; track(retry ? 'quiz-review' : 'quiz-open-' + v); go('quiz');
-      })(); break;
-      case 'quizpick': (function () {
-        var z = U.quiz, q = z.qs[z.i], n = +v; z.state = z.state || {};
-        if (n === q.answer) z.state.right = true;
-        else {
-          (z.state.wrong = z.state.wrong || []).push(n); z.misses++;
-          // a missed question comes back after the next payday
-          P.journey = P.journey || { done: [] }; P.journey.retry = (P.journey.retry || []).filter(function (x) { return x.id !== q.id; }); P.journey.retry.push({ id: q.id, on: F.isoDay(today()) }); save();
-        }
-        render();
-      })(); break;
-      case 'quiznext': (function () {
-        var z = U.quiz, q = z.qs[z.i];
-        // answered right on review: it's done coming back
-        if (z.retry && !(z.state.wrong || []).length) P.journey.retry = (P.journey.retry || []).filter(function (x) { return x.id !== q.id; });
-        z.i++; z.state = {};
-        if (z.i >= z.qs.length) {
-          P.journey = P.journey || { done: [] };
-          if (!z.retry) { P.journey.quizzes = P.journey.quizzes || {}; z.newStars = !P.journey.quizzes['S' + z.step]; if (z.newStars) P.journey.quizzes['S' + z.step] = F.isoDay(today()); z.firstTry = !z.misses; track('quiz-pass-' + z.step + (z.misses ? '' : '-first')); }
-          save();
-        }
-        render(); window.scrollTo(0, 0);
-      })(); break;
-      case 'quizend': U.quiz = null; U.jTab = 'map'; go('journey'); break;
-      case 'jstep': U.jStep = +v; U.jAllPast = false; U.jTab = 'map'; render(); break;
       case 'ch30start': if (!(chS().status === 'active' && chS().startDate > chToday())) track('challenge-start'); chStart(v); window.scrollTo(0, 0); render(); break;
       case 'chagain': chStart('today'); track('challenge-start'); U.screen = 'journey'; U.jTab = null; window.scrollTo(0, 0); render(); break;
       case 'ch30quit': if (!U.chQuit) { U.chQuit = true; render(); break; } (function () { var c = chS(); c.status = 'notStarted'; c.startDate = null; U.chQuit = false; save(); track('challenge-quit'); render(); })(); break;
@@ -4079,47 +3683,19 @@
       case 'chgpost': chPost(String(chRec(chToday()).gratitude || ''), 'challenge-gratitude-shared'); break;
       case 'chshare': openShare(ch30Card()); break;
       case 'chpost': chPost(ch30Card().caption, 'challenge-complete-shared'); break;
-      case 'jtab': U.jTab = v; if (v === 'challenges' || v === 'milestones') U.winsView = v; render(); break;
+      case 'jtab': U.jTab = v; render(); window.scrollTo(0, 0); break;
       case 'lessondone': (function () {
-        var id = U.lesson && U.lesson.id, m = /^reset7-(\d)$/.exec(id || '');
-        if (lessonDone(id)) { go('journey'); return; }
-        if (m) { var run = resetRun(); if (run.done.indexOf(+m[1]) < 0) run.done.push(+m[1]); U.planToast = 'Lesson done: ' + esc(lessonFor(id).title) + '.'; track('plan-day'); }
-        else { P.journey = P.journey || { done: [] }; P.journey.done.push(id); U.planToast = 'Lesson done.'; track('lesson-' + id); }
-        jCheckRoom(); save(); U.jTab = 'map'; go('journey');
+        var id = U.lesson && U.lesson.id;
+        if (id && !lessonDone(id)) { P.journey = P.journey || { done: [] }; P.journey.done.push(id); track('lesson-' + id); }
+        save(); U.jTab = null; go('journey');
       })(); break;
       case 'lessonact': (function () {
-        var m = /^reset7-(\d)$/.exec(U.lesson.id || ''); if (m) { var run = resetRun(); U.planUid = run.uid; U.planDay = +m[1]; U.planCtx = { uid: run.uid, day: +m[1] }; }
         U.wizReturn = 'lesson';
         if (v === 'plan') { go('plan'); return; }
         if (v === 'goalnew') { U.form = { name: '', amount: '', by: F.isoDay(F.addDays(today(), 182)) }; U.formErr = ''; U.back = 'lesson'; U.next = 'lesson'; go('goal'); return; }
         if (v === 'spend') { openScan(); return; }
         go(v);
       })(); break;
-      case 'jfun': U.wizReturn = 'journey'; go('fun'); break;
-      case 'jsub': (function () {
-        if (!P.challenges.some(function (c) { return c.id === 'cancel1' && !c.ended; })) P.challenges.push({ uid: uid(), id: 'cancel1', start: F.isoDay(today()), marks: [], amount: 0 });
-        save(); U.jTab = 'challenges'; U.chTab = 'suggested'; render(); window.scrollTo(0, 0);
-      })(); break;
-      case 'jside': U.jTab = 'challenges'; U.chTab = 'earn'; render(); window.scrollTo(0, 0); break;
-      case 'planmark':
-        if (U.planCtx) { U.planUid = U.planCtx.uid; U.planDay = U.planCtx.day; }
-        var rp = P.plans.filter(function (p) { return p.uid === U.planUid; })[0];
-        if (rp.done.indexOf(U.planDay) < 0) rp.done.push(U.planDay);
-        U.planCtx = null; U.wizReturn = null;
-        U.planToast = 'Lesson done: ' + F.planDef('reset7').days[U.planDay].title + '.'; U.jTab = 'map';
-        save(); track('plan-day'); go('plans'); break;
-      case 'planback': if (U.planCtx) { U.lesson = { id: 'reset7-' + U.planCtx.day }; U.lessonCard = 2; } U.planCtx = null; go('lesson'); break;
-      case 'planact':
-        U.planCtx = { uid: U.planUid, day: U.planDay };
-        if (v === 'goalnew') { U.form = { name: '', amount: '', by: F.isoDay(F.addDays(today(), 182)) }; U.formErr = ''; U.back = 'planday'; U.next = 'planday'; go('goal'); break; }
-        if (v === 'spend') { U.wizReturn = 'planday'; openScan(); break; }
-        if (v === 'savings' || v === 'fun' || v === 'debts' || v === 'install') U.wizReturn = 'planday';
-        go(v); break;
-      case 'shareplan':
-        markSeen('plan:' + v);
-        var sp = P.plans.filter(function (p) { return p.uid === v; })[0], spd = F.planDef(sp.id);
-        openShare({ eyebrow: 'Plan complete', title: spd.title, sub: spd.share, chips: [spd.days.length + ' days, ' + spd.days.length + ' small steps'].concat(streakChips()).slice(0, 3), caption: 'Finished the ' + spd.title + '!' });
-        break;
       case 'winsdone': P.unseen = P.unseen.filter(function (u) { return u.type !== 'badge'; }); save(); go('home'); break;
       case 'sharebadge': markSeen('badge:' + v); openShare(cardForBadge(v)); break;
       case 'sharech': markSeen('challenge:' + v); openShare(cardForChallenge(v)); break;
@@ -4259,6 +3835,8 @@
   app.addEventListener('change', function (e) {
     var t = e.target;
     if (t.hasAttribute('data-slide')) { save(); render(); return; }
+    if (t.getAttribute('data-set') === 'tz') { if (F.validTz(t.value)) { P.tz = t.value; save(); track('set-tz'); render(); } return; }
+    if (t.getAttribute('data-set') === 'weekStart') { var wsv = +t.value; if (wsv >= 0 && wsv <= 6) { P.weekStart = wsv; if (U.mm) U.mm.wk = mmWeek(mmToday()); save(); track('set-week-start'); render(); } return; }
     if (t.hasAttribute('data-mename')) { var nv = String(t.value || '').trim().replace(/\s+/g, ' ').slice(0, 40); if (nv) { setMe({ name: nv }); peopleSave(); render(); } return; }
     if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
     if (t.getAttribute('data-file') === 'scan') { scanFiles(t); return; }

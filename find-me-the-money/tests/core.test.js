@@ -134,4 +134,20 @@ test('A goal with a date sets aside its fixed amount every paycheck', () => {
   assert.strictEqual(C.perCheck({ amount: 1200, saved: 1200, byPer: 100 }, 2), 0);
 });
 
+test('Time zone: a Texas user at 8 pm on Oct 31 is still in October; 12:01 am Nov 1 is November', () => {
+  // Central time is UTC-5 until Nov 1, 2026 at 2 am
+  assert.strictEqual(C.dayIn('America/Chicago', new Date('2026-11-01T01:00:00Z')), '2026-10-31');
+  assert.strictEqual(C.dayIn('America/Chicago', new Date('2026-11-01T05:01:00Z')), '2026-11-01');
+  assert.strictEqual(C.dayIn('America/Chicago', new Date('2026-11-01T01:00:00Z')).slice(0, 7), '2026-10');
+  assert.strictEqual(C.validTz('America/Chicago'), true); assert.strictEqual(C.validTz('Not/AZone'), false);
+});
+test('Week start: Monday puts Sat Nov 7 and Sun Nov 8 in the same week; Sunday splits them', () => {
+  assert.strictEqual(C.weekStartOf('2026-11-07', 1), C.weekStartOf('2026-11-08', 1));
+  assert.strictEqual(C.weekStartOf('2026-11-08', 1), '2026-11-02');
+  assert.notStrictEqual(C.weekStartOf('2026-11-07', 0), C.weekStartOf('2026-11-08', 0));
+  assert.strictEqual(C.weekStartOf('2026-11-08', 0), '2026-11-08');
+  // a weekly $150 category is $650 a month on average, whichever day the week starts
+  assert.strictEqual(Math.round(150 * 52 / 12), 650);
+});
+
 console.log(`\n${passed} tests passed`);

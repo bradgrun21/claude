@@ -27,6 +27,15 @@
   function fromIso(s) { var p = String(s).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
   // calendar days, not 24-hour blocks, so a clock change never slips a date back a day
   function addDays(d, n) { var r = new Date(d.getTime()); r.setDate(r.getDate() + Math.round(n)); return r; }
+  // the date (YYYY-MM-DD) it is right now in a time zone; the phone's own date when the zone is unknown
+  function dayIn(tz, now) {
+    now = now || new Date();
+    try { if (tz) { var p = {}; new Intl.DateTimeFormat('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now).forEach(function (x) { p[x.type] = x.value; }); return p.year + '-' + p.month + '-' + p.day; } } catch (e) {}
+    return isoDay(now);
+  }
+  function validTz(tz) { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return !!tz; } catch (e) { return false; } }
+  // the first day of the week a date is in, for a week that starts on ws (0 Sunday ... 6 Saturday)
+  function weekStartOf(iso, ws) { var d = fromIso(iso); return isoDay(addDays(d, -((d.getDay() - (ws || 0) + 7) % 7))); }
   function daysBetween(a, b) { return Math.round((fromIso(isoDay(b)) - fromIso(isoDay(a))) / DAY); }
   // moves a payday that has already passed forward to the next one on schedule
   function rollPayday(iso, freq, today) {
@@ -391,6 +400,7 @@
   }
 
   var api = { CUSHION: CUSHION, PLANS: PLANS, planDef: planDef, planStatus: planStatus, FREQS: FREQS, STEPS: STEPS, isoDay: isoDay, fromIso: fromIso, addDays: addDays, daysBetween: daysBetween, rollPayday: rollPayday,
+    dayIn: dayIn, validTz: validTz, weekStartOf: weekStartOf,
     CHALLENGES: CHALLENGES, challengeDef: challengeDef, challengeStatus: challengeStatus, BADGES: BADGES, badgeProgress: badgeProgress,
     nextAfter: nextAfter, winsBetween: winsBetween, freedomDate: freedomDate,
     cleanMerchant: cleanMerchant, storeTotals: storeTotals, spanDays: spanDays,
