@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01c';
+  var APP_VERSION = '11-01d';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -1982,7 +1982,10 @@
             var rows = r.rows || []; found += rows.length; if (!rows.length) failed++;
             FMTMEntry.dedupe(sc.rows.concat(rows), seen).slice(sc.rows.length).forEach(function (row) {
               // a store they've categorized before wins, then the AI's category, then our own guess
+              // a remembered or AI category only counts while it's still in their budget (a removed category leaves no key)
+              var has = function (k) { return !!k && lines.some(function (l) { return l.key === k; }); };
               var mem = (P.merchantMem || {})[merchKey(row.merchant)], g = row.skip ? { key: '', tag: '' } : suggestKey(row.merchant, lines);
+              if (!has(mem)) mem = ''; if (!has(row.key)) row.key = '';
               row.key = row.skip ? '' : mem || row.key || g.key; if (!row.tag && !row.skip && !mem && !row.key) row.tag = g.tag;
               row.ok = !row.skip && !row.low && !!row.key; row.src = 'ai'; sc.rows.push(row);
             });
@@ -3763,7 +3766,7 @@
       })(); break;
       case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
       case 'scansave': (function () {
-        var sc = U.scan, keep = sc.rows.filter(function (r) { return r.ok; }), miss = keep.filter(function (r) { return !r.key; })[0];
+        var sc = U.scan, keep = sc.rows.filter(function (r) { return r.ok; }), ks = spendLines().map(function (l) { return l.key; }), miss = keep.filter(function (r) { return !r.key || ks.indexOf(r.key) < 0; })[0];
         if (!keep.length) return;
         if (miss) { sc.err = 'Choose a category for ' + miss.merchant + ' (' + money2(miss.amount) + ').'; render(); return; }
         var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0], fallback = F.isoDay(today());
