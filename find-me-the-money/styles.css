@@ -1559,6 +1559,36 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .chatedit label { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 .chatedit input { font: inherit; font-size: 16px; color: var(--ink); background: var(--card2); border: 0; border-radius: 10px; padding: 10px; min-width: 0; width: 100%; }
 .chatedit input[type=date] { grid-column: 1 / -1; }
+/* Add purchases as a chat: their words and photos on the right, what came back on the left, the bar at the bottom */
+.chatthread { display: grid; gap: 10px; padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
+.chatthread .chatcard { justify-self: stretch; margin-right: 10%; border-radius: 18px 18px 18px 6px; }
+.chatthread .chatcard.reply, .chatthread .chatcard.done { justify-self: start; }
+.chatthread .chatcard.snapreply { margin-right: 0; padding: 12px 14px 14px; }
+.chatthread .chatyou { border-radius: 18px 18px 6px 18px; }
+.chatyou.pics { background: none; padding: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.chatyou.pics img { display: block; max-width: 132px; max-height: 190px; border-radius: 16px; object-fit: cover; border: 2px solid #2A6B66; background: var(--card2); }
+.chatnote { justify-self: start; color: var(--faint); font-size: 13px; }
+.snaphead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.snaphelp { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.snapreply .scl { padding: 0; margin: 0 -4px; }
+.snapreply .scerr { margin: 0; }
+.chatdock { box-sizing: border-box; position: fixed; z-index: 22; left: 50%; transform: translateX(-50%); bottom: 0; width: min(430px, 100%); padding: 8px max(16px, env(safe-area-inset-left, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)); background: rgba(20,20,20,.94); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.chatdock > * { min-width: 0; }
+.chatdock .chatbar { align-items: center; }
+.chatdock .chatbar input { width: 0; }
+.chatdock .chatbar input { border-radius: 22px; padding: 11px 16px; }
+.chatplus, .chatsend { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.chatplus { background: var(--card2); color: var(--ink); transition: transform .2s; }
+.chatplus svg { width: 22px; height: 22px; }
+.chatplus.on { transform: rotate(45deg); background: rgba(255,255,255,.14); }
+.chatsend { background: var(--green); color: #0f1d19; }
+.chatmenu { box-sizing: border-box; display: grid; gap: 4px; padding: 6px; background: var(--card); border-radius: 18px; max-height: 60vh; overflow-y: auto; }
+.chatopt { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--ink); font: inherit; font-size: 22px; text-align: left; cursor: pointer; }
+.chatopt:active, .chatopt:hover { background: rgba(255,255,255,.06); }
+.chatopt span { display: grid; } .chatopt b { font-size: 15px; } .chatopt small { font-size: 13px; color: var(--muted); }
+.chatmenu .snapleft { margin: 0 0 2px; }
+.chatmenu .snapcard { padding: 8px 10px; }
+.chatdock .chatfoot { font-size: 11px; }
 /* delete my account and data; the challenge nudge offer */
 .wipebox { gap: 10px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px; }
 .wipebox > span { font-size: 14px; color: var(--muted); }

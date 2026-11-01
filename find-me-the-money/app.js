@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01d';
+  var APP_VERSION = '11-01e';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -578,7 +578,9 @@
         return '<button type="button" data-a="go" data-v="' + t[0] + '"' + (on ? ' aria-current="page" class="on"' : '') + '>' + ICON[t[2]] + '<span>' + t[1] + '</span>' + (t[0] === 'community' && news && !on ? '<i class="badge-dot" aria-label="' + news + ' new"></i>' : '') + '</button>';
       }).join('') + '</nav>' + (U.plusOpen ? plusSheet() : '');
     }
+    var ci0 = document.getElementById('chatIn'), ciVal = ci0 ? ci0.value : '', ciFocus = !!ci0 && document.activeElement === ci0;
     app.innerHTML = html;
+    var ci1 = document.getElementById('chatIn'); if (ci1 && ciVal) ci1.value = ciVal; if (ci1 && ciFocus) ci1.focus();
     var front = U.screen === 'welcome' && U.front; document.body.classList.toggle('is-front', front); if (front) frontInit(); else clearInterval(wf.timer);
     tourMaybe();
     csvAutoplay();
@@ -639,7 +641,7 @@
   }
   // the + menu: the quick things people do between paydays
   function plusSheet() {
-    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Snap or type them'], ['chatopen', '\uD83D\uDCAC', 'Tell me what you spent', 'Type it like you’d say it'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Breakfast, lunch or dinner on any day'], ['mmnew', '\uD83C\uDF72', 'New meal', 'Price out a meal you cook'], ['goalnew', '\uD83C\uDFAF', 'Add a goal', 'Save for something']];
+    var items = [['scan', '\uD83E\uDDFE', 'Add purchases', 'Type them or snap a photo'], ['checkin', '\uD83D\uDCB0', 'Update balances', 'Savings, funds, debts'], ['mmplan', '\uD83D\uDCC5', 'Plan a meal', 'Pick a meal or make a new one']];
     return '<div class="plusback" data-a="plusclose" aria-hidden="true"></div><div class="plussheet" role="menu">' + items.map(function (x) {
       return '<button type="button" role="menuitem" data-a="' + x[0] + '"><span class="plusic" aria-hidden="true">' + x[1] + '</span><span class="plustx"><b>' + x[2] + '</b><small>' + x[3] + '</small></span></button>'; }).join('') + '</div>';
   }
@@ -1193,9 +1195,9 @@
       '<div class="mm-daterow"><button type="button" class="mm-nav" data-mm-pd="-1" aria-label="Previous day">‹</button><b>' + mmDay(p.date) + (p.date === td ? ' · Today' : '') + '</b><button type="button" class="mm-nav" data-mm-pd="1" aria-label="Next day">›</button></div>' +
       '<div class="mm-slots" role="group" aria-label="Meal">' + MM_SLOTS.map(function (x) { return '<button type="button" class="mm-chip" data-mm-ps="' + x[0] + '" aria-pressed="' + (x[0] === p.slot) + '">' + x[2] + ' ' + x[1] + '</button>'; }).join('') + '</div>' +
       (cur && cur.type === 'meal' && mmHasRecipe(mmMeal(cur.mealId)) ? '<button type="button" class="mm-btn gold mm-rsee" data-mm-rsee="' + cur.mealId + '">📖 Open the recipe</button>' : '') +
-      '<div class="mm-h2">Your meals</div><div class="mm-list">' + (meals.length ? meals.map(function (x) {
+      '<div class="mm-h2">Your meals</div><div class="mm-list"><button type="button" class="mm-row new" data-mm-newmeal><span class="mm-em">+</span><span class="mm-mid"><span class="mm-n">New meal</span><span class="mm-s">Price out a meal you cook</span></span><span></span></button>' + (meals.length ? meals.map(function (x) {
         return '<button type="button" class="mm-row" data-mm-pm="' + x.m.id + '" aria-pressed="' + on('meal', x.m.id) + '"><span class="mm-em" style="background:' + mmTint(x.m.color) + '">' + mmTile(x.m) + '</span><span class="mm-mid"><span class="mm-n">' + esc(x.m.name) + '</span><span class="mm-s">' + mm$(x.c.plate) + ' a plate' + (x.c.saves > 0 ? ' · saves ' + mm$(x.c.saves) : '') + '</span></span><span class="mm-r">' + (on('meal', x.m.id) ? '✓' : '') + '</span></button>';
-      }).join('') : '<div class="mm-empty">No meals yet. Add one from 🍲 Meals.</div>') + '</div>' +
+      }).join('') : '') + '</div>' +
       (cur && cur.type === 'meal' ? '<div class="mm-h2">🥗 Sides</div><div class="mm-list">' + mmSides().map(function (x) {
         var on2 = (cur.sideIds || []).indexOf(x.id) >= 0;
         return '<button type="button" class="mm-row" data-mm-pside="' + x.id + '" aria-pressed="' + on2 + '"><span class="mm-em" style="background:' + mmTint(x.color) + '">' + mmTile(x) + '</span><span class="mm-mid"><span class="mm-n">' + esc(x.name) + '</span><span class="mm-s">' + mm$(mmCalc(x).plate) + ' a plate</span></span><span class="mm-r">' + (on2 ? '✓' : '+') + '</span></button>';
@@ -1313,6 +1315,12 @@
     var at = st.attachTo; st.attachTo = null;
     var ae = at && !before && meal.kind === 'side' ? mmEntry(at.date, at.slot) : null;
     if (ae && ae.type === 'meal') { ae.sideIds = (ae.sideIds || []).concat([meal.id]); save(); setTimeout(function () { mmOpen({ type: 'plan', date: at.date, slot: at.slot }); }, 0); }
+    if (at && !before && meal.kind !== 'side') {
+      P.planEntries = mmPlan().filter(function (e) { return !(e.date === at.date && e.slot === at.slot); });
+      P.planEntries.push({ id: uid(), date: at.date, slot: at.slot, type: 'meal', mealId: meal.id, sideIds: [], budget: null, createdAt: now }); save(); track('meal-plan-meal');
+      st.wk = mmWeek(at.date); st.backTo = 'week';
+      if (mmSides().length) setTimeout(function () { mmOpen({ type: 'plan', date: at.date, slot: at.slot }); }, 0);
+    }
     var c = mmCalc(meal);
     setTimeout(mmPageGc, 0); st.draft = null; st.view = st.backTo === 'week' ? 'week' : 'meals'; render(); window.scrollTo(0, 0);
     mmToast('🎉 Saved · ' + mm$(c.plate) + ' a plate');
@@ -1342,6 +1350,8 @@
     if (a('sort')) { st.sort = a('sort'); render(); return; }
     if (a('open')) { mmStartEdit(a('open'), 'meals'); return; }
     if (has('new')) { mmStartEdit(null, 'meals'); return; }
+    // a new meal made from Plan a meal goes on that day and meal once it's saved
+    if (has('newmeal')) { var at0 = sh ? { date: sh.date, slot: sh.slot } : null; if (sh) mmClose(); mmStartEdit(null, sh ? 'week' : 'meals'); st.attachTo = at0; return; }
     if (has('newside')) { var fromWk = !!sh, at = sh ? { date: sh.date, slot: sh.slot } : null; if (sh) mmClose(); mmStartEdit(null, fromWk ? 'week' : 'meals', 'side'); st.attachTo = at; return; }
     if (a('kind')) { d.kind = a('kind'); if (d.kind === 'side') d.eatingOutCost = null; render(); return; }
     if (a('pside')) {
@@ -1947,7 +1957,15 @@
     }
     return { key: '', tag: '' };
   }
-  function openScan(week) { U.scan = { week: week || weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.screen === 'scan' ? U.scanBack : U.screen; go('scan'); }
+  // Add purchases is one chat: what they type and the photos they add on the right, what came back on the left
+  function newScan(week) { return { week: week || weekNow().start, msgs: [], attach: false }; }
+  function openScan(week) { dropScan(); U.scan = newScan(week); U.scanBack = U.screen === 'scan' ? U.scanBack : U.screen; go('scan'); }
+  // the photos only live on this screen: let them go when the chat closes
+  function dropScan() { (U.scan && U.scan.msgs || []).forEach(function (m) { (m.urls || []).forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) {} }); }); }
+  function scanPaint(sc, down) { if (U.screen !== 'scan' || U.scan !== sc) return; render(); if (down) chatDown(); }
+  function chatDown() { setTimeout(function () { window.scrollTo(0, document.documentElement.scrollHeight); }, 30); }
+  function scanMsg(v) { return U.scan && U.scan.msgs[+String(v).split('.')[0]] || null; }
+  function chatAt(v) { var p = String(v).split('.'), m = scanMsg(p[0]); return m && m.st ? m.st.cards[+p[1]] || null : null; }
   // read picked screenshots on this phone, one at a time; nothing is uploaded or kept
   // ---------- AI snaps: a receipt or a bank screenshot, read by the ai Edge Function (signed-in accounts only) ----------
   // 10 snaps a month in the app, 20 after joining the free community, unlimited with group coaching. Typing is always free.
@@ -1962,47 +1980,53 @@
   function snapFiles(input) {
     var kind = input.getAttribute('data-kind') === 'bank' ? 'bank' : 'receipt', picked = Array.prototype.slice.call(input.files || []), sc = U.scan;
     if (!picked.length || !sc) return;
-    if (!S || !window.FMTMAI) { sc.err = 'Sign in to use snaps.'; render(); return; }
+    sc.attach = false;
+    if (!S || !window.FMTMAI) { sc.msgs.push({ t: 'snap', rows: [], err: 'Sign in to use snaps.' }); render(); chatDown(); return; }
     // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
     Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (files) {
-      input.value = ''; sc.total = files.length; sc.reading = 1; sc.err = ''; render(); track('snap-start');
+      input.value = '';
+      var urls = files.map(function (f) { try { return URL.createObjectURL(f); } catch (e) { return ''; } }).filter(Boolean);
+      var m = { t: 'snap', rows: [], err: '', reading: 1, total: files.length };
+      sc.msgs.push({ t: 'pics', urls: urls, kind: kind }, m); scanPaint(sc, true); track('snap-start');
       var lines = spendLines(), seen = P.spends.map(function (x) { return FMTMEntry.rowKey({ date: x.date, amount: num(x.amount), merchant: x.note || '' }); }), stop = false, found = 0, failed = 0;
+      // rows still waiting in earlier snaps in this chat count as seen too
+      sc.msgs.forEach(function (x) { if (x.t === 'snap' && x !== m && !x.saved) x.rows.forEach(function (r) { seen.push(FMTMEntry.rowKey(r)); }); });
       return files.reduce(function (chain, f, i) {
         return chain.then(function () {
           if (stop) return;
-          sc.reading = i + 1; render();
+          m.reading = i + 1; scanPaint(sc);
           return FMTMAI.prepare(f).then(function (images) {
             return aiCall('snap', { images: images, kind: kind, categories: aiCats(), today: F.isoDay(today()) });
           }).then(function (r) {
             r = r || {};
-            if (r.paused) { stop = true; U.ai = Object.assign(U.ai || {}, { paused: true }); track('snap-paused'); return; }
-            if (r.limitReached) { stop = true; U.ai = Object.assign(U.ai || {}, { level: r.level, snaps: { used: r.used, limit: r.used } }); track(r.level === 'community' ? 'snap-limit-20' : 'snap-limit-10'); return; }
-            if (r.slow) { stop = true; sc.err = 'One moment. Try that one again in a minute.'; return; }
+            if (r.paused) { stop = true; m.blocked = true; U.ai = Object.assign(U.ai || {}, { paused: true }); track('snap-paused'); return; }
+            if (r.limitReached) { stop = true; m.blocked = true; U.ai = Object.assign(U.ai || {}, { level: r.level, snaps: { used: r.used, limit: r.used } }); track(r.level === 'community' ? 'snap-limit-20' : 'snap-limit-10'); return; }
+            if (r.slow) { stop = true; m.err = 'One moment. Try that one again in a minute.'; return; }
             if (U.ai && U.ai.snaps && r.used != null) U.ai.snaps.used = r.used;
             var rows = r.rows || []; found += rows.length; if (!rows.length) failed++;
-            FMTMEntry.dedupe(sc.rows.concat(rows), seen).slice(sc.rows.length).forEach(function (row) {
+            FMTMEntry.dedupe(m.rows.concat(rows), seen).slice(m.rows.length).forEach(function (row) {
               // a store they've categorized before wins, then the AI's category, then our own guess
               // a remembered or AI category only counts while it's still in their budget (a removed category leaves no key)
               var has = function (k) { return !!k && lines.some(function (l) { return l.key === k; }); };
               var mem = (P.merchantMem || {})[merchKey(row.merchant)], g = row.skip ? { key: '', tag: '' } : suggestKey(row.merchant, lines);
               if (!has(mem)) mem = ''; if (!has(row.key)) row.key = '';
               row.key = row.skip ? '' : mem || row.key || g.key; if (!row.tag && !row.skip && !mem && !row.key) row.tag = g.tag;
-              row.ok = !row.skip && !row.low && !!row.key; row.src = 'ai'; sc.rows.push(row);
+              row.ok = !row.skip && !row.low && !!row.key; row.src = 'ai'; m.rows.push(row);
             });
             if (rows.length) track('snap-ok');
           }, function (er) {
             failed++;
-            if (er && er.status === 413) sc.err = 'That photo is too big. Try a screenshot of it instead.';
-            else if (er && er.status === 502) sc.err = 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute, or type them in.';
-            else if (er && er.status >= 500) sc.err = 'Something went wrong on our side. Your snap wasn’t counted. Try again, or type them in.';
-            else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; sc.err = 'Sign in to use snaps.'; }
+            if (er && er.status === 413) m.err = 'That photo is too big. Try a screenshot of it instead.';
+            else if (er && er.status === 502) m.err = 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute, or type them in.';
+            else if (er && er.status >= 500) m.err = 'Something went wrong on our side. Your snap wasn’t counted. Try again, or type them in.';
+            else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; m.err = 'Sign in to use snaps.'; }
           });
         });
       }, Promise.resolve()).then(function () {
-        sc.reading = 0;
-        if (!sc.err && failed && !sc.rows.length) sc.err = 'We couldn’t read purchases in that photo. Try again, or type them in.';
-        else if (!sc.err && !sc.rows.length && found) sc.err = 'Everything in that photo is already saved.';
-        aiStatus(true); render();
+        m.reading = 0;
+        if (!m.err && failed && !m.rows.length) m.err = 'We couldn’t read purchases in that photo. Try again, or type them in.';
+        else if (!m.err && !m.rows.length && found) m.err = 'Everything in that photo is already saved.';
+        aiStatus(true); scanPaint(sc, true);
       });
     });
   }
@@ -2035,22 +2059,28 @@
   }
   function chatCard(a) {
     var c = { id: uid(), a: a, state: 'open' };
-    if (a.type === 'add_purchase') { var mem = (P.merchantMem || {})[merchKey(a.merchant)]; c.key = mem || a.category_key || suggestKey(a.merchant, spendLines()).key || ''; }
+    if (a.type === 'add_purchase') {
+      var ls = spendLines(), has = function (k) { return !!k && ls.some(function (l) { return l.key === k; }); }, mem = (P.merchantMem || {})[merchKey(a.merchant)];
+      c.key = (has(mem) && mem) || (has(a.category_key) && a.category_key) || suggestKey(a.merchant, ls).key || '';
+    }
     if (a.type === 'update_balance') c.acct = chatMatch(a.account_hint);
     if (a.type === 'how_much_left') c.state = 'info';
     return c;
   }
   function chatSend(text) {
-    text = String(text || '').trim().slice(0, FMTMAI.CHAT_MAX); if (!text) return;
-    var st = U.chat = { text: text, cards: [], busy: false, reply: '', report: '' };
+    text = String(text || '').trim().slice(0, FMTMAI.CHAT_MAX); var sc = U.scan; if (!text || !sc) return;
+    var st = { text: text, cards: [], busy: false, reply: '', report: '' };
+    sc.msgs.push({ t: 'you', text: text }, { t: 'chat', st: st }); sc.attach = false;
+    var ci = document.getElementById('chatIn'); if (ci) ci.value = '';
+    var paint = function () { scanPaint(sc, true); };
     // hard money stress: no logging, a calm card instead (checked here before any AI, so it works even when AI is off)
-    if (FMTMAI.needsCare(text)) { st.reply = 'care'; track('chat-care'); render(); return; }
+    if (FMTMAI.needsCare(text)) { st.reply = 'care'; track('chat-care'); paint(); return; }
     if (!CHAT_AI_WORDS.test(text)) {
       var rows = FMTMEntry.parseTyped(FMTMAI.maskDigits(text), today());
-      if (rows.length) { st.cards = rows.map(function (r) { return chatCard({ type: 'add_purchase', date: r.date, merchant: r.merchant, amount: r.amount, category_key: null }); }); track('chat-local'); render(); return; }
+      if (rows.length) { st.cards = rows.map(function (r) { return chatCard({ type: 'add_purchase', date: r.date, merchant: r.merchant, amount: r.amount, category_key: null }); }); track('chat-local'); paint(); return; }
     }
-    if (!S) { st.reply = 'signin'; render(); return; }
-    st.busy = true; render(); track('chat-ai');
+    if (!S) { st.reply = 'signin'; paint(); return; }
+    st.busy = true; paint(); track('chat-ai');
     aiCall('chat', { text: FMTMAI.maskDigits(text), categories: aiCats(), budgetLeft: chatLeft().map(function (x) { return { key: x.key, left: x.left }; }), today: F.isoDay(today()) }).then(function (r) {
       r = r || {}; st.busy = false;
       if (r.paused) st.reply = 'paused';
@@ -2062,8 +2092,8 @@
         else st.cards.push(chatCard(a));
       });
       if (!st.reply && !st.cards.length) st.reply = 'unclear';
-      if (U.chat === st) render();
-    }, function (er) { st.busy = false; st.reply = er && (er.status === 401 || er.message === 'signed out') ? 'signin' : 'error'; if (U.chat === st) render(); });
+      paint();
+    }, function (er) { st.busy = false; st.reply = er && (er.status === 401 || er.message === 'signed out') ? 'signin' : 'error'; paint(); });
   }
   var CHAT_ITEM = { debt: ['💳', 'No new debt today'], eat: ['🍽️', 'No eating out today'], lesson: ['🎧', 'I did today’s lesson'] };
   function chatCardHtml(c, i) {
@@ -2091,25 +2121,55 @@
     return '<div class="chatcard"><div>' + line + '</div>' + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') +
       (btns ? '<div class="chatbtns"><button type="button" class="chmini gold" data-a="chatok" data-v="' + i + '">Confirm</button>' + (a.type === 'add_purchase' ? '<button type="button" class="chmini" data-a="chatedit" data-v="' + i + '">' + (c.edit ? 'Done' : 'Edit') + '</button>' : '') + '<button type="button" class="chmini" data-a="chatskip" data-v="' + i + '">Skip</button></div>' : '') + '</div>';
   }
-  function chatArea() {
-    var st = U.chat, body = '';
-    if (st) {
-      var say = st.reply ? (FMTMAI.REPLIES[st.reply] || CHAT_SAY[st.reply] || '') : '';
-      body = '<div class="chatyou">' + esc(FMTMAI.maskDigits(st.text)) + '</div>' +
-        (st.busy ? '<div class="chatcard"><span class="spin" aria-hidden="true"></span> Reading…</div>' : '') +
-        (st.reply === 'care' ? '<div class="chatcard care"><p>' + esc(say) + '</p><div class="chatbtns"><a class="chmini gold" href="tel:988">Call 988</a><a class="chmini" href="sms:988">Text 988</a>' +
-            (CONFIG.supportEmail ? '<a class="chmini" href="mailto:' + esc(CONFIG.supportEmail) + '">Message Brad</a>' : CONFIG.communityUrl ? '<a class="chmini" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener">Message Brad</a>' : '') + '</div></div>'
-          : say ? '<div class="chatcard reply"><p>' + esc(say) + '</p>' + (st.reply === 'advice' ? '<div class="chatbtns">' + (CONFIG.communityUrl ? '<a class="chmini gold" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Free community</a>' : '') + (CONFIG.coachingUrl ? '<a class="chmini" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Coaching</a>' : '') + '</div>' : '') + '</div>' : '') +
-        st.cards.map(chatCardHtml).join('') +
-        (st.cards.length && !st.busy ? (st.report === 'open' ? '<div class="chatcard"><p>Send this to Brad? He’ll see your message and what came back.</p><div class="chatbtns"><button type="button" class="chmini gold" data-a="chatreport" data-v="send">Send</button><button type="button" class="chmini" data-a="chatreport" data-v="no">Cancel</button></div></div>'
-          : st.report === 'sent' ? '<small class="chatfoot">Sent. Thanks.</small>' : '<button type="button" class="linkbtn chatwrong" data-a="chatreport" data-v="open">Something look wrong?</button>') : '');
-    }
-    return '<div class="chatbox" id="chatbox">' + body +
-      '<form class="chatbar" data-chatform><input type="text" id="chatIn" maxlength="' + FMTMAI.CHAT_MAX + '" placeholder="Tell me what you spent…" aria-label="Tell me what you spent" autocomplete="off" enterkeyhint="send"><button type="submit" class="sharebtn">Send</button></form>' +
+  // what came back for one chat message: Brad's reply, and a card per action
+  function chatReplyHtml(st, j) {
+    var say = st.reply ? (FMTMAI.REPLIES[st.reply] || CHAT_SAY[st.reply] || '') : '';
+    return (st.busy ? '<div class="chatcard"><span class="spin" aria-hidden="true"></span> Reading…</div>' : '') +
+      (st.reply === 'care' ? '<div class="chatcard care"><p>' + esc(say) + '</p><div class="chatbtns"><a class="chmini gold" href="tel:988">Call 988</a><a class="chmini" href="sms:988">Text 988</a>' +
+          (CONFIG.supportEmail ? '<a class="chmini" href="mailto:' + esc(CONFIG.supportEmail) + '">Message Brad</a>' : CONFIG.communityUrl ? '<a class="chmini" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener">Message Brad</a>' : '') + '</div></div>'
+        : say ? '<div class="chatcard reply"><p>' + esc(say) + '</p>' + (st.reply === 'advice' ? '<div class="chatbtns">' + (CONFIG.communityUrl ? '<a class="chmini gold" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Free community</a>' : '') + (CONFIG.coachingUrl ? '<a class="chmini" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Coaching</a>' : '') + '</div>' : '') + '</div>' : '') +
+      st.cards.map(function (c, i) { return chatCardHtml(c, j + '.' + i); }).join('') +
+      (st.cards.length && !st.busy ? (st.report === 'open' ? '<div class="chatcard"><p>Send this to Brad? He’ll see your message and what came back.</p><div class="chatbtns"><button type="button" class="chmini gold" data-a="chatreport" data-v="send:' + j + '">Send</button><button type="button" class="chmini" data-a="chatreport" data-v="no:' + j + '">Cancel</button></div></div>'
+        : st.report === 'sent' ? '<small class="chatnote">Sent. Thanks.</small>' : '<button type="button" class="linkbtn chatwrong" data-a="chatreport" data-v="open:' + j + '">Something look wrong?</button>') : '');
+  }
+  // what came back from a photo: the rows to check, then Save
+  function snapReplyHtml(m, j) {
+    if (m.reading) return '<div class="chatcard scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (m.total > 1 ? 'photo ' + m.reading + ' of ' + m.total : 'your photo') + '…</b><small>A few seconds each.</small></div>';
+    if (m.saved) return '<div class="chatcard done"><span class="chatok">✓</span><span>' + plural(m.saved.n, 'purchase') + ' saved · ' + money2(m.saved.total) + '</span></div>';
+    var block = m.blocked ? snapBlock() : '';
+    if (!m.rows.length) return block ? '<div class="chatcard">' + block + '</div>' : m.err ? '<div class="chatcard reply"><p>' + esc(m.err) + '</p></div>' : '';
+    var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
+    var select = function (r, k) {
+      return '<select data-scan-key="' + k + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
+        var ms = lines.filter(function (l) { return l.grp === g[0]; }); return ms.length ? '<optgroup label="' + g[1] + '">' + ms.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
+      }).join('') + '</select>';
+    };
+    var okRows = m.rows.filter(function (r) { return r.ok; }), n = okRows.length, total = okRows.reduce(function (t, r) { return t + r.amount; }, 0), open = m.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
+    var rows = m.rows.map(function (r, i) {
+      var sub = [r.date ? dayMonth(F.fromIso(r.date)) : 'No date found'].concat(r.flag ? ['<span class="sctag warn">' + esc(r.flag) + '</span>'] : []).concat(r.tag ? ['<span class="sctag">' + r.tag + '</span>'] : []).concat(r.low && !r.flag ? ['<span class="sctag warn">Double-check</span>'] : []);
+      return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + j + '.' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
+        '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, j + '.' + i) + '</div></div>';
+    }).join('');
+    return '<div class="chatcard snapreply"><div class="snaphead"><b>' + plural(m.rows.length, 'purchase') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall" data-v="' + j + '">Check all</button>' : '') + '</div>' +
+      '<small class="snaphelp">Check the right ones and pick a category. Unchecked ones are skipped. AI can misread, so look before you save.</small>' +
+      '<div class="scl">' + rows + '</div>' + (m.err ? '<p role="alert" class="scerr">' + esc(m.err) + '</p>' : '') + block +
+      '<button type="button" class="primary" data-a="scansave" data-v="' + j + '"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') + ' · ' + money2(total) : 'Check the purchases to save') + '</button></div>';
+  }
+  // the bar at the bottom: add a photo, type, send. The + opens the photo choices (or why snaps are resting).
+  function chatDock() {
+    var sc = U.scan, ai = U.ai || {}, sn = ai.snaps || {}, lim = sn.limit, left = lim == null ? null : Math.max(0, lim - (sn.used || 0));
+    var block = snapBlock(), file = function (k) { return '<input type="file" accept="image/*" multiple data-file="snap" data-kind="' + k + '" id="snap-' + k + '" class="sr" tabindex="-1">'; };
+    var menu = !sc.attach ? '' : '<div class="chatmenu">' + (block || '<label class="chatopt" for="snap-receipt">🧾<span><b>Snap a receipt</b><small>A photo of a paper receipt</small></span></label><label class="chatopt" for="snap-bank">🏦<span><b>Add a bank screenshot</b><small>Your bank app’s list of purchases</small></span></label>' +
+      '<small class="snapleft">' + (ai.level === 'paid' ? 'Unlimited snaps' : lim != null ? left + ' of ' + lim + ' snaps left this month' : '') + '</small>') +
+      '<button type="button" class="chatopt" data-a="weekhand">✍️<span><b>Add one by hand</b><small>Amount, store and category</small></span></button></div>';
+    return '<div class="chatdock">' + menu + (block ? '' : file('receipt') + file('bank')) +
+      '<form class="chatbar" data-chatform><button type="button" class="chatplus' + (sc.attach ? ' on' : '') + '" data-a="chatattach" aria-label="Add a photo" aria-expanded="' + !!sc.attach + '">' + ICON.plus + '</button>' +
+      '<input type="text" id="chatIn" maxlength="' + FMTMAI.CHAT_MAX + '" placeholder="Tell me what you spent…" aria-label="Tell me what you spent" autocomplete="off" enterkeyhint="send">' +
+      '<button type="submit" class="chatsend" aria-label="Send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></form>' +
       '<small class="chatfoot">Educational tool, not financial advice.</small></div>';
   }
-  function chatConfirm(i) {
-    var c = U.chat && U.chat.cards[i]; if (!c || c.state !== 'open') return;
+  function chatConfirm(v) {
+    var c = chatAt(v); if (!c || c.state !== 'open') return;
     var a = c.a, td = chToday();
     if (a.type === 'add_purchase') {
       if (!(num(a.amount) > 0)) { c.err = 'Enter how much it was.'; render(); return; }
@@ -2139,22 +2199,20 @@
     }
     c.state = 'done'; c.err = ''; save(); track('chat-confirm'); render();
   }
-  // what's on the Add purchases screen above the list: snap buttons and the count, or why snaps are resting
-  function snapArea() {
+  // why snaps can't be used right now (signed out, resting, used up), or '' when they can
+  function snapBlock() {
     var ai = U.ai || {}, sn = ai.snaps || {}, lim = sn.limit, left = lim == null ? null : Math.max(0, lim - (sn.used || 0));
-    var typeLine = '<small class="snapfree">Or type it in. That’s always free.</small>';
-    var btn = function (k, label, cls) { return '<label class="' + cls + ' snapbtn">' + label + '<input type="file" accept="image/*" multiple data-file="snap" data-kind="' + k + '" class="sr"></label>'; };
-    if (!S) return '<div class="card snapcard"><b>📸 Snap a receipt or your bank app</b><span>Sign in to use snaps.</span><button type="button" class="outline" data-a="go" data-v="account">Sign in</button>' + typeLine + '</div>';
-    if (ai.paused) return '<div class="card snapcard"><b>😴 Snaps are resting until the 1st.</b><span>You can still type purchases in.</span></div>';
+    var typeLine = '<small class="snapfree">You can always type them in. That’s free.</small>';
+    if (!S) return '<div class="snapcard"><b>📸 Snap a receipt or your bank app</b><span>Sign in to use snaps.</span><button type="button" class="outline" data-a="go" data-v="account">Sign in</button>' + typeLine + '</div>';
+    if (ai.paused) return '<div class="snapcard"><b>😴 Snaps are resting until the 1st.</b>' + typeLine + '</div>';
     if (lim != null && left === 0) {
       var alt = U.altOpen ? '<div class="typeit"><input type="email" data-alt autocomplete="email" placeholder="The email you joined with" aria-label="The email you joined the community with"><button type="button" class="sharebtn" data-a="altsave">Save</button></div>' + (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '')
         : (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '<button type="button" class="linkbtn" data-a="altopen">Joined with a different email?</button>');
       return ai.level === 'community'
-        ? '<div class="card snapcard"><b>You’ve used your 20 snaps this month.</b><span>Unlimited snaps come with group coaching ($29/mo).</span>' + (CONFIG.coachingUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + typeLine + '</div>'
-        : '<div class="card snapcard"><b>You’ve used your 10 snaps this month.</b><span>Join the free community and get 10 more.</span>' + (CONFIG.communityUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community</a>' : '') + alt + typeLine + '</div>';
+        ? '<div class="snapcard"><b>You’ve used your 20 snaps this month.</b><span>Unlimited snaps come with group coaching ($29/mo).</span>' + (CONFIG.coachingUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + typeLine + '</div>'
+        : '<div class="snapcard"><b>You’ve used your 10 snaps this month.</b><span>Join the free community and get 10 more.</span>' + (CONFIG.communityUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community</a>' : '') + alt + typeLine + '</div>';
     }
-    return '<div class="snapgrid">' + btn('receipt', '🧾 Snap a receipt', 'primary') + btn('bank', '🏦 Snap a bank screenshot', 'outline') + '</div>' +
-      '<small class="snapleft">' + (ai.level === 'paid' ? 'Unlimited snaps' : lim != null ? left + ' of ' + lim + ' snaps left this month' : '') + '</small>';
+    return '';
   }
   function weekDone(ws, how) { wkMark('cat'); P.weeks = P.weeks || {}; if (!P.weeks[ws] || how === 'saved') P.weeks[ws] = how; }
   // ---------- the budget: spending categories, recurring expenses, everything else ----------
@@ -3056,31 +3114,20 @@
     },
 
     scan: function () {
-      var sc = U.scan; if (!sc) { U.scan = sc = { week: weekNow().start, rows: [], err: '', reading: 0, total: 0 }; U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
+      var sc = U.scan; if (!sc || !sc.msgs) { U.scan = sc = newScan(sc && sc.week); U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
       aiStatus();
-      var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow(), lines = spendLines();
-      var groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
-      var select = function (r, i) {
-        return '<select data-scan-key="' + i + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
-          var m = lines.filter(function (l) { return l.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
-        }).join('') + '</select>';
-      };
-      var okRows = sc.rows.filter(function (r) { return r.ok; }), n = okRows.length, total = okRows.reduce(function (t, r) { return t + r.amount; }, 0), open = sc.rows.filter(function (r) { return !r.ok && !r.skip; }).length;
-      var rows = sc.rows.map(function (r, i) {
-        var sub = [r.date ? dayMonth(F.fromIso(r.date)) : 'No date found'].concat(r.flag ? ['<span class="sctag warn">' + esc(r.flag) + '</span>'] : []).concat(r.tag ? ['<span class="sctag">' + r.tag + '</span>'] : []).concat(r.low && !r.flag ? ['<span class="sctag warn">Double-check</span>'] : []);
-        return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
-          '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, i) + '</div></div>';
+      var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow();
+      var hello = '<div class="chatcard reply"><p>Tell me what you spent, like “HEB 84.20 groceries.” Or tap <b>+</b> to snap a receipt or a screenshot of your bank app.</p></div>';
+      var thread = sc.msgs.map(function (m, j) {
+        if (m.t === 'you') return '<div class="chatyou">' + esc(FMTMAI.maskDigits(m.text)) + '</div>';
+        if (m.t === 'pics') return '<div class="chatyou pics">' + m.urls.map(function (u) { return '<img src="' + esc(u) + '" alt="' + (m.kind === 'bank' ? 'Your bank screenshot' : 'Your receipt') + '">'; }).join('') + '</div>';
+        if (m.t === 'chat') return chatReplyHtml(m.st, j);
+        if (m.t === 'snap') return snapReplyHtml(m, j);
+        if (m.t === 'note') return '<div class="chatcard done"><span class="chatok">✓</span><span>' + esc(m.text) + '</span></div>';
+        return '';
       }).join('');
-      return back(U.scanBack || 'journey') + '<div class="stack" style="gap:6px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2>' +
-        '<p>Snap a receipt or your bank app, or type them in.</p></div>' + (sc.reading ? '' : snapArea()) +
-        chatArea() +
-        (sc.reading ? '<div class="card scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (sc.total > 1 ? 'photo ' + sc.reading + ' of ' + sc.total : 'your photo') + '…</b><small>A few seconds each.</small></div>' : '') +
-        (sc.err ? '<p role="alert" class="scerr">' + esc(sc.err) + '</p>' : '') +
-        (rows ? '<div class="stack" style="gap:6px"><div class="row" style="border:0;padding:0"><b>' + plural(sc.rows.length, 'row') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall">Confirm all</button>' : '') + '</div>' +
-          '<small style="color:var(--muted)">Check the right ones and pick a category. Unchecked rows are skipped. AI can misread, so check before you save.</small></div>' +
-          '<div class="card scl">' + rows + '</div>' +
-          '<div class="push"><button type="button" class="primary" data-a="scansave"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') + ' · ' + money2(total) : 'Check the purchases to save') + '</button>' + '<button type="button" class="textbtn" data-a="weekhand">Add one by hand</button></div>'
-          : sc.reading ? '' : '<div class="stack" style="gap:10px"><button type="button" class="outline" data-a="weekhand">Add one by hand</button></div>');
+      return back(U.scanBack || 'journey') + '<div class="stack" style="gap:2px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2></div>' +
+        '<div class="chatthread" aria-live="polite">' + hello + thread + '</div>' + chatDock();
     },
     spendadd: function () {
       var f = U.form || {}, lines = spendLines(), last = f.key;
@@ -3611,7 +3658,7 @@
       case 'recapopen': U.recapBack = U.screen; U.recapWk = null; go('recap'); break;
       case 'tourreplay': try { localStorage.removeItem(TOUR_KEY); } catch (e) {} track('tour-replay'); U.bTab = 'spend'; U.jTab = null; go('home'); break;
       case 'frontstart': U.front = false; clearInterval(wf.timer); track('welcome-start'); U.ob = OB[0]; render(); window.scrollTo(0, 0); break;
-      case 'recapgo': if (v === 'cat') { U.scan = null; U.scanBack = U.screen; go('scan'); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
+      case 'recapgo': if (v === 'cat') { openScan(); } else { U.bTab = 'save'; go('plan'); U.sheet = { k: 'bal' }; render(); } break;
       case 'recapdone': U.recapCoach = !coachSeen() && !!CONFIG.communityUrl && !Object.keys(P.wk || {}).some(function (k) { return P.wk[k].done; }); wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
       case 'fundopen': (function () {
         var f = v ? funds().filter(function (x) { return x.id === v; })[0] : null;
@@ -3735,13 +3782,14 @@
       case 'caltab': U.calTab = v; U.calDay = null; render(); break;
       case 'scan': openScan(); break;
       case 'weekadd': openScan(v); break;
-      case 'chatopen': openScan(); setTimeout(function () { var el = document.getElementById('chatIn'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 80); break;
-      case 'chatok': chatConfirm(+v); break;
-      case 'chatskip': if (U.chat && U.chat.cards[+v]) { U.chat.cards[+v].state = 'skipped'; render(); } break;
-      case 'chatedit': if (U.chat && U.chat.cards[+v]) { U.chat.cards[+v].edit = !U.chat.cards[+v].edit; render(); } break;
-      case 'chatacct': (function () { var pr = String(v).split('|'), cc = U.chat && U.chat.cards[+pr[0]]; if (cc) { cc.acct = pr.slice(1).join('|'); cc.err = ''; render(); } })(); break;
+      case 'chatopen': openScan(); setTimeout(function () { var el = document.getElementById('chatIn'); if (el) el.focus(); }, 80); break;
+      case 'chatattach': if (U.scan) { U.scan.attach = !U.scan.attach; render(); if (U.scan.attach) chatDown(); } break;
+      case 'chatok': chatConfirm(v); break;
+      case 'chatskip': (function () { var cc = chatAt(v); if (cc) { cc.state = 'skipped'; render(); } })(); break;
+      case 'chatedit': (function () { var cc = chatAt(v); if (cc) { cc.edit = !cc.edit; render(); } })(); break;
+      case 'chatacct': (function () { var pr = String(v).split('|'), cc = chatAt(pr[0]); if (cc) { cc.acct = pr.slice(1).join('|'); cc.err = ''; render(); } })(); break;
       case 'chatreport': (function () {
-        var st = U.chat; if (!st) return;
+        var pv = String(v).split(':'), cm = scanMsg(pv[1]), st = cm && cm.st; if (!st) return; v = pv[0];
         if (v === 'open') st.report = 'open'; else if (v === 'no') st.report = '';
         else if (v === 'send') { st.report = 'sent'; if (S) aiCall('report', { what: 'chat', input: FMTMAI.maskDigits(st.text), output: st.cards.map(function (c) { return c.a; }) }).catch(function () {}); track('chat-report'); }
         render();
@@ -3764,19 +3812,20 @@
         fresh().then(function () { return sb('/rest/v1/people?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.uid, alt_email: e } }); })
           .then(function () { U.altMsg = 'Saved. Your extra snaps show up once the community has your email.'; U.altOpen = false; track('alt-email'); aiStatus(true); render(); }, function () { U.altMsg = 'That didn’t save. Try again.'; render(); });
       })(); break;
-      case 'scanall': U.scan.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); U.scan.err = ''; render(); break;
+      case 'scanall': (function () { var sm = scanMsg(v); if (!sm || !sm.rows) return; sm.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); sm.err = ''; render(); })(); break;
       case 'scansave': (function () {
-        var sc = U.scan, keep = sc.rows.filter(function (r) { return r.ok; }), ks = spendLines().map(function (l) { return l.key; }), miss = keep.filter(function (r) { return !r.key || ks.indexOf(r.key) < 0; })[0];
+        var sc = U.scan, sm = scanMsg(v); if (!sm || !sm.rows || sm.saved) return;
+        var keep = sm.rows.filter(function (r) { return r.ok; }), ks = spendLines().map(function (l) { return l.key; }), miss = keep.filter(function (r) { return !r.key || ks.indexOf(r.key) < 0; })[0];
         if (!keep.length) return;
-        if (miss) { sc.err = 'Choose a category for ' + miss.merchant + ' (' + money2(miss.amount) + ').'; render(); return; }
+        if (miss) { sm.err = 'Choose a category for ' + miss.merchant + ' (' + money2(miss.amount) + ').'; render(); return; }
         var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0], fallback = F.isoDay(today());
         if (w && w.end < fallback) fallback = w.end;
         P.merchantMem = P.merchantMem || {};
         keep.forEach(function (r) { P.spends.push({ id: uid(), date: r.date || fallback, amount: String(round2(r.amount)), key: r.key, note: r.merchant, src: r.src || (r.typed ? 'typed' : 'scan') }); P.merchantMem[merchKey(r.merchant)] = r.key; });
         markLogged(keep.map(function (r) { return r.date || fallback; }));
         weekDone(sc.week, 'saved'); track('scan-save');
-        // the screenshot and what was read from it are dropped here
-        U.scan = null; U.planToast = plural(keep.length, 'purchase') + ' saved to your budget.'; U.jTab = null; save(); go(U.scanBack === 'journey' || !U.scanBack ? 'journey' : U.scanBack);
+        // what was read from the photo is dropped here; the chat keeps a short ✓ line
+        sm.saved = { n: keep.length, total: keep.reduce(function (t, r) { return t + r.amount; }, 0) }; sm.rows = []; sm.err = ''; save(); render();
       })(); break;
       case 'weeknone': weekDone(U.scan.week, 'none'); track('scan-none'); U.planToast = 'Got it: no purchases this week.'; U.scan = null; U.jTab = null; save(); go('journey'); break;
       case 'weekhand': U.spendBack = 'scan'; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
@@ -3787,7 +3836,11 @@
         if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
         P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
         U.lastSpendKey = U.form.key; wkMark('cat'); markLogged([U.form.date || F.isoDay(today())]);
-        if (U.spendBack === 'scan' && U.scan) { weekDone(U.scan.week, 'saved'); if (String(U.form.note || '').trim()) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(U.form.note)] = U.form.key; } }
+        if (U.spendBack === 'scan' && U.scan) {
+          weekDone(U.scan.week, 'saved'); if (String(U.form.note || '').trim()) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(U.form.note)] = U.form.key; }
+          var hl = spendLines().filter(function (l) { return l.key === U.form.key; })[0];
+          if (U.scan.msgs) U.scan.msgs.push({ t: 'note', text: (String(U.form.note || '').trim() ? String(U.form.note).trim().slice(0, 40) + ' · ' : '') + money2(num(U.form.amount)) + ' added to ' + (hl ? hl.label : 'your budget') });
+        }
         save(); track('spend-add');
         if (v === 'again') {
           var sl = spendLines().filter(function (l) { return l.key === U.form.key; })[0];
@@ -4141,10 +4194,10 @@
     if (t.hasAttribute('data-meoptin')) { setMe({ optIn: t.checked }); peopleSave(); track(t.checked ? 'email-list-on' : 'email-list-off'); return; }
     if (t.getAttribute('data-file') === 'snap') { snapFiles(t); return; }
     if (t.hasAttribute('data-wipehand')) { U.wipeHand = t.checked; return; }
-    if (t.hasAttribute('data-cckey')) { var ck = U.chat && U.chat.cards[+t.getAttribute('data-cckey')]; if (ck) { ck.key = t.value; ck.err = ''; render(); } return; }
-    if (t.hasAttribute('data-cc')) { var ce = U.chat && U.chat.cards[+t.getAttribute('data-cc')]; if (ce) { var f = t.getAttribute('data-ccf'); ce.a[f] = f === 'amount' ? round2(num(t.value)) : String(t.value).slice(0, 40); } return; }
-    if (t.hasAttribute('data-scan-ok')) { var so = U.scan.rows[+t.getAttribute('data-scan-ok')]; so.ok = t.checked; U.scan.err = ''; render(); return; }
-    if (t.hasAttribute('data-scan-key')) { var sk = U.scan.rows[+t.getAttribute('data-scan-key')]; sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; U.scan.err = ''; render(); return; }
+    if (t.hasAttribute('data-cckey')) { var ck = chatAt(t.getAttribute('data-cckey')); if (ck) { ck.key = t.value; ck.err = ''; render(); } return; }
+    if (t.hasAttribute('data-cc')) { var ce = chatAt(t.getAttribute('data-cc')); if (ce) { var f = t.getAttribute('data-ccf'); ce.a[f] = f === 'amount' ? round2(num(t.value)) : String(t.value).slice(0, 40); } return; }
+    if (t.hasAttribute('data-scan-ok')) { var po = t.getAttribute('data-scan-ok').split('.'), mo = scanMsg(po[0]), so = mo && mo.rows && mo.rows[+po[1]]; if (so) { so.ok = t.checked; mo.err = ''; render(); } return; }
+    if (t.hasAttribute('data-scan-key')) { var pk = t.getAttribute('data-scan-key').split('.'), mk = scanMsg(pk[0]), sk = mk && mk.rows && mk.rows[+pk[1]]; if (sk) { sk.key = t.value; sk.tag = ''; if (t.value) sk.ok = true; mk.err = ''; render(); } return; }
     if (t.getAttribute('data-file') === 'backup') readFile(t, function (text) {
       try { var d = JSON.parse(text); if (!d || d.v !== 1 || !Array.isArray(d.debts)) throw new Error('bad'); if (P.setupDone) keepCopy(); P = Object.assign(blank(), d); save(); U.toast = ['Backup restored.', 'Welcome back.', false]; go(P.setupDone ? 'home' : 'welcome'); }
       catch (err) { U.err = 'That doesn’t look like a Find Me the Money backup file.'; render(); }
