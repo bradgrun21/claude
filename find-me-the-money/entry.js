@@ -71,7 +71,7 @@
           date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); rest = rest.replace(w[0], ' ');
         }
       }
-      rest = rest.replace(/\b(at|on|for|spent|paid|bought)\b/gi, ' ').replace(/[$]/g, ' ').replace(/\s+/g, ' ').trim();
+      rest = rest.replace(/^\s*add\s+(an?\s+)?(purchases?\s+)?(of\s+)?/i, ' ').replace(/\b(at|on|for|spent|paid|bought|purchases?)\b/gi, ' ').replace(/[$]/g, ' ').replace(/\s+/g, ' ').trim();
       var merchant = rest ? rest.split(' ').map(function (x) { return x.length > 2 || /[A-Z]/.test(x) ? x.charAt(0).toUpperCase() + x.slice(1) : x; }).join(' ').slice(0, 40) : 'Purchase';
       out.push({ merchant: merchant, raw: s, amount: amount, date: date || (t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate())), confidence: 100, low: false, flag: '', skip: false, typed: true });
     });

@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01f';
+  var APP_VERSION = '11-01g';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -2034,7 +2034,7 @@
   // Cheap first: entry.js reads plain purchases on the phone (no AI, never counts). Only what it can't read goes to the
   // ai function, which answers with proposed actions. Every action is a card with Confirm / Edit / Skip and nothing
   // changes until Confirm. The only sentences shown are Brad's (FMTMAI.REPLIES and CHAT_SAY) and the person's own words.
-  var CHAT_AI_WORDS = /\b(balance|savings|checking|account|grateful|thankful|should|how much|left|spend today|spent nothing|nothing today|didn'?t|did not|lesson|debt|credit card|eat(ing)? out|invest\w*|401k|crypto)\b|\?/i;
+  var CHAT_AI_WORDS = /\b((from|in|since|back in) (1[89]|20)\d\d|ago|last (week|month|year)|years?|months?|balance|savings|checking|account|grateful|thankful|should|how much|left|spend today|spent nothing|nothing today|didn'?t|did not|lesson|debt|credit card|eat(ing)? out|invest\w*|401k|crypto)\b|\?/i;
   var CHAT_SAY = {
     signin: 'Sign in to use chat. A purchase typed like “HEB 84.20” still works.',
     paused: 'Chat is resting until the 1st. A purchase typed like “HEB 84.20” still works.',
@@ -2053,9 +2053,15 @@
     return hits.length === 1 ? hits[0].k : '';
   }
   // what's left this month in each spending line (the app answers "how much is left"; the AI never does the math)
+  // the same numbers as the Budget tab: a weekly category is this week's money, the rest this month's (from the start day)
   function chatLeft() {
-    var ym = monthOf(F.isoDay(today())), m = spentMap(ym);
-    return spendLines().filter(function (l) { return l.grp === 'spend'; }).map(function (l) { return { key: l.key, label: l.label, icon: l.icon, left: round2((l.per === 'week' ? l.amt * weeksIn(today().getFullYear(), today().getMonth()) : l.mon) - (m[l.key] || 0)) }; });
+    var now = today(), ym = monthOf(F.isoDay(now)), m = spentMap(ym), share = budFrom(ym).share;
+    return spendLines().filter(function (l) { return l.grp === 'spend'; }).map(function (l) {
+      var wk = l.per === 'week' ? weekOf(now) : null;
+      var sp = wk ? linePurchases(l.key, wk[0], wk[1]).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
+      var cap = wk ? l.amt : (l.per === 'week' ? l.amt * weeksIn(now.getFullYear(), now.getMonth()) : l.mon) * share;
+      return { key: l.key, label: l.label, icon: l.icon, week: !!wk, left: round2(cap - sp) };
+    });
   }
   function chatCard(a) {
     var c = { id: uid(), a: a, state: 'open' };
@@ -2077,6 +2083,10 @@
     if (FMTMAI.needsCare(text)) { st.reply = 'care'; track('chat-care'); paint(); return; }
     if (!CHAT_AI_WORDS.test(text)) {
       var rows = FMTMEntry.parseTyped(FMTMAI.maskDigits(text), today());
+      rows = rows.filter(function (r) { return r.amount < 10000; });
+      // the same date rule as the AI: the last 60 days, nothing in the future
+      var dd = rows.map(function (r) { return F.daysBetween(F.fromIso(r.date), today()); });
+      if (dd.some(function (d) { return d > 60 || d < -1; })) { st.reply = 'old_date'; paint(); return; }
       if (rows.length) { st.cards = rows.map(function (r) { return chatCard({ type: 'add_purchase', date: r.date, merchant: r.merchant, amount: r.amount, category_key: null }); }); track('chat-local'); paint(); return; }
     }
     if (!S) { st.reply = 'signin'; paint(); return; }
@@ -2123,7 +2133,7 @@
       if (!acct && !done) extra = '<div class="chatpick">' + chatAccounts().map(function (x) { return '<button type="button" class="chmini" data-a="chatacct" data-v="' + i + '|' + esc(x.k) + '">' + esc(x.label) + '</button>'; }).join('') + '</div>';
     } else if (a.type === 'how_much_left') {
       var cl = chatLeft().filter(function (x) { return x.key === a.category_key; })[0]; btns = false;
-      row = cl ? ccRow(cl.icon, colorFor(cl.key), esc(cl.label), cl.left < 0 ? 'Over this month' : 'Left this month', money2(Math.abs(cl.left)), '') : '<p class="chatsay">That category isn’t in your budget.</p>';
+      row = cl ? ccRow(cl.icon, colorFor(cl.key), esc(cl.label), (cl.left < 0 ? 'Over this ' : 'Left this ') + (cl.week ? 'week' : 'month'), money2(Math.abs(cl.left)), '') : '<p class="chatsay">That category isn’t in your budget.</p>';
     }
     return '<div class="chatcard cc' + (done ? ' done' : '') + '">' + row + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') + '</div>' +
       (btns && !done ? '<div class="ccbtns"><button type="button" class="ccno" data-a="chatskip" data-v="' + i + '">Cancel</button><button type="button" class="ccyes" data-a="chatok" data-v="' + i + '">Confirm</button></div>' : '');
