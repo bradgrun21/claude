@@ -113,3 +113,46 @@ export function checkChat(input, opts) {
   if (!out.length) return unclear();
   return { actions: out, rejected };
 }
+
+// ---- meals: read_recipe (a recipe photo -> a meal draft) ----
+// The app's units are servings, lb, oz, count and cups; tbsp and tsp become cups on the phone, and 'other'
+// ("a pinch", "to taste") comes back with no amount so the person fills it in. No prices: the AI can't know them.
+export const RECIPE_UNITS = ['servings', 'lb', 'oz', 'count', 'cups', 'tbsp', 'tsp', 'other'];
+const RECIPE_TOP = ['name', 'plates', 'ingredients'], RECIPE_ING = ['name', 'amount', 'unit', 'pantry_id'];
+export function checkRecipe(input, opts) {
+  const ids = new Set((opts.pantryIds || []).map(String));
+  if (!onlyKeys(input, RECIPE_TOP) || !Array.isArray(input.ingredients)) return { ok: false, name: '', plates: null, ingredients: [] };
+  const out = [];
+  for (const g of input.ingredients.slice(0, 40)) {
+    if (!onlyKeys(g, RECIPE_ING)) return { ok: false, name: '', plates: null, ingredients: [] };
+    const name = cleanText(g.name); if (!name) continue;
+    const unit = RECIPE_UNITS.includes(g.unit) ? g.unit : 'other';
+    const n = typeof g.amount === 'number' && isFinite(g.amount) ? Math.round(g.amount * 1000) / 1000 : null;
+    const amount = unit !== 'other' && n != null && n > 0 && n <= 1000 ? n : null;
+    const pantryId = typeof g.pantry_id === 'string' && ids.has(g.pantry_id) ? g.pantry_id : null;
+    out.push({ name, amount, unit, pantryId });
+  }
+  const p = typeof input.plates === 'number' && isFinite(input.plates) ? Math.round(input.plates) : null;
+  return { ok: true, name: cleanText(input.name), plates: p != null && p >= 1 && p <= 50 ? p : null, ingredients: out };
+}
+
+// ---- meals: read_prices (a grocery receipt -> new pantry prices) ----
+// Each line is matched to a pantry item the person already has (by id from the list given), or dropped.
+// price is what one package cost: the line total divided by how many were bought.
+const PRICES_TOP = ['store', 'date', 'total', 'lines'], PRICES_LINE = ['text', 'line_total', 'qty', 'pantry_id'];
+export function checkPrices(input, opts) {
+  const ids = new Set((opts.pantryIds || []).map(String));
+  if (!onlyKeys(input, PRICES_TOP) || !Array.isArray(input.lines)) return { ok: false, lines: [], total: null, date: null, store: '' };
+  const out = [], seen = new Set();
+  for (const l of input.lines.slice(0, 80)) {
+    if (!onlyKeys(l, PRICES_LINE)) return { ok: false, lines: [], total: null, date: null, store: '' };
+    const pantryId = typeof l.pantry_id === 'string' && ids.has(l.pantry_id) ? l.pantry_id : null;
+    const lineTotal = money(l.line_total); if (!pantryId || lineTotal == null || seen.has(pantryId)) continue;
+    const qty = typeof l.qty === 'number' && Number.isInteger(l.qty) && l.qty >= 1 && l.qty <= 50 ? l.qty : 1;
+    const price = Math.round(lineTotal / qty * 100) / 100; if (price < 0.01) continue;
+    seen.add(pantryId);
+    out.push({ pantryId, text: cleanText(l.text) || 'Item', price, qty });
+  }
+  const total = money(input.total), date = input.date && checkDate(input.date, opts.today) === 'ok' ? input.date : null;
+  return { ok: true, lines: out, total, date, store: cleanText(input.store) };
+}

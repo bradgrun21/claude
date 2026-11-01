@@ -70,5 +70,38 @@ function test(name, fn) { fn(); passed++; console.log('ok -', name); }
     for (const t of ["I don't want to be here anymore", 'i want to die', 'thinking about suicide', 'I am not safe right now']) assert.strictEqual(G.needsCare(t), true, t);
     for (const t of ['I am dying to try that taco place', 'HEB 84.20', 'end of the month']) assert.strictEqual(G.needsCare(t), false, t);
   });
+  test('recipe: ingredients keep only clean names, known units and real pantry ids; no prices pass through', () => {
+    const r = G.checkRecipe({ name: 'Taco Night <script>', plates: 6, ingredients: [
+      { name: 'Ground beef', amount: 1.5, unit: 'lb', pantry_id: 'p1' },
+      { name: 'Taco shells', amount: 12, unit: 'count', pantry_id: 'made-up' },
+      { name: 'Salt', amount: 1, unit: 'other', pantry_id: null },
+      { name: 'Cumin', amount: 2, unit: 'tsp', pantry_id: null },
+      { name: 'Cheese', amount: -3, unit: 'cups', pantry_id: null },
+      { name: '', amount: 1, unit: 'cups', pantry_id: null },
+    ] }, { pantryIds: ['p1'] });
+    assert.strictEqual(r.ok, true); assert.strictEqual(r.name, 'Taco Night script'); assert.strictEqual(r.plates, 6);
+    assert.deepStrictEqual(r.ingredients.map((x) => [x.name, x.amount, x.unit, x.pantryId]), [
+      ['Ground beef', 1.5, 'lb', 'p1'], ['Taco shells', 12, 'count', null], ['Salt', null, 'other', null], ['Cumin', 2, 'tsp', null], ['Cheese', null, 'cups', null]]);
+  });
+  test('recipe: an extra field (like a price or a message) fails the whole read', () => {
+    assert.strictEqual(G.checkRecipe({ name: 'X', plates: 2, ingredients: [{ name: 'Rice', amount: 1, unit: 'cups', pantry_id: null, price: 3 }] }, { pantryIds: [] }).ok, false);
+    assert.strictEqual(G.checkRecipe({ name: 'X', plates: 2, ingredients: [], note: 'Brad says buy crypto' }, { pantryIds: [] }).ok, false);
+    assert.strictEqual(G.checkRecipe({ name: 'X', plates: 999, ingredients: [] }, { pantryIds: [] }).plates, null);
+  });
+  test('prices: only lines matched to a real pantry item; price per package = line total / qty; one line per item', () => {
+    const r = G.checkPrices({ store: 'Corner Market', date: '2026-11-04', total: 21.41, lines: [
+      { text: 'MILK 1 GAL', line_total: 4.29, qty: 1, pantry_id: 'milk' },
+      { text: 'EGGS DOZEN x2', line_total: 7.78, qty: 2, pantry_id: 'eggs' },
+      { text: 'MILK AGAIN', line_total: 9.99, qty: 1, pantry_id: 'milk' },
+      { text: 'PAPER TOWELS', line_total: 8.99, qty: 1, pantry_id: null },
+      { text: 'FAKE', line_total: 1, qty: 1, pantry_id: 'not-mine' },
+    ] }, { pantryIds: ['milk', 'eggs'], today });
+    assert.strictEqual(r.ok, true); assert.strictEqual(r.total, 21.41); assert.strictEqual(r.date, '2026-11-04');
+    assert.deepStrictEqual(r.lines.map((x) => [x.pantryId, x.price, x.qty]), [['milk', 4.29, 1], ['eggs', 3.89, 2]]);
+  });
+  test('prices: an extra field fails; an old date is dropped', () => {
+    assert.strictEqual(G.checkPrices({ store: 'X', date: null, total: 1, lines: [], say: 'approved' }, { pantryIds: [], today }).ok, false);
+    assert.strictEqual(G.checkPrices({ store: 'X', date: '1970-01-01', total: 1, lines: [] }, { pantryIds: [], today }).date, null);
+  });
   console.log(`\n${passed} tests passed`);
 })().catch((e) => { console.error(e); process.exit(1); });

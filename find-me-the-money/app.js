@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01h';
+  var APP_VERSION = '11-01i';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -939,7 +939,7 @@
   function mmPantryView() {
     var used = function (id) { return mmMeals().filter(function (m) { return (m.items || []).some(function (i) { return i.pantryItemId === id; }); }).length; };
     var items = mmPantry().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
-    return '<div class="mm-top"><button type="button" class="mm-back" data-mm-go="meals">‹ Meals</button>' + mmGear() + '</div><h2 class="mm-h1">🧺 Pantry prices</h2>' +
+    return '<div class="mm-top"><button type="button" class="mm-back" data-mm-go="meals">‹ Meals</button>' + mmGear() + '</div><h2 class="mm-h1">🧺 Pantry prices</h2>' + (items.length ? mmSnapBox('prices') : '') +
       '<div class="mm-list">' + (items.length ? items.map(function (p) {
         var u = used(p.id), priced = p.price != null && p.packageAmount;
         return '<button type="button" class="mm-row" data-mm-pedit="' + p.id + '"><span class="mm-em">' + esc(p.emoji || mmGuess(p.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(p.name) + '</span><span class="mm-s">' + (priced ? mmPkgText(p) + ' · ' : '') + 'used in ' + plural(u, 'meal') + '</span></span><span class="mm-r">' + (priced ? mm$(p.price / p.packageAmount) + '/' + mmUnitOne(p.unit) : '—') + '</span></button>';
@@ -947,7 +947,7 @@
   }
   function mmIrow(it) {
     var blank = mmNum(it.price) == null, c = mmLine(it.price, it.packageAmount, it.amountUsed, it.alreadyHave);
-    var sub = it.alreadyHave ? '<span class="mm-s have">🧺 Already have it</span>' : blank ? '<span class="mm-s">No price · not counted</span>' :
+    var sub = it.check ? '<span class="mm-s warn">Check amount' + (it.note ? ' · ' + esc(it.note) : '') + '</span>' : it.alreadyHave ? '<span class="mm-s have">🧺 Already have it</span>' : blank ? '<span class="mm-s">No price · not counted</span>' :
       mmNum(it.packageAmount) && mmNum(it.amountUsed) ? '<span class="mm-s">' + (+it.amountUsed) + ' of ' + (+it.packageAmount) + (it.unit === 'count' ? '' : ' ' + it.unit) + '</span>' : '<span class="mm-s">Tap to finish</span>';
     return '<button type="button" class="mm-irow" data-mm-iedit="' + it.key + '"><span class="mm-em">' + esc(it.emoji || mmGuess(it.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(it.name) + '</span>' + sub + '</span><span class="mm-c">' + (it.alreadyHave || blank ? '—' : mm$(c)) + '</span><span class="mm-chev">›</span></button>';
   }
@@ -959,6 +959,7 @@
       '<div class="mm-chips mm-kind" role="group" aria-label="Main or side"><button type="button" class="mm-chip" data-mm-kind="main" aria-pressed="' + (d.kind !== 'side') + '">🍽️ Main</button><button type="button" class="mm-chip" data-mm-kind="side" aria-pressed="' + (d.kind === 'side') + '">🥗 Side</button></div>' +
       '<div class="mm-row2"><div class="mm-field"><span class="mm-lab">🍽️ Plates</span><div class="mm-stepper"><button type="button" data-mm-plates="-1" aria-label="Fewer plates">−</button><input data-mm-f="plates" inputmode="numeric" value="' + esc(d.plates) + '" aria-label="Plates"><button type="button" data-mm-plates="1" aria-label="More plates">+</button></div></div>' +
       (d.kind === 'side' ? '' : '<label class="mm-field"><span class="mm-lab">🍔 Same meal eating out</span><span class="mm-money"><span>$</span><input class="mm-in" data-mm-f="eatingOutCost" inputmode="decimal" value="' + esc(d.eatingOutCost == null ? '' : d.eatingOutCost) + '" placeholder="optional"></span></label>') + '</div>' +
+      mmSnapBox('recipe') +
       '<div class="mm-h2">Ingredients' + (d.items.length ? ' · ' + d.items.length : '') + '</div>' +
       '<div class="mm-ings">' + (d.items.length ? d.items.map(mmIrow).join('') : '<div class="mm-empty">Tap + to add your first ingredient</div>') + '</div>' +
       '<button type="button" class="mm-addbtn" data-mm-addi><span class="mm-plus">+</span> Add ingredient</button>' +
@@ -1031,6 +1032,117 @@
     }; img.onerror = function () { mmToast('Couldn’t open that photo'); }; img.src = rd.result; };
     rd.readAsDataURL(file);
   }
+  // ----- AI for meals: snap a recipe (fills a meal draft) or a grocery receipt (updates pantry prices) -----
+  // Each photo counts as one snap from the same monthly limit as purchase snaps. The AI never names a price for a
+  // recipe and never writes a sentence; everything it reads is a draft until Save.
+  function mmSnapBox(kind) {
+    aiStatus();
+    var sn = mmSt().snap || {}, ai = U.ai || {}, sc = ai.snaps || {}, lim = sc.limit, left = lim == null ? null : Math.max(0, lim - (sc.used || 0));
+    if (sn.kind === kind && sn.reading) return '<div class="mm-snapbox" role="status"><span class="spin" aria-hidden="true"></span><b>' + (kind === 'recipe' ? 'Reading your recipe…' : 'Reading your receipt…') + '</b><small>A few seconds.</small></div>';
+    var block = snapBlock(), sub = kind === 'recipe' ? 'Fills in the name and ingredients from a photo.' : 'Reads a grocery receipt and updates what you paid.';
+    var count = ai.level === 'paid' ? ' Unlimited snaps.' : lim != null ? ' Uses 1 snap · ' + left + ' of ' + lim + ' left.' : ' Uses 1 snap.';
+    return '<div class="mm-snapbox">' + (block ? block : '<label class="mm-btn gold mm-snapbtn">' + (kind === 'recipe' ? '📸 Snap a recipe' : '📸 Update prices from a receipt') + '<input type="file" accept="image/*" multiple data-mm-snap="' + kind + '" class="sr"></label><small>' + sub + count + '</small>') +
+      (sn.kind === kind && sn.err ? '<p class="mm-snaperr" role="alert">' + esc(sn.err) + '</p>' : '') + (sn.kind === kind && sn.msg ? '<p class="mm-snapmsg">' + esc(sn.msg) + '</p>' : '') + '</div>';
+  }
+  // 2 cups vs a pantry item counted in lb can't be converted; tbsp and tsp become cups, lb and oz convert
+  function mmConvert(n, from, to) {
+    if (n == null) return null; if (from === to) return n;
+    var cup = { cups: 1, tbsp: 1 / 16, tsp: 1 / 48 }, oz = { oz: 1, lb: 16 };
+    if (cup[from] && cup[to]) return Math.round(n * cup[from] / cup[to] * 1000) / 1000;
+    if (oz[from] && oz[to]) return Math.round(n * oz[from] / oz[to] * 1000) / 1000;
+    return null;
+  }
+  function mmAmtText(n, u) { return n == null ? 'no amount' : (+n) + ' ' + (u === 'count' ? '' : u); }
+  function mmSnapErr(er) {
+    return er && er.status === 413 ? 'That photo is too big. Try a screenshot of it instead.' : er && er.status === 502 ? 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute.'
+      : er && (er.status === 401 || er.message === 'signed out') ? 'Sign in to use snaps.' : 'Something went wrong on our side. Your snap wasn’t counted. Try again.';
+  }
+  function mmSnap(kind, input) {
+    var st = mmSt(), picked = Array.prototype.slice.call(input.files || []).slice(0, 3), d = st.draft;
+    if (!picked.length) return;
+    if (kind === 'recipe' && !d) return;
+    st.snap = { kind: kind, reading: true }; render();
+    if (!S || !window.FMTMAI) { st.snap = { kind: kind, err: 'Sign in to use snaps.' }; render(); return; }
+    track(kind === 'recipe' ? 'meal-recipe-snap' : 'meal-prices-snap');
+    // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
+    Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (blobs) {
+      input.value = '';
+      // a recipe photo is also kept as the recipe's page, to read while cooking
+      if (kind === 'recipe') blobs.slice(0, Math.max(0, MM_PAGES - (d.recipePhotos || []).length)).forEach(mmRecipePhoto);
+      return Promise.all(blobs.map(FMTMAI.prepare));
+    }).then(function (sets) {
+      var images = [].concat.apply([], sets).slice(0, kind === 'recipe' ? 3 : 2);
+      var pantry = mmPantry().map(function (p) { return { id: p.id, name: p.name, unit: p.unit || 'servings' }; });
+      return aiCall(kind, kind === 'recipe' ? { images: images, pantry: pantry } : { images: images, pantry: pantry, today: F.isoDay(today()) });
+    }).then(function (r) {
+      r = r || {}; var sn = st.snap = { kind: kind };
+      if (r.paused) { U.ai = Object.assign(U.ai || {}, { paused: true }); }
+      else if (r.limitReached) { U.ai = Object.assign(U.ai || {}, { level: r.level, snaps: { used: r.used, limit: r.used } }); }
+      else if (r.slow) sn.err = 'One moment. Try that again in a minute.';
+      else {
+        if (U.ai && U.ai.snaps && r.used != null) U.ai.snaps.used = r.used;
+        if (kind === 'recipe') mmRecipeFill(r, d); else mmPricesOpen(r);
+      }
+      aiStatus(true); render();
+    }, function (er) { st.snap = { kind: kind, err: mmSnapErr(er) }; render(); });
+  }
+  function mmRecipeFill(r, d) {
+    var st = mmSt(), sn = st.snap, ings = r.ingredients || [];
+    if (st.draft !== d) return;
+    if (!ings.length) { sn.err = 'We couldn’t read a recipe in that photo. Try again, or add the ingredients by hand.'; return; }
+    var hadItems = d.items.length, have = {}, added = 0, check = 0;
+    d.items.forEach(function (i) { have[String(i.name || '').toLowerCase()] = 1; });
+    if (!String(d.name || '').trim() && r.name) d.name = r.name;
+    if (!hadItems && r.plates) d.plates = r.plates;
+    ings.forEach(function (g) {
+      var p = g.pantryId ? mmItem(g.pantryId) : null, name = p ? p.name : g.name;
+      if (have[name.toLowerCase()]) return; have[name.toLowerCase()] = 1;
+      var unitNew = g.unit === 'tbsp' || g.unit === 'tsp' ? 'cups' : g.unit === 'other' ? 'servings' : g.unit;
+      var it = { key: uid(), name: name, emoji: p ? p.emoji || mmGuess(p.name) : mmGuess(g.name), alreadyHave: false };
+      if (p) {
+        var amt = mmConvert(g.amount, g.unit, p.unit || 'servings');
+        it.pantryItemId = p.id; it.price = p.price; it.packageAmount = p.packageAmount; it.unit = p.unit || 'servings'; it.amountUsed = amt;
+        if (amt == null) { it.check = true; it.note = 'recipe says ' + mmAmtText(g.amount, g.unit); }
+      } else {
+        it.price = null; it.packageAmount = null; it.unit = unitNew; it.amountUsed = mmConvert(g.amount, g.unit, unitNew);
+        if (it.amountUsed == null) { it.check = true; it.note = g.unit === 'other' ? 'no amount in the recipe' : 'recipe says ' + mmAmtText(g.amount, g.unit); }
+      }
+      if (it.check) check++;
+      d.items.push(it); added++;
+    });
+    var fresh = d.items.slice(-added).filter(function (i) { return !i.pantryItemId; }).length;
+    sn.msg = 'Added ' + plural(added, 'ingredient') + '.' + (fresh ? ' Tap the ' + (fresh === 1 ? 'new one' : plural(fresh, 'new one')) + ' to add a price.' : '') + (check ? ' ' + plural(check, 'amount') + ' to check.' : '');
+    mmToast('📸 ' + plural(added, 'ingredient') + ' added');
+  }
+  // the receipt's lines next to the pantry's prices; nothing changes until Update
+  function mmPricesOpen(r) {
+    var sn = mmSt().snap, lines = (r.lines || []).map(function (l) { var p = mmItem(l.pantryId); return p ? { pantryId: p.id, text: l.text, price: l.price, old: p.price, ok: mmNum(p.price) !== l.price } : null; }).filter(Boolean);
+    if (!lines.length) { sn.err = 'Nothing on that receipt matched your pantry. Prices stay as they are.'; return; }
+    mmOpen({ type: 'prices', lines: lines, total: r.total, date: r.date, store: r.store, addTotal: false });
+  }
+  function mmGroceryLine() { var ls = spendLines().filter(function (l) { return l.grp === 'spend'; }); return ls.filter(function (l) { return /grocer/i.test(l.label); })[0] || ls.filter(function (l) { return l.key === 'basics'; })[0] || null; }
+  function mmPricesSheet() {
+    var sh = mmSt().sheet, n = sh.lines.filter(function (l) { return l.ok; }).length, g = mmGroceryLine();
+    return mmSheetHead('🧾 New prices') + '<p class="mm-s" style="margin:0 0 10px">From ' + esc(sh.store || 'your receipt') + '. Check the ones to update. Every meal that uses them updates too.</p>' +
+      '<div class="mm-list">' + sh.lines.map(function (l, i) {
+        var p = mmItem(l.pantryId) || {}, same = mmNum(l.old) === l.price;
+        return '<button type="button" class="mm-row mm-prow" data-mm-pl="' + i + '" aria-pressed="' + l.ok + '"><span class="mm-em">' + esc(p.emoji || mmGuess(p.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(p.name || l.text) + '</span><span class="mm-s">' + esc(l.text) + '</span></span>' +
+          '<span class="mm-r mm-pchg">' + (same ? mm$(l.price) + ' · same' : (mmNum(l.old) == null ? 'No price' : mm$(l.old)) + ' → <b>' + mm$(l.price) + '</b>') + '</span><span class="mm-pck" aria-hidden="true">' + (l.ok ? '✓' : '') + '</span></button>';
+      }).join('') + '</div>' +
+      (sh.total && g ? '<button type="button" class="mm-row mm-prow" data-mm-ptot aria-pressed="' + !!sh.addTotal + '"><span class="mm-em">' + esc(g.icon) + '</span><span class="mm-mid"><span class="mm-n">Also add ' + mm$(sh.total) + ' to ' + esc(g.label) + '</span><span class="mm-s">Skip this if you already added this receipt</span></span><span class="mm-r"></span><span class="mm-pck" aria-hidden="true">' + (sh.addTotal ? '✓' : '') + '</span></button>' : '') +
+      '<button type="button" class="mm-btn gold mm-rsee" data-mm-psave' + (n || sh.addTotal ? '' : ' disabled') + '>' + (n ? 'Update ' + plural(n, 'price') : sh.addTotal ? 'Add the purchase' : 'Check the prices to update') + '</button>';
+  }
+  function mmPricesSave() {
+    var sh = mmSt().sheet, now = new Date().toISOString(), n = 0, g = mmGroceryLine(), td = F.isoDay(today());
+    sh.lines.forEach(function (l) { if (!l.ok) return; var p = mmItem(l.pantryId); if (p) { p.price = l.price; p.updatedAt = now; n++; } });
+    if (sh.addTotal && sh.total && g) {
+      var date = sh.date && sh.date <= td ? sh.date : td;
+      P.spends.push({ id: uid(), date: date, amount: String(round2(sh.total)), key: g.key, note: String(sh.store || 'Groceries').slice(0, 40), src: 'scan' });
+      wkMark('cat'); markLogged([date]);
+    }
+    save(); track('meal-prices-save'); mmSt().snap = null; mmClose(true);
+    mmToast('✓ ' + (n ? plural(n, 'price') + ' updated' : '') + (n && sh.addTotal ? ' · ' : '') + (sh.addTotal ? mm$(sh.total) + ' added' : ''));
+  }
   // full screen, for cooking: pages one under another, tap a page to zoom, and the screen stays on
   var mmWake = null;
   function mmRecipeOpen(m, at) {
@@ -1097,7 +1209,10 @@
   }
   function mmBarHtml() {
     var d = mmSt().draft, c = mmTotals(d.items, d.plates, d.eatingOutCost);
-    var note = c.skipped ? '🧺 ' + plural(c.skipped, 'item') + ' you already have, not counted' + (c.skippedVal ? ' (' + mm$(c.skippedVal) + ')' : '') : '';
+    // not counted: what they already have, and what has no price yet (said separately)
+    var haveN = d.items.filter(function (i) { return i.alreadyHave; }).length, noPrice = c.skipped - haveN;
+    var note = [haveN ? '🧺 ' + plural(haveN, 'item') + ' you already have' + (c.skippedVal ? ' (' + mm$(c.skippedVal) + ')' : '') : '', noPrice > 0 ? plural(noPrice, 'item') + ' without a price yet' : ''].filter(Boolean).join(' · ');
+    if (note) note += ', not counted';
     return '<div class="mm-bar-in">' + (note ? '<div class="mm-note">' + note + '</div>' : '') +
       '<div><div class="k">Meal total</div><div class="v">' + mm$(c.total) + '</div></div><div><div class="k">Per plate</div><div class="v">' + mm$(c.plate) + '</div></div>' +
       (d.kind === 'side' ? '' : '<div><div class="k">Saves</div><div class="v t">' + mm$(c.saves) + '</div></div>') + '<button type="button" class="mm-save" data-mm-save>Save</button></div>';
@@ -1183,7 +1298,7 @@
     var st = mmSt(), sh = st.sheet; if (!sh) return;
     var el = document.getElementById('mmsheet');
     if (!el) { el = document.createElement('div'); el.id = 'mmsheet'; el.className = 'mm-scrim'; el.innerHTML = '<div class="mm-panel" role="dialog" aria-modal="true"></div>'; document.body.appendChild(el); document.body.classList.add('mm-lock'); }
-    el.firstChild.innerHTML = { plan: mmPlanSheet, pick: mmPickSheet, item: mmItemSheet, look: mmLookSheet, share: mmShareSheet }[sh.type]();
+    el.firstChild.innerHTML = { plan: mmPlanSheet, pick: mmPickSheet, item: mmItemSheet, look: mmLookSheet, share: mmShareSheet, prices: mmPricesSheet }[sh.type]();
     if (sh.type === 'item') mmCalcLive();
   }
   function mmSheetHead(t) { return '<div class="mm-grab"></div><div class="mm-shtitle"><b>' + t + '</b><button type="button" class="mm-close" data-mm-close aria-label="Close">✕</button></div>'; }
@@ -1280,12 +1395,12 @@
       save(); track('meal-price'); mmClose(true); mmToast('✓ ' + p.name + ' updated in every meal'); return;
     }
     var item = { name: name, emoji: f.emoji, price: f.price, packageAmount: f.packageAmount, unit: f.unit, amountUsed: f.amountUsed, alreadyHave: !!f.alreadyHave };
-    if (sh.key) { var it = st.draft.items.filter(function (i) { return i.key === sh.key; })[0]; if (it) for (var k in item) it[k] = item[k]; }
+    if (sh.key) { var it = st.draft.items.filter(function (i) { return i.key === sh.key; })[0]; if (it) { for (var k in item) it[k] = item[k]; delete it.check; delete it.note; } }
     else { item.key = uid(); item.pantryItemId = sh.pid; st.draft.items.push(item); }
     mmClose(true);
   }
   function mmStartEdit(id, from, kind) {
-    var st = mmSt(), m = id ? mmMeal(id) : null; st.backTo = from || 'meals';
+    var st = mmSt(), m = id ? mmMeal(id) : null; st.backTo = from || 'meals'; st.snap = null;
     st.draft = m ? { id: m.id, kind: m.kind === 'side' ? 'side' : 'main', name: m.name, emoji: m.emoji, color: m.color, plates: m.plates, eatingOutCost: m.eatingOutCost, photo: m.photo || null, recipePhotos: (m.recipePhotos || []).slice(), recipeUrl: m.recipeUrl || '', items: mmLines(m).map(function (x) { x.key = uid(); return x; }) }
       : { id: null, kind: kind === 'side' ? 'side' : 'main', name: '', emoji: kind === 'side' ? '🥗' : '🍲', color: MM_COLORS[mmMeals().length % MM_COLORS.length][1], plates: 4, eatingOutCost: null, photo: null, recipePhotos: [], recipeUrl: '', items: [] };
     st.view = 'edit'; if (U.screen !== 'meals') go('meals'); else render(); window.scrollTo(0, 0);
@@ -1411,6 +1526,9 @@
     if (a('uses')) { var step = sh.f.unit === 'lb' || sh.f.unit === 'cups' ? 0.5 : 1, v = Math.max(0, mmR2((mmNum(sh.f.amountUsed) || 0) + step * (+a('uses')))); sh.f.amountUsed = v; document.getElementById('mmUses').value = v; mmCalcLive(); return; }
     if (has('have')) { sh.f.alreadyHave = !sh.f.alreadyHave; t.setAttribute('aria-pressed', sh.f.alreadyHave); mmCalcLive(); return; }
     if (has('isave')) { mmSaveItem(); return; }
+    if (a('pl') != null && sh && sh.type === 'prices') { var pl = sh.lines[+a('pl')]; if (pl) pl.ok = !pl.ok; mmSheetDraw(); return; }
+    if (has('ptot') && sh && sh.type === 'prices') { sh.addTotal = !sh.addTotal; mmSheetDraw(); return; }
+    if (has('psave') && sh && sh.type === 'prices') { mmPricesSave(); return; }
     if (has('iremove')) { d.items = d.items.filter(function (i) { return i.key !== sh.key; }); mmClose(true); return; }
   });
   document.addEventListener('click', function (e) { if (e.target.id === 'mmsheet') mmClose(true); });
@@ -1431,6 +1549,7 @@
     if (!e.target.hasAttribute) return;
     if (e.target.hasAttribute('data-mm-photo')) { mmPhoto(e.target.files && e.target.files[0]); e.target.value = ''; }
     if (e.target.hasAttribute('data-mm-rphoto')) { mmRecipePhoto(e.target.files && e.target.files[0]); e.target.value = ''; }
+    if (e.target.hasAttribute('data-mm-snap')) { mmSnap(e.target.getAttribute('data-mm-snap'), e.target); }
   });
   function mmBar() { var b = document.getElementById('mmbar'); if (b) b.innerHTML = mmBarHtml(); }
   document.addEventListener('input', function (e) {

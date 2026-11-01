@@ -1637,3 +1637,17 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .daypick button { min-height: 42px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: var(--card2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
 .daypick button.on { background: var(--hi); color: #1a1408; border-color: var(--hi); }
 .goalaside { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+/* AI for meals: snap a recipe, update prices from a receipt */
+.mm-snapbox { display: grid; gap: 8px; margin: 14px 0 4px; padding: 14px; border-radius: 18px; background: var(--card); }
+.mm-snapbox[role=status] { grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; }
+.mm-snapbox[role=status] small { grid-column: 2; color: var(--muted); font-size: 13px; }
+.mm-snapbox > small { color: var(--muted); font-size: 13px; text-align: center; }
+.mm-snapbtn { display: grid; place-items: center; cursor: pointer; min-height: 50px; }
+.mm-snaperr { margin: 0; font-size: 14px; color: var(--warn); }
+.mm-snapmsg { margin: 0; font-size: 14px; color: var(--green); }
+.mm-snapbox .snapcard { padding: 4px 2px; }
+.mm-s.warn { color: var(--warn); }
+.mm-prow { grid-template-columns: 44px minmax(0, 1fr) auto 24px; }
+.mm-pchg { white-space: nowrap; font-size: 13px; color: var(--muted); } .mm-pchg b { color: var(--green); }
+.mm-pck { width: 22px; height: 22px; border-radius: 50%; background: var(--card2); color: #0f1d19; display: grid; place-items: center; font-weight: 900; font-size: 12px; }
+.mm-prow[aria-pressed="true"] .mm-pck { background: var(--green); }
