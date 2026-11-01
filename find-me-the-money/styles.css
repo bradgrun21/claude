@@ -1572,3 +1572,13 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .catlog-sum { padding: 16px 18px; }
 .catlog-sum b { display: block; font-size: 28px; } .catlog-sum b.over { color: var(--warn); }
 .catlog-sum small { color: var(--muted); font-size: 14px; }
+/* saving fund day; a goal's set-aside switch */
+.daypick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.daypick button { min-height: 42px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: var(--card2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
+.daypick button.on { background: var(--hi); color: #1a1408; border-color: var(--hi); }
+.goalaside { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+/* saving fund day; a goal's set-aside switch */
+.daypick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.daypick button { min-height: 42px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: var(--card2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
+.daypick button.on { background: var(--hi); color: #1a1408; border-color: var(--hi); }
+.goalaside { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }

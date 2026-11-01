@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01a';
+  var APP_VERSION = '11-01b';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -449,13 +449,21 @@
       // interest is optional; a blank rate is estimated at 20%
       debts: P.debts.filter(function (d) { return num(d.bal) > 0 || num(d.orig) > 0; }).map(function (d) { return { id: d.id, name: d.name || 'Debt', bal: num(d.bal), min: num(d.min), apr: String(d.apr).trim() === '' ? 20 : num(d.apr) }; }),
       efMonths: efMonths(), saveRows: saveRows(),
-      goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind || 'dream', months: g.months || 6, per: g.per || 0, byPer: g.by ? goalByPer(g) : 0, saved: num(g.saved) }; })
+      goals: P.goals.map(function (g) { return { id: g.id, name: g.name, amount: g.amount, kind: g.kind || 'dream', months: g.months || 6, per: g.per || 0, byPer: g.by && !g.paused ? goalByPer(g) : 0, saved: num(g.saved) }; }).map(function (g, i) { if (P.goals[i].paused) g.per = 0; return g; })
     };
   }
   // paydays left before a goal's date, and what each one needs to set aside
   function paydaysUntil(iso) {
     var next = F.rollPayday(P.nextPay, P.freq, today()), days = F.FREQS[P.freq].days, gap = F.daysBetween(F.fromIso(next), F.fromIso(iso));
     return gap < 0 ? 0 : Math.floor(gap / days) + 1;
+  }
+  // what a goal sets aside each paycheck, with a switch to stop (nothing comes out of the budget for it then)
+  function goalAside(g) {
+    if (num(g.saved) >= num(g.amount)) return '';
+    var per = g.by ? goalByPer(g) : num(g.per), on = !g.paused && per > 0;
+    if (!g.by && !per) return '';
+    var label = on ? 'Setting aside ' + money(per) + ' a paycheck' + (g.by ? ' until ' + shortDay(g.by) : '') : 'Not setting money aside';
+    return '<span class="tglrow goalaside"><span>' + label + '</span><button type="button" role="switch" class="tgl' + (on ? ' on' : '') + '" aria-checked="' + on + '" aria-label="Set money aside each paycheck for ' + esc(g.name) + '" data-a="goalpause" data-v="' + esc(g.id) + '"></button></span>';
   }
   function goalByPer(g) { var left = Math.max(0, num(g.amount) - num(g.saved)), n = paydaysUntil(g.by); return left ? Math.ceil(left / Math.max(1, n)) : 0; }
   // ---------- household income: Paycheck 1 (P.paycheck) plus any others (P.incomes) ----------
@@ -2289,6 +2297,7 @@
       title = fd.id ? (fd.icon || '\uD83D\uDCB0') + ' ' + esc(fd.name || 'Fund') : 'Add a saving fund';
       body = '<label class="field">Name<input type="text" data-g="name" maxlength="30" value="' + esc(fd.name || '') + '" placeholder="Like Bills or Car insurance"></label>' +
         '<div class="field">Save<div class="seg" role="group">' + [['week', 'Weekly'], ['month', 'Monthly']].map(function (t) { var on = fper === t[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" data-a="fundper" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+        (fper === 'week' ? '<div class="field">Save on<div class="daypick" role="group" aria-label="Day of the week">' + DOW.map(function (d, i) { var on = (fd.day != null ? +fd.day : fundDay({})) === i; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" aria-label="' + d + '" data-a="fundday" data-v="' + i + '">' + d.charAt(0) + '</button>'; }).join('') + '</div></div>' : '') +
         '<label class="field"><span data-live="fundamtlabel">' + (fper === 'week' ? 'Each week' : 'Each month') + '</span><input type="number" inputmode="decimal" min="0" data-g="amount" value="' + esc(fd.amount || '') + '" placeholder="$0"></label>' +
         '<label class="field">In the fund now<input type="number" inputmode="decimal" min="0" data-g="bal" value="' + esc(fd.bal != null ? fd.bal : '') + '" placeholder="$0"></label>' +
         '<div class="field">Color<div class="swatches">' + CAT_COLORS.map(function (x) { var on = (fd.color || (fd.id ? colorFor('u:' + fd.id) : '')) === x; return '<button type="button" class="swatch' + (on ? ' on' : '') + '" style="--c:' + x + '" data-a="fundcolor" data-v="' + x + '" aria-label="Color"></button>'; }).join('') + '</div></div>' +
@@ -2334,7 +2343,10 @@
   // how many weeks start in a month (a weekly category's spending month)
   function weeksIn(y, m) { var n = 0, dim = new Date(y, m + 1, 0).getDate(), w = weekDay0(); for (var d = 1; d <= dim; d++) if (new Date(y, m, d).getDay() === w) n++; return n; }
   function catInMonth(c, y, m) { return c.per === 'week' ? num(c.amount) * weeksIn(y, m) : catMonthly(c); }
-  function fundInMonth(f, y, m) { return f.per === 'week' ? num(f.amount) * weeksIn(y, m) : fundMonthly(f); }
+  function fundInMonth(f, y, m) { return f.per === 'week' ? num(f.amount) * daysIn(fundDay(f), y, m) : fundMonthly(f); }
+  // the day a weekly fund saves on (0 Sunday ... 6 Saturday); payday's weekday until one is picked
+  function fundDay(f) { return f.day >= 0 && f.day <= 6 ? +f.day : F.fromIso(P.nextPay || F.isoDay(today())).getDay(); }
+  function daysIn(wd, y, m) { var n = 0, dim = new Date(y, m + 1, 0).getDate(); for (var d = 1; d <= dim; d++) if (new Date(y, m, d).getDay() === wd) n++; return n; }
   // this month's income (pay x paychecks that land in it) and what's left after everything with a job
   function monthMoney(ym) {
     var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1, n = paydaysIn(P.nextPay, P.freq, y, m), pl = F.plan(profile()), ppm = pl.ppm;
@@ -2410,11 +2422,12 @@
       '</div>' : '';
     var cushion = '<div class="card ccard static"' + (step >= 3 ? ' role="button" data-a="edit" data-v="safety"' : '') + '>' + icoBox('🛟', 'cushion') + '<span class="cmid"><b>' + gname + '</b><span class="cbar"><i style="width:' + Math.min(100, goal ? sv / goal * 100 : 0) + '%;background:var(--green)"></i></span><span class="crow"><span>' + money(sv) + ' saved</span><span>' + money(goal) + '</span></span></span></div>';
     var goals = P.goals.map(function (g) {
-      return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + '</span></span></span></div>'; }).join('');
+      return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + '</span></span>' + goalAside(g) + '</span></div>'; }).join('');
     var ret = retireOn() ? (P.retirements || []).filter(function (a) { return accMonthly(a) > 0; }).map(function (a, i) {
       return '<button type="button" class="ccard" data-a="edit" data-v="retire">' + icoBox('\uD83C\uDF34', 'ret:' + i) + '<span class="cmid"><b>' + esc(accLabel(a)) + '</b><span class="crow"><span>' + money(accMonthly(a)) + ' a month</span><span>' + (a.from === 'post' ? 'from take-home' : 'before payday · not in this budget') + '</span></span></span></button>'; }).join('') : '';
-    var fundHtml = '<div class="bud-sec"><div><b>Saving funds</b></div>' + (funds().length ? '<span>' + money(fundsMonthly()) + '/mo</span>' : '') + '</div>' + funds().map(function (f) {
-      return '<button type="button" class="ccard" data-a="fundopen" data-v="' + f.id + '">' + icoBox(f.icon || '\uD83D\uDCB0', 'u:' + f.id) + '<span class="cmid"><b>' + esc(f.name || 'Fund') + '</b><span class="crow"><span>' + money2(fundBal(f)) + '</span><span>+' + money2(num(f.amount)) + (f.per === 'week' ? '/wk' : '/mo') + '</span></span></span></button>'; }).join('') +
+    var fym = curSpendMonth().split('-'), fy = +fym[0], fm = +fym[1] - 1, fThis = funds().reduce(function (t, f) { return t + fundInMonth(f, fy, fm); }, 0);
+    var fundHtml = '<div class="bud-sec"><div><b>Saving funds</b></div>' + (funds().length ? '<span>' + money(fThis) + ' in ' + new Date(fy, fm, 1).toLocaleDateString('en-US', { month: 'short' }) + '</span>' : '') + '</div>' + funds().map(function (f) {
+      return '<button type="button" class="ccard" data-a="fundopen" data-v="' + f.id + '">' + icoBox(f.icon || '\uD83D\uDCB0', 'u:' + f.id) + '<span class="cmid"><b>' + esc(f.name || 'Fund') + '</b><span class="crow"><span>' + money2(fundBal(f)) + '</span><span>+' + money2(num(f.amount)) + (f.per === 'week' ? ' every ' + DOW[fundDay(f)].slice(0, 3) : '/mo') + '</span></span></span></button>'; }).join('') +
       '<button type="button" class="outline" data-a="fundopen" data-v="">+ Add a fund</button>';
     return '<button type="button" class="primary" data-a="sheetopen" data-v="bal">Update balances</button>' + cushion + stepCard + fundHtml + '<div class="bud-sec"><div><b>Goals</b></div></div>' + goals + '<button type="button" class="outline" data-a="goalnew">+ Add a goal</button>' +
       '<div class="bud-sec"><div><b>Retirement</b></div></div>' + ret + '<button type="button" class="outline" data-a="edit" data-v="retire">' + (ret ? 'Edit retirement' : '+ Add retirement') + '</button>';
@@ -3597,10 +3610,12 @@
       case 'recapdone': U.recapCoach = !coachSeen() && !!CONFIG.communityUrl && !Object.keys(P.wk || {}).some(function (k) { return P.wk[k].done; }); wkMark('done'); P.wk[wkStart()].snap = balSnap(); save(); track('recap-done'); U.recapToast = wkFull(wkRec()) ? plural(wkStreak(), 'week') + ' in a row' : 'Recap done'; render(); window.scrollTo(0, 0); break;
       case 'fundopen': (function () {
         var f = v ? funds().filter(function (x) { return x.id === v; })[0] : null;
-        U.form = f ? { id: f.id, name: f.name, amount: f.amount, per: f.per || 'week', bal: round2(fundBal(f)), icon: f.icon, color: f.color } : { name: '', amount: '', per: 'week', bal: '' };
+        U.form = f ? { id: f.id, name: f.name, amount: f.amount, per: f.per || 'week', day: fundDay(f), bal: round2(fundBal(f)), icon: f.icon, color: f.color } : { name: '', amount: '', per: 'week', day: fundDay({}), bal: '' };
         U.formErr = ''; U.sheet = { k: 'fund' }; render();
       })(); break;
-      case 'fundper': U.form.per = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=fundper]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); (function () { var lb = app.querySelector('[data-live=fundamtlabel]'); if (lb) lb.textContent = v === 'week' ? 'Each week' : 'Each month'; })(); break;
+      case 'fundper': U.form.per = v; render(); break;
+      case 'goalpause': P.goals.forEach(function (g) { if (g.id === v) g.paused = !g.paused; }); save(); track('goal-aside-toggle'); render(); break;
+      case 'fundday': U.form.day = +v; render(); break;
       case 'fundcolor': U.form.color = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=fundcolor]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
       case 'fundicon': U.form.icon = v; Array.prototype.forEach.call(app.querySelectorAll('[data-a=fundicon]'), function (x) { x.classList.toggle('on', x.getAttribute('data-v') === v); }); break;
       case 'fundsave': (function () {
@@ -3609,7 +3624,7 @@
         var f = fd.id ? funds().filter(function (x) { return x.id === fd.id; })[0] : null;
         budgetV2(); var was = f ? fundMonthly(f) : null;
         if (!f) { f = { id: uid() }; funds().push(f); track('fund-add'); }
-        f.name = nm; f.amount = String(round2(Math.max(0, num(fd.amount)))); f.per = fd.per || 'week'; f.icon = fd.icon || f.icon || '\uD83D\uDCB0'; if (fd.color) f.color = fd.color;
+        f.name = nm; f.amount = String(round2(Math.max(0, num(fd.amount)))); f.per = fd.per || 'week'; if (f.per === 'week') f.day = fd.day != null ? +fd.day : fundDay({}); f.icon = fd.icon || f.icon || '\uD83D\uDCB0'; if (fd.color) f.color = fd.color;
         f.start = String(round2(Math.max(0, num(fd.bal)) - fundNet(f)));
         if (was != null) shiftRough(fundMonthly(f) - was);
         U.sheet = null; U.form = null; save(); render();
