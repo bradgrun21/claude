@@ -2064,10 +2064,6 @@
       return { key: l.key, label: l.label, icon: l.icon, week: !!wk, left: round2(cap - sp), cap: round2(cap), mLeft: round2(mCap - mSp), mCap: round2(mCap) };
     });
   }
-  // the whole spending budget this month, as the Budget tab's "Left to spend" shows it
-  function chatTotal() {
-    var ls = chatLeft(); return { left: round2(ls.reduce(function (t, x) { return t + x.mLeft; }, 0)), cap: round2(ls.reduce(function (t, x) { return t + x.mCap; }, 0)) };
-  }
   function chatCard(a) {
     var c = { id: uid(), a: a, state: 'open' };
     if (a.type === 'add_purchase') {
@@ -2139,10 +2135,10 @@
     } else if (a.type === 'how_much_left') {
       var cl = chatLeft().filter(function (x) { return x.key === a.category_key; })[0]; btns = false;
       if (cl) {
-        // a short summary: this week (weekly categories), this month, and the whole budget this month
-        var tot = chatTotal(), line = function (name, left, cap) { return '<div class="ccsum-row"><span>' + name + '</span><b class="' + (left < -0.005 ? 'over' : '') + '">' + (left < -0.005 ? money2(-left) + ' over' : money2(left) + ' left') + '</b><small>of ' + money2(cap) + '</small></div>'; };
+        // a short summary: this week (weekly categories) and this month
+        var line = function (name, left, cap) { return '<div class="ccsum-row"><span>' + name + '</span><b class="' + (left < -0.005 ? 'over' : '') + '">' + (left < -0.005 ? money2(-left) + ' over' : money2(left) + ' left') + '</b><small>of ' + money2(cap) + '</small></div>'; };
         row = ccRow(cl.icon, colorFor(cl.key), esc(cl.label), 'What’s left to spend', '', '') +
-          '<div class="ccsum">' + (cl.week ? line('This week', cl.left, cl.cap) : '') + line('This month', cl.mLeft, cl.mCap) + line('Whole budget this month', tot.left, tot.cap) + '</div>';
+          '<div class="ccsum">' + (cl.week ? line('This week', cl.left, cl.cap) : '') + line('This month', cl.mLeft, cl.mCap) + '</div>';
       } else row = '<p class="chatsay">That category isn’t in your budget.</p>';
     }
     return '<div class="chatcard cc' + (done ? ' done' : '') + '">' + row + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') + '</div>' +
