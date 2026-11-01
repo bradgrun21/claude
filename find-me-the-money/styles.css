@@ -1589,6 +1589,26 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .chatmenu .snapleft { margin: 0 0 2px; }
 .chatmenu .snapcard { padding: 8px 10px; }
 .chatdock .chatfoot { font-size: 11px; }
+/* chat look: their words in a dark pill, the app's words as plain text, each purchase as one row with Cancel / Confirm */
+.chatthread .chatyou { background: var(--card2); color: var(--green); border-radius: 22px; padding: 11px 18px; font-size: 16px; }
+.chatthread .chatyou.pics { background: none; padding: 0; }
+.chatsay { justify-self: start; color: var(--ink); font-size: 16px; line-height: 1.45; margin: 2px 2px 0; }
+.chatsay p { margin: 0; } .chatsay .chatbtns { margin-top: 8px; }
+.chatthread .chatcard.cc { justify-self: stretch; margin-right: 0; border-radius: 18px; padding: 12px 14px; display: grid; gap: 10px; }
+.chatthread .chatcard.cc.done { grid-template-columns: none; color: inherit; opacity: .78; }
+.ccrow { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; }
+.ccic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; color: #0f1d19; font-weight: 900; }
+.ccmid { display: grid; min-width: 0; } .ccmid b { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccmid small { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ccpick { color: var(--warn); }
+.ccamt { font-weight: 600; font-size: 16px; }
+.ccedit { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; font-weight: 900; }
+.ccedit.on { background: var(--card2); color: var(--green); }
+.ccdone { width: 26px; height: 26px; border-radius: 50%; background: var(--green); color: #0f1d19; display: grid; place-items: center; font-size: 13px; font-weight: 900; }
+.ccbtns { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; margin-top: -2px; }
+.ccbtns button { min-height: 50px; border: 0; border-radius: 18px; font: inherit; font-size: 17px; font-weight: 600; cursor: pointer; }
+.ccno { background: var(--card2); color: var(--ink); } .ccyes { background: #F4F3EF; color: #141414; }
+.snapreply .snaphead { justify-content: flex-end; }
 /* delete my account and data; the challenge nudge offer */
 .wipebox { gap: 10px; border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px; }
 .wipebox > span { font-size: 14px; color: var(--muted); }

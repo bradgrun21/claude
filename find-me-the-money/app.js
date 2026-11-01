@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01e';
+  var APP_VERSION = '11-01f';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -2096,30 +2096,37 @@
     }, function (er) { st.busy = false; st.reply = er && (er.status === 401 || er.message === 'signed out') ? 'signin' : 'error'; paint(); });
   }
   var CHAT_ITEM = { debt: ['💳', 'No new debt today'], eat: ['🍽️', 'No eating out today'], lesson: ['🎧', 'I did today’s lesson'] };
+  // a day the way people say it: Today, Yesterday, else "Thu, Nov 5"
+  function chDay(iso) { var td = F.isoDay(today()); return !iso || iso === td ? 'Today' : iso === F.isoDay(F.addDays(today(), -1)) ? 'Yesterday' : chDate(iso); }
+  var PENCIL = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 00-3-3l-10 10z"/></svg>';
+  // one row: an icon in a circle, a name with a small line under it, the amount, and an action on the right
+  function ccRow(icon, tint, title, sub, amt, act) {
+    return '<div class="ccrow"><span class="ccic" style="background:' + tint + '" aria-hidden="true">' + icon + '</span><span class="ccmid"><b>' + title + '</b><small>' + sub + '</small></span>' + (amt ? '<b class="ccamt">' + amt + '</b>' : '') + (act || '') + '</div>';
+  }
   function chatCardHtml(c, i) {
-    var a = c.a, td = F.isoDay(today()), line = '', extra = '', btns = true;
+    var a = c.a, extra = '', row = '', btns = true, done = c.state === 'done', mark = '<span class="ccdone" aria-label="Added">✓</span>';
     if (c.state === 'skipped') return '';
     if (a.type === 'add_purchase') {
-      if (c.edit) line = '<div class="chatedit"><label>$<input type="number" inputmode="decimal" step="0.01" data-cc="' + i + '" data-ccf="amount" value="' + esc(a.amount) + '" aria-label="Amount"></label><input type="text" data-cc="' + i + '" data-ccf="merchant" value="' + esc(a.merchant) + '" maxlength="40" aria-label="Store"><input type="date" data-cc="' + i + '" data-ccf="date" value="' + esc(a.date) + '" aria-label="Date"></div>';
-      else line = '🧾 <b>' + esc(a.merchant) + '</b> · ' + money2(a.amount) + ' · ' + chDate(a.date);
-      var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
-      extra = '<select data-cckey="' + i + '" aria-label="Category"' + (c.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) { var m = lines.filter(function (l) { return l.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (l) { return '<option value="' + l.key + '"' + (l.key === c.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : ''; }).join('') + '</select>';
+      var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']], l = lines.filter(function (x) { return x.key === c.key; })[0];
+      row = ccRow(l ? l.icon : '🧾', l ? colorFor(l.key) : 'var(--card2)', esc(a.merchant), (l ? esc(l.short || l.label) : '<span class="ccpick">Pick a category</span>') + ' · ' + chDay(a.date), money2(a.amount),
+        done ? mark : '<button type="button" class="ccedit' + (c.edit ? ' on' : '') + '" data-a="chatedit" data-v="' + i + '" aria-label="' + (c.edit ? 'Done editing' : 'Edit') + '">' + (c.edit ? '✓' : PENCIL) + '</button>');
+      if (!done && c.edit) extra = '<div class="chatedit"><label>$<input type="number" inputmode="decimal" step="0.01" data-cc="' + i + '" data-ccf="amount" value="' + esc(a.amount) + '" aria-label="Amount"></label><input type="text" data-cc="' + i + '" data-ccf="merchant" value="' + esc(a.merchant) + '" maxlength="40" aria-label="Store"><input type="date" data-cc="' + i + '" data-ccf="date" value="' + esc(a.date) + '" aria-label="Date"></div>';
+      if (!done && (c.edit || !c.key)) extra += '<select data-cckey="' + i + '" aria-label="Category"' + (c.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) { var m = lines.filter(function (x) { return x.grp === g[0]; }); return m.length ? '<optgroup label="' + g[1] + '">' + m.map(function (x) { return '<option value="' + x.key + '"' + (x.key === c.key ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</optgroup>' : ''; }).join('') + '</select>';
       // big or old: just checking
-      if (a.amount > 1000 || (a.date && F.daysBetween(F.fromIso(a.date), today()) > 14)) extra += '<p class="chatwarn">Just checking: ' + money2(a.amount) + ' on ' + chDate(a.date) + '?</p>';
-    } else if (a.type === 'no_spend_today') line = '✅ <b>No spend today</b>';
-    else if (a.type === 'check_daily_item') line = CHAT_ITEM[a.item][0] + ' <b>' + CHAT_ITEM[a.item][1] + '</b>';
-    else if (a.type === 'gratitude') line = '🙏 <b>“' + esc(a.text) + '”</b>';
+      if (!done && (a.amount > 1000 || (a.date && F.daysBetween(F.fromIso(a.date), today()) > 14))) extra += '<p class="chatwarn">Just checking: ' + money2(a.amount) + ' on ' + chDate(a.date) + '?</p>';
+    } else if (a.type === 'no_spend_today') row = ccRow('✅', 'var(--green-soft)', 'No spend today', 'Daily checklist · Today', '', done ? mark : '');
+    else if (a.type === 'check_daily_item') row = ccRow(CHAT_ITEM[a.item][0], 'var(--green-soft)', CHAT_ITEM[a.item][1], 'Daily checklist · Today', '', done ? mark : '');
+    else if (a.type === 'gratitude') row = ccRow('🙏', 'var(--green-soft)', '“' + esc(a.text) + '”', 'Grateful for · Today', '', done ? mark : '');
     else if (a.type === 'update_balance') {
       var acct = chatAccounts().filter(function (x) { return x.k === c.acct; })[0];
-      line = '💰 <b>' + (acct ? esc(acct.label) : 'Which account?') + '</b> · ' + money2(a.amount);
-      if (!acct) { extra = '<div class="chatpick">' + chatAccounts().map(function (x) { return '<button type="button" class="chmini" data-a="chatacct" data-v="' + i + '|' + esc(x.k) + '">' + esc(x.label) + '</button>'; }).join('') + '</div>'; }
+      row = ccRow('💰', 'var(--green-soft)', acct ? esc(acct.label) : 'Which account?', 'New balance', money2(a.amount), done ? mark : '');
+      if (!acct && !done) extra = '<div class="chatpick">' + chatAccounts().map(function (x) { return '<button type="button" class="chmini" data-a="chatacct" data-v="' + i + '|' + esc(x.k) + '">' + esc(x.label) + '</button>'; }).join('') + '</div>';
     } else if (a.type === 'how_much_left') {
       var cl = chatLeft().filter(function (x) { return x.key === a.category_key; })[0]; btns = false;
-      line = cl ? cl.icon + ' <b>' + esc(cl.label) + '</b>: ' + (cl.left < 0 ? money2(-cl.left) + ' over this month' : money2(cl.left) + ' left this month') : 'That category isn’t in your budget.';
+      row = cl ? ccRow(cl.icon, colorFor(cl.key), esc(cl.label), cl.left < 0 ? 'Over this month' : 'Left this month', money2(Math.abs(cl.left)), '') : '<p class="chatsay">That category isn’t in your budget.</p>';
     }
-    if (c.state === 'done') return '<div class="chatcard done"><span class="chatok">✓</span><span>' + line + '</span></div>';
-    return '<div class="chatcard"><div>' + line + '</div>' + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') +
-      (btns ? '<div class="chatbtns"><button type="button" class="chmini gold" data-a="chatok" data-v="' + i + '">Confirm</button>' + (a.type === 'add_purchase' ? '<button type="button" class="chmini" data-a="chatedit" data-v="' + i + '">' + (c.edit ? 'Done' : 'Edit') + '</button>' : '') + '<button type="button" class="chmini" data-a="chatskip" data-v="' + i + '">Skip</button></div>' : '') + '</div>';
+    return '<div class="chatcard cc' + (done ? ' done' : '') + '">' + row + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') + '</div>' +
+      (btns && !done ? '<div class="ccbtns"><button type="button" class="ccno" data-a="chatskip" data-v="' + i + '">Cancel</button><button type="button" class="ccyes" data-a="chatok" data-v="' + i + '">Confirm</button></div>' : '');
   }
   // what came back for one chat message: Brad's reply, and a card per action
   function chatReplyHtml(st, j) {
@@ -2127,17 +2134,19 @@
     return (st.busy ? '<div class="chatcard"><span class="spin" aria-hidden="true"></span> Reading…</div>' : '') +
       (st.reply === 'care' ? '<div class="chatcard care"><p>' + esc(say) + '</p><div class="chatbtns"><a class="chmini gold" href="tel:988">Call 988</a><a class="chmini" href="sms:988">Text 988</a>' +
           (CONFIG.supportEmail ? '<a class="chmini" href="mailto:' + esc(CONFIG.supportEmail) + '">Message Brad</a>' : CONFIG.communityUrl ? '<a class="chmini" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener">Message Brad</a>' : '') + '</div></div>'
-        : say ? '<div class="chatcard reply"><p>' + esc(say) + '</p>' + (st.reply === 'advice' ? '<div class="chatbtns">' + (CONFIG.communityUrl ? '<a class="chmini gold" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Free community</a>' : '') + (CONFIG.coachingUrl ? '<a class="chmini" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Coaching</a>' : '') + '</div>' : '') + '</div>' : '') +
+        : say ? '<div class="chatsay"><p>' + esc(say) + '</p>' + (st.reply === 'advice' ? '<div class="chatbtns">' + (CONFIG.communityUrl ? '<a class="chmini gold" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Free community</a>' : '') + (CONFIG.coachingUrl ? '<a class="chmini" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Coaching</a>' : '') + '</div>' : '') + '</div>' : '') +
+      (function () { var n = st.cards.filter(function (c) { return c.state === 'open'; }).length; return n ? '<p class="chatsay">Got it. Take a quick look and tap Confirm to add ' + (n > 1 ? 'them' : 'it') + ' 👇</p>' : ''; })() +
       st.cards.map(function (c, i) { return chatCardHtml(c, j + '.' + i); }).join('') +
-      (st.cards.length && !st.busy ? (st.report === 'open' ? '<div class="chatcard"><p>Send this to Brad? He’ll see your message and what came back.</p><div class="chatbtns"><button type="button" class="chmini gold" data-a="chatreport" data-v="send:' + j + '">Send</button><button type="button" class="chmini" data-a="chatreport" data-v="no:' + j + '">Cancel</button></div></div>'
+      (st.cards.length && st.cards.every(function (c) { return c.state === 'skipped'; }) ? '<small class="chatnote">Canceled. Nothing was added.</small>' :
+       st.cards.length && !st.busy ? (st.report === 'open' ? '<div class="chatcard"><p>Send this to Brad? He’ll see your message and what came back.</p><div class="chatbtns"><button type="button" class="chmini gold" data-a="chatreport" data-v="send:' + j + '">Send</button><button type="button" class="chmini" data-a="chatreport" data-v="no:' + j + '">Cancel</button></div></div>'
         : st.report === 'sent' ? '<small class="chatnote">Sent. Thanks.</small>' : '<button type="button" class="linkbtn chatwrong" data-a="chatreport" data-v="open:' + j + '">Something look wrong?</button>') : '');
   }
   // what came back from a photo: the rows to check, then Save
   function snapReplyHtml(m, j) {
     if (m.reading) return '<div class="chatcard scread" role="status"><span class="spin" aria-hidden="true"></span><b>Reading ' + (m.total > 1 ? 'photo ' + m.reading + ' of ' + m.total : 'your photo') + '…</b><small>A few seconds each.</small></div>';
-    if (m.saved) return '<div class="chatcard done"><span class="chatok">✓</span><span>' + plural(m.saved.n, 'purchase') + ' saved · ' + money2(m.saved.total) + '</span></div>';
+    if (m.saved) return '<div class="chatcard cc done">' + ccRow('✓', 'var(--green)', plural(m.saved.n, 'purchase') + ' saved', 'From your photo · ' + chDay(F.isoDay(today())), money2(m.saved.total), '') + '</div>';
     var block = m.blocked ? snapBlock() : '';
-    if (!m.rows.length) return block ? '<div class="chatcard">' + block + '</div>' : m.err ? '<div class="chatcard reply"><p>' + esc(m.err) + '</p></div>' : '';
+    if (!m.rows.length) return block ? '<div class="chatcard">' + block + '</div>' : m.err ? '<div class="chatsay"><p>' + esc(m.err) + '</p></div>' : '';
     var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
     var select = function (r, k) {
       return '<select data-scan-key="' + k + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
@@ -2150,8 +2159,8 @@
       return '<div class="scrow' + (r.ok ? ' on' : '') + (r.low ? ' low' : '') + (r.skip && !r.ok ? ' skip' : '') + '"><label class="scchk"><input type="checkbox" data-scan-ok="' + j + '.' + i + '"' + (r.ok ? ' checked' : '') + ' aria-label="Keep ' + esc(r.merchant) + ' ' + money2(r.amount) + '"></label>' +
         '<div class="scmid"><div class="sctop"><b>' + esc(r.merchant) + '</b><b class="scamt">' + money2(r.amount) + '</b></div><small>' + sub.join(' · ') + '</small>' + select(r, j + '.' + i) + '</div></div>';
     }).join('');
-    return '<div class="chatcard snapreply"><div class="snaphead"><b>' + plural(m.rows.length, 'purchase') + ' found</b>' + (open ? '<button type="button" class="linkbtn" data-a="scanall" data-v="' + j + '">Check all</button>' : '') + '</div>' +
-      '<small class="snaphelp">Check the right ones and pick a category. Unchecked ones are skipped. AI can misread, so look before you save.</small>' +
+    return '<p class="chatsay">Found ' + plural(m.rows.length, 'purchase') + '. Check the right ones, pick a category, then tap Save 👇 AI can misread, so take a quick look.</p>' +
+      '<div class="chatcard snapreply">' + (open ? '<div class="snaphead"><button type="button" class="linkbtn" data-a="scanall" data-v="' + j + '">Check all</button></div>' : '') +
       '<div class="scl">' + rows + '</div>' + (m.err ? '<p role="alert" class="scerr">' + esc(m.err) + '</p>' : '') + block +
       '<button type="button" class="primary" data-a="scansave" data-v="' + j + '"' + (n ? '' : ' disabled') + '>' + (n ? 'Save ' + plural(n, 'purchase') + ' · ' + money2(total) : 'Check the purchases to save') + '</button></div>';
   }
@@ -3117,13 +3126,13 @@
       var sc = U.scan; if (!sc || !sc.msgs) { U.scan = sc = newScan(sc && sc.week); U.scanBack = U.scanBack || U.wizReturn || 'journey'; }
       aiStatus();
       var w = payWeeks().filter(function (x) { return x.start === sc.week; })[0] || weekNow();
-      var hello = '<div class="chatcard reply"><p>Tell me what you spent, like “HEB 84.20 groceries.” Or tap <b>+</b> to snap a receipt or a screenshot of your bank app.</p></div>';
+      var hello = '<div class="chatsay"><p>Tell me what you spent, like “HEB 84.20 groceries.” Or tap <b>+</b> to snap a receipt or a screenshot of your bank app.</p></div>';
       var thread = sc.msgs.map(function (m, j) {
         if (m.t === 'you') return '<div class="chatyou">' + esc(FMTMAI.maskDigits(m.text)) + '</div>';
         if (m.t === 'pics') return '<div class="chatyou pics">' + m.urls.map(function (u) { return '<img src="' + esc(u) + '" alt="' + (m.kind === 'bank' ? 'Your bank screenshot' : 'Your receipt') + '">'; }).join('') + '</div>';
         if (m.t === 'chat') return chatReplyHtml(m.st, j);
         if (m.t === 'snap') return snapReplyHtml(m, j);
-        if (m.t === 'note') return '<div class="chatcard done"><span class="chatok">✓</span><span>' + esc(m.text) + '</span></div>';
+        if (m.t === 'note') return '<div class="chatcard cc done">' + ccRow('✓', 'var(--green)', esc(m.text), 'Added by hand · ' + chDay(F.isoDay(today())), '', '') + '</div>';
         return '';
       }).join('');
       return back(U.scanBack || 'journey') + '<div class="stack" style="gap:2px"><div class="eyebrow">' + (w.now ? 'This week' : 'Week of') + ' · ' + weekLabel(w) + '</div><h2>Add purchases</h2></div>' +
