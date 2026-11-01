@@ -60,6 +60,7 @@ alter table public.people add column if not exists alt_email text;
 -- lim null = no monthly limit (paid). per_minute caps bursts. Returns { allowed, used, remaining, reason }.
 create or replace function public.use_ai(owner uuid, kind text, lim int, mon text, per_minute int)
 returns json language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 declare used int; burst int;
 begin
   insert into ai_minute (owner_id, kind, minute, n) values (owner, kind, date_trunc('minute', now()), 1)
@@ -92,6 +93,7 @@ $$;
 -- add what one call cost, to the household and to the app's month; returns the app's month total
 create or replace function public.add_ai_cost(owner uuid, mon text, spend_mon text, cost numeric)
 returns numeric language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 declare total numeric;
 begin
   update ai_usage set cost_usd = cost_usd + cost where owner_id = owner and month = mon;
@@ -103,6 +105,7 @@ end $$;
 -- one rejected AI output (counts only, never the text); 10 in a day pauses that account's AI for 24 hours
 create or replace function public.ai_reject(owner uuid)
 returns int language plpgsql security definer set search_path = public as $$
+#variable_conflict use_column
 declare n int;
 begin
   insert into ai_flags (owner_id, day, rejects) values (owner, current_date, 1)
@@ -111,8 +114,12 @@ begin
   return n;
 end $$;
 
--- only the server calls these
+-- only the server (service role) calls these
 revoke all on function public.use_ai(uuid, text, int, text, int) from public, anon, authenticated;
 revoke all on function public.refund_ai(uuid, text, text) from public, anon, authenticated;
 revoke all on function public.add_ai_cost(uuid, text, text, numeric) from public, anon, authenticated;
 revoke all on function public.ai_reject(uuid) from public, anon, authenticated;
+grant execute on function public.use_ai(uuid, text, int, text, int) to service_role;
+grant execute on function public.refund_ai(uuid, text, text) to service_role;
+grant execute on function public.add_ai_cost(uuid, text, text, numeric) to service_role;
+grant execute on function public.ai_reject(uuid) to service_role;
