@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01g';
+  var APP_VERSION = '11-01h';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -2059,9 +2059,14 @@
     return spendLines().filter(function (l) { return l.grp === 'spend'; }).map(function (l) {
       var wk = l.per === 'week' ? weekOf(now) : null;
       var sp = wk ? linePurchases(l.key, wk[0], wk[1]).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
-      var cap = wk ? l.amt : (l.per === 'week' ? l.amt * weeksIn(now.getFullYear(), now.getMonth()) : l.mon) * share;
-      return { key: l.key, label: l.label, icon: l.icon, week: !!wk, left: round2(cap - sp) };
+      var mCap = (l.per === 'week' ? l.amt * weeksIn(now.getFullYear(), now.getMonth()) : l.mon) * share, mSp = m[l.key] || 0;
+      var cap = wk ? l.amt : mCap;
+      return { key: l.key, label: l.label, icon: l.icon, week: !!wk, left: round2(cap - sp), cap: round2(cap), mLeft: round2(mCap - mSp), mCap: round2(mCap) };
     });
+  }
+  // the whole spending budget this month, as the Budget tab's "Left to spend" shows it
+  function chatTotal() {
+    var ls = chatLeft(); return { left: round2(ls.reduce(function (t, x) { return t + x.mLeft; }, 0)), cap: round2(ls.reduce(function (t, x) { return t + x.mCap; }, 0)) };
   }
   function chatCard(a) {
     var c = { id: uid(), a: a, state: 'open' };
@@ -2133,7 +2138,12 @@
       if (!acct && !done) extra = '<div class="chatpick">' + chatAccounts().map(function (x) { return '<button type="button" class="chmini" data-a="chatacct" data-v="' + i + '|' + esc(x.k) + '">' + esc(x.label) + '</button>'; }).join('') + '</div>';
     } else if (a.type === 'how_much_left') {
       var cl = chatLeft().filter(function (x) { return x.key === a.category_key; })[0]; btns = false;
-      row = cl ? ccRow(cl.icon, colorFor(cl.key), esc(cl.label), (cl.left < 0 ? 'Over this ' : 'Left this ') + (cl.week ? 'week' : 'month'), money2(Math.abs(cl.left)), '') : '<p class="chatsay">That category isn’t in your budget.</p>';
+      if (cl) {
+        // a short summary: this week (weekly categories), this month, and the whole budget this month
+        var tot = chatTotal(), line = function (name, left, cap) { return '<div class="ccsum-row"><span>' + name + '</span><b class="' + (left < -0.005 ? 'over' : '') + '">' + (left < -0.005 ? money2(-left) + ' over' : money2(left) + ' left') + '</b><small>of ' + money2(cap) + '</small></div>'; };
+        row = ccRow(cl.icon, colorFor(cl.key), esc(cl.label), 'What’s left to spend', '', '') +
+          '<div class="ccsum">' + (cl.week ? line('This week', cl.left, cl.cap) : '') + line('This month', cl.mLeft, cl.mCap) + line('Whole budget this month', tot.left, tot.cap) + '</div>';
+      } else row = '<p class="chatsay">That category isn’t in your budget.</p>';
     }
     return '<div class="chatcard cc' + (done ? ' done' : '') + '">' + row + extra + (c.err ? '<p class="chatwarn">' + esc(c.err) + '</p>' : '') + '</div>' +
       (btns && !done ? '<div class="ccbtns"><button type="button" class="ccno" data-a="chatskip" data-v="' + i + '">Cancel</button><button type="button" class="ccyes" data-a="chatok" data-v="' + i + '">Confirm</button></div>' : '');

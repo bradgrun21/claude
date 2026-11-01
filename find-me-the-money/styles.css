@@ -1601,6 +1601,11 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .ccmid { display: grid; min-width: 0; } .ccmid b { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ccmid small { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ccpick { color: var(--warn); }
+.ccsum { display: grid; border-top: 1px solid var(--line); }
+.ccsum-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; padding: 10px 0 8px; border-bottom: 1px solid var(--line); }
+.ccsum-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.ccsum-row span { color: var(--muted); font-size: 15px; } .ccsum-row b { font-size: 16px; font-weight: 600; text-align: right; } .ccsum-row b.over { color: var(--warn); }
+.ccsum-row small { grid-column: 2; text-align: right; color: var(--faint); font-size: 13px; margin-top: -2px; }
 .ccamt { font-weight: 600; font-size: 16px; }
 .ccedit { width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; font-weight: 900; }
 .ccedit.on { background: var(--card2); color: var(--green); }
