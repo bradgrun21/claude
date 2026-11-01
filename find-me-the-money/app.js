@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01b';
+  var APP_VERSION = '11-01c';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -1990,6 +1990,8 @@
           }, function (er) {
             failed++;
             if (er && er.status === 413) sc.err = 'That photo is too big. Try a screenshot of it instead.';
+            else if (er && er.status === 502) sc.err = 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute, or type them in.';
+            else if (er && er.status >= 500) sc.err = 'Something went wrong on our side. Your snap wasn’t counted. Try again, or type them in.';
             else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; sc.err = 'Sign in to use snaps.'; }
           });
         });
