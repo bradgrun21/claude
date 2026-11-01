@@ -225,7 +225,7 @@ function imagesFrom(body: { images?: unknown; image?: unknown }, max: number): s
 // the person's pantry: ids and names only (no prices go to the AI)
 const cleanPantry = (list: unknown) => (Array.isArray(list) ? list : []).slice(0, 300)
   .filter((p) => p && /^[A-Za-z0-9_-]{1,40}$/.test(String(p.id)))
-  .map((p) => ({ id: String(p.id), name: cleanText(p.name) || 'Item', unit: ['servings', 'lb', 'oz', 'count', 'cups'].includes(p.unit) ? p.unit : 'servings' }));
+  .map((p) => ({ id: String(p.id), name: cleanText(p.name) || 'Item', unit: ['servings', 'lb', 'oz', 'count', 'cups', 'tbsp', 'tsp'].includes(p.unit) ? p.unit : 'servings' }));
 const imageBlocks = (images: string[]) => images.map((data) => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } }));
 
 const RECIPE_TOOL = {

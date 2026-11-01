@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01i';
+  var APP_VERSION = '11-01j';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -817,7 +817,7 @@
   //   P.meals: { id, name, emoji, color, plates, eatingOutCost|null, photo, items: [{ pantryItemId, amountUsed, alreadyHave }], createdAt }
   //   P.planEntries: { id, date, slot: breakfast|lunch|dinner, type: meal|leftovers|eatOut, mealId, budget, createdAt }
   // No suggestion buttons in this feature: it shows what was saved, never what to do with it.
-  var MM_UNITS = ['servings', 'lb', 'oz', 'count', 'cups'];
+  var MM_UNITS = ['servings', 'lb', 'oz', 'count', 'cups', 'tbsp', 'tsp'];
   var MM_COLORS = [['Mint', '#7ED9C0'], ['Sunset', '#FF9F6E'], ['Gold', '#FFC97E'], ['Coral', '#FF8C8C'], ['Berry', '#E58BC8'], ['Lavender', '#B39DFF'], ['Sky', '#7EB6FF'], ['Lime', '#B8E07E']];
   var MM_MEAL_EMO = '🍛 🌮 🍝 🥞 🍲 🥗 🍕 🍔 🌯 🥪 🍜 🍳 🍗 🥩 🐟 🍤 🥘 🍱 🥙 🫔 🍚 🥣 🧆 🍽️'.split(' ');
   var MM_ING_EMO = '🍚 🍗 🥩 🥓 🐟 🍤 🥚 🧀 🥛 🧈 🍞 🌮 🍝 🥞 🥦 🥬 🍅 🧅 🧄 🥔 🥕 🌽 🫑 🌶️ 🥑 🍄 🥒 🫘 🍋 🍎 🍌 🍓 🥫 🍯 🧂 🛒'.split(' ');
@@ -837,7 +837,7 @@
   function mmItem(id) { return mmPantry().filter(function (p) { return p.id === id; })[0]; }
   function mmMeal(id) { return mmMeals().filter(function (m) { return m.id === id; })[0]; }
   function mmTile(m) { return m.photo ? '<img src="' + m.photo + '" alt="">' : esc(m.emoji || '🍽️'); }
-  function mmUnitOne(u) { return { servings: 'serving', lb: 'lb', oz: 'oz', count: 'item', cups: 'cup' }[u] || u; }
+  function mmUnitOne(u) { return { servings: 'serving', lb: 'lb', oz: 'oz', count: 'item', cups: 'cup', tbsp: 'tbsp', tsp: 'tsp' }[u] || u; }
   function mmPkgText(p) { return mm$(p.price) + ' for ' + (+p.packageAmount) + (p.unit === 'count' ? '' : ' ' + p.unit); }
   // Brad's formula: store price / amount in the package x amount the recipe uses, to the cent
   function mmLine(price, pkg, uses, have) {
@@ -1044,7 +1044,7 @@
     return '<div class="mm-snapbox">' + (block ? block : '<label class="mm-btn gold mm-snapbtn">' + (kind === 'recipe' ? '📸 Snap a recipe' : '📸 Update prices from a receipt') + '<input type="file" accept="image/*" multiple data-mm-snap="' + kind + '" class="sr"></label><small>' + sub + count + '</small>') +
       (sn.kind === kind && sn.err ? '<p class="mm-snaperr" role="alert">' + esc(sn.err) + '</p>' : '') + (sn.kind === kind && sn.msg ? '<p class="mm-snapmsg">' + esc(sn.msg) + '</p>' : '') + '</div>';
   }
-  // 2 cups vs a pantry item counted in lb can't be converted; tbsp and tsp become cups, lb and oz convert
+  // 2 cups vs a pantry item counted in lb can't be converted; cups, tbsp and tsp convert to each other, and lb and oz
   function mmConvert(n, from, to) {
     if (n == null) return null; if (from === to) return n;
     var cup = { cups: 1, tbsp: 1 / 16, tsp: 1 / 48 }, oz = { oz: 1, lb: 16 };
@@ -1052,7 +1052,7 @@
     if (oz[from] && oz[to]) return Math.round(n * oz[from] / oz[to] * 1000) / 1000;
     return null;
   }
-  function mmAmtText(n, u) { return n == null ? 'no amount' : (+n) + ' ' + (u === 'count' ? '' : u); }
+  function mmAmtText(n, u) { return n == null ? 'no amount' : (+n) + (u === 'count' ? '' : ' ' + (+n <= 1 ? mmUnitOne(u) : u)); }
   function mmSnapErr(er) {
     return er && er.status === 413 ? 'That photo is too big. Try a screenshot of it instead.' : er && er.status === 502 ? 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute.'
       : er && (er.status === 401 || er.message === 'signed out') ? 'Sign in to use snaps.' : 'Something went wrong on our side. Your snap wasn’t counted. Try again.';
@@ -1097,7 +1097,7 @@
     ings.forEach(function (g) {
       var p = g.pantryId ? mmItem(g.pantryId) : null, name = p ? p.name : g.name;
       if (have[name.toLowerCase()]) return; have[name.toLowerCase()] = 1;
-      var unitNew = g.unit === 'tbsp' || g.unit === 'tsp' ? 'cups' : g.unit === 'other' ? 'servings' : g.unit;
+      var unitNew = g.unit === 'other' ? 'servings' : g.unit;
       var it = { key: uid(), name: name, emoji: p ? p.emoji || mmGuess(p.name) : mmGuess(g.name), alreadyHave: false };
       if (p) {
         var amt = mmConvert(g.amount, g.unit, p.unit || 'servings');
@@ -1523,7 +1523,7 @@
     if (has('emotoggle')) { var g = document.getElementById('mmEmoGrid'); g.hidden = !g.hidden; return; }
     if (a('ie')) { sh.f.emoji = a('ie'); sh.picked = true; document.querySelector('[data-mm-emotoggle]').textContent = a('ie'); Array.prototype.forEach.call(document.querySelectorAll('[data-mm-ie]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mm-ie') === a('ie')); }); document.getElementById('mmEmoGrid').hidden = true; return; }
     if (a('unit')) { sh.f.unit = a('unit'); Array.prototype.forEach.call(document.querySelectorAll('[data-mm-unit]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-mm-unit') === a('unit')); }); var u = document.getElementById('mmUnit'); if (u) u.textContent = a('unit'); mmCalcLive(); return; }
-    if (a('uses')) { var step = sh.f.unit === 'lb' || sh.f.unit === 'cups' ? 0.5 : 1, v = Math.max(0, mmR2((mmNum(sh.f.amountUsed) || 0) + step * (+a('uses')))); sh.f.amountUsed = v; document.getElementById('mmUses').value = v; mmCalcLive(); return; }
+    if (a('uses')) { var step = sh.f.unit === 'cups' || sh.f.unit === 'tbsp' || sh.f.unit === 'tsp' ? 0.25 : sh.f.unit === 'lb' ? 0.5 : 1, v = Math.max(0, mmR2((mmNum(sh.f.amountUsed) || 0) + step * (+a('uses')))); sh.f.amountUsed = v; document.getElementById('mmUses').value = v; mmCalcLive(); return; }
     if (has('have')) { sh.f.alreadyHave = !sh.f.alreadyHave; t.setAttribute('aria-pressed', sh.f.alreadyHave); mmCalcLive(); return; }
     if (has('isave')) { mmSaveItem(); return; }
     if (a('pl') != null && sh && sh.type === 'prices') { var pl = sh.lines[+a('pl')]; if (pl) pl.ok = !pl.ok; mmSheetDraw(); return; }
