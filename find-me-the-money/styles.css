@@ -1566,3 +1566,9 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .chrem { display: grid; gap: 10px; padding: 14px 16px; margin-top: 12px; }
 .chrem .chbtns { display: flex; gap: 8px; }
 .wf-priv { display: block; text-align: center; margin-top: 6px; font-size: 13px; color: var(--faint); text-decoration: none; }
+/* a spending category's purchases */
+.catlog-head { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.catlog-head h2 { margin: 0; }
+.catlog-sum { padding: 16px 18px; }
+.catlog-sum b { display: block; font-size: 28px; } .catlog-sum b.over { color: var(--warn); }
+.catlog-sum small { color: var(--muted); font-size: 14px; }

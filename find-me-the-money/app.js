@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '10-31g';
+  var APP_VERSION = '11-01a';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -549,7 +549,7 @@
   var app = document.getElementById('app');
   // Challenges and Milestones share the Wins tab, so the bar stays at five
   var TABS = [['home', 'Home', 'home'], ['plan', 'Budget', 'wallet'], ['plus', 'Add', 'plus'], ['journey', 'Challenge', 'flag'], ['meals', 'Meals', 'menu']];
-  function tabOf(screen) { return screen === 'chlesson' || screen === 'chjournal' || screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
+  function tabOf(screen) { if (screen === 'catlog' || screen === 'spendlog') return 'plan'; return screen === 'chlesson' || screen === 'chjournal' || screen === 'challenges' || screen === 'milestones' || screen === 'community' || screen === 'plans' || screen === 'lesson' || screen === 'quiz' ? 'journey' : screen; }
   function render() {
     autoColorMap = null; ensureIds();
     chCheck();
@@ -2382,10 +2382,10 @@
       (bf.from > 1 ? '<small class="bud-from">Counting from ' + F.fromIso(ym + '-' + String(bf.from).padStart(2, '0')).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + (bf.started ? ', when you started' : ', your first purchase') + '</small>' : '') + '</div>';
     var cards = lines.map(function (l) {
       var wk = l.per === 'week' && isNow ? weekOf(now) : null;
-      var sp = wk ? (P.spends || []).filter(function (x) { return x.key === l.key && x.date >= wk[0] && x.date <= wk[1]; }).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
+      var sp = wk ? linePurchases(l.key, wk[0], wk[1]).reduce(function (t, x) { return t + num(x.amount); }, 0) : m[l.key] || 0;
       var cap = wk ? l.amt : monOf(l), lf = cap - sp, pct = cap ? Math.round(sp / cap * 100) : (sp ? 100 : 0);
       var card = '<button type="button" class="ccard" data-a="catopen" data-v="' + l.key + '">' + icoBox(l.icon, l.key) + '<span class="cmid"><b>' + esc(l.label) + (l.type ? ' <span class="ttag t-' + l.type + '">' + TYPES.filter(function (t) { return t[0] === l.type; })[0][1] + '</span>' : '') + '</b><span class="cbar' + (lf < -0.5 ? ' over' : '') + '"><i style="width:' + Math.min(100, pct) + '%;background:' + colorFor(l.key) + '"></i></span>' +
-        '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + (wk ? ' this week' : '') + '</span><span>' + money2(cap) + (l.per === 'week' ? '/wk' : '') + '</span></span>' + '</span></button>';
+        '<span class="crow"><span>' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + (wk ? ' this week' + (wk[0].slice(0, 7) !== ym ? ' (since ' + shortDay(wk[0]) + ')' : '') : '') + '</span><span>' + money2(cap) + (l.per === 'week' ? '/wk' : '') + '</span></span>' + '</span></button>';
       return card;
     }).join('');
     var have = {}; lines.forEach(function (l) { have[l.label.toLowerCase()] = 1; });
@@ -2412,7 +2412,7 @@
     var goals = P.goals.map(function (g) {
       return '<div class="card ccard static">' + icoBox('🎯', 'g:' + g.id) + '<span class="cmid"><b>' + esc(g.name) + '</b><span class="cbar"><i style="width:' + Math.min(100, num(g.amount) ? num(g.saved) / num(g.amount) * 100 : 0) + '%;background:' + colorFor('g:' + g.id) + '"></i></span><span class="crow"><span>' + money(num(g.saved)) + ' saved</span><span>' + money(num(g.amount)) + '</span></span></span></div>'; }).join('');
     var ret = retireOn() ? (P.retirements || []).filter(function (a) { return accMonthly(a) > 0; }).map(function (a, i) {
-      return '<button type="button" class="ccard" data-a="edit" data-v="retire">' + icoBox('\uD83C\uDF34', 'ret:' + i) + '<span class="cmid"><b>' + esc(accLabel(a)) + '</b><span class="crow"><span>' + money(accMonthly(a)) + ' a month</span><span>' + (a.from === 'post' ? 'from take-home' : 'before payday') + '</span></span></span></button>'; }).join('') : '';
+      return '<button type="button" class="ccard" data-a="edit" data-v="retire">' + icoBox('\uD83C\uDF34', 'ret:' + i) + '<span class="cmid"><b>' + esc(accLabel(a)) + '</b><span class="crow"><span>' + money(accMonthly(a)) + ' a month</span><span>' + (a.from === 'post' ? 'from take-home' : 'before payday · not in this budget') + '</span></span></span></button>'; }).join('') : '';
     var fundHtml = '<div class="bud-sec"><div><b>Saving funds</b></div>' + (funds().length ? '<span>' + money(fundsMonthly()) + '/mo</span>' : '') + '</div>' + funds().map(function (f) {
       return '<button type="button" class="ccard" data-a="fundopen" data-v="' + f.id + '">' + icoBox(f.icon || '\uD83D\uDCB0', 'u:' + f.id) + '<span class="cmid"><b>' + esc(f.name || 'Fund') + '</b><span class="crow"><span>' + money2(fundBal(f)) + '</span><span>+' + money2(num(f.amount)) + (f.per === 'week' ? '/wk' : '/mo') + '</span></span></span></button>'; }).join('') +
       '<button type="button" class="outline" data-a="fundopen" data-v="">+ Add a fund</button>';
@@ -2438,6 +2438,7 @@
       }).join('') +
       '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>' + homeRow();
   }
+  function shortDay(iso) { return F.fromIso(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
   function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
   // purchases added by hand, plus imported purchases from stores placed in a budget line
@@ -2446,6 +2447,12 @@
     P.spends.forEach(function (x) { if (monthOf(x.date) === month) m[x.key] = (m[x.key] || 0) + num(x.amount); });
     P.tx.forEach(function (x) { var k = sl[x.merchant]; if (k && monthOf(x.date) === month) m[k] = (m[k] || 0) + num(x.amount); });
     return m;
+  }
+  function linePurchases(key, from, to) {
+    var sl = P.storeLine || {};
+    return P.spends.filter(function (x) { return x.key === key && x.date >= from && x.date <= to; })
+      .concat(P.tx.filter(function (x) { return sl[x.merchant] === key && x.date >= from && x.date <= to; }).map(function (x) { return { date: x.date, amount: x.amount, key: key, note: x.merchant, imported: true }; }))
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
   }
   function spendTotals() {
     var m = spentMap(), lines = spendLines(), spent = 0, bud = 0;
@@ -3073,6 +3080,27 @@
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button><button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button></div>';
     },
+    // one spending category's purchases: this week for a weekly one (or the whole month), the month for the rest
+    catlog: function () {
+      var key = U.catKey, l = spendLines().filter(function (x) { return x.key === key; })[0];
+      if (!l) { U.screen = 'plan'; return V.plan(); }
+      var ym = curSpendMonth(), y = +ym.slice(0, 4), mo = +ym.slice(5, 7) - 1, isNow = ym === monthOf(F.isoDay(today()));
+      var wk = l.per === 'week' && isNow && !U.catAll ? weekOf(today()) : null;
+      var from = wk ? wk[0] : ym + '-01', to = wk ? wk[1] : F.isoDay(new Date(y, mo + 1, 0));
+      var list = linePurchases(key, from, to), spent = list.reduce(function (t, x) { return t + num(x.amount); }, 0);
+      var cap = wk ? l.amt : (l.per === 'week' ? l.amt * weeksIn(y, mo) : l.mon) * budFrom(ym).share, lf = cap - spent;
+      var days = {}; list.forEach(function (x) { (days[x.date] = days[x.date] || []).push(x); });
+      var period = wk ? 'This week · ' + weekLabel({ start: wk[0], end: wk[1] }) : monthName(ym);
+      return back('plan') + '<div class="catlog-head">' + icoBox(l.icon, l.key) + '<div><div class="eyebrow">' + esc(period) + '</div><h2>' + esc(l.label) + '</h2></div></div>' +
+        (l.per === 'week' && isNow ? '<div class="seg" role="group" aria-label="Show">' + [['0', 'This week'], ['1', monthName(ym)]].map(function (o) { var on = (U.catAll ? '1' : '0') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="catall" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' : '') +
+        '<div class="card catlog-sum"><div><b class="' + (lf < -0.5 ? 'over' : '') + '">' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + '</b><small>' + money2(spent) + ' spent of ' + money2(cap) + '</small></div></div>' +
+        '<div class="grid2"><button type="button" class="primary" data-a="spendnew" data-v="' + esc(key) + '">+ Add spending</button><button type="button" class="outline" data-a="catedit" data-v="' + esc(key) + '">Edit category</button></div>' +
+        (list.length ? Object.keys(days).map(function (d) {
+          return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
+            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '</span><span class="bright"><b>' + money2(num(x.amount)) + '</b>' + (x.imported ? '<span class="impt" title="From your bank file">bank</span>' : '<button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button>') + '</span></div>';
+          }).join('') + '</div>';
+        }).join('') : '<p style="padding:8px 0">No purchases ' + (wk ? 'this week' : 'in ' + monthName(ym)) + '.</p>');
+    },
     spendlog: function () {
       var month = curSpendMonth(), lines = spendLines(), byKey = {}, t = spendTotals(), sl = P.storeLine || {};
       lines.forEach(function (l) { byKey[l.key] = l; });
@@ -3555,7 +3583,9 @@
       case 'obhome': U.obAfter = false; go('home'); break;
       case 'obskip': if (!P.setupDone) finishSetup(); track('save-skip'); U.obAfter = false; U.cloudStep = null; U.afterSave = false; go('steps'); break;
       case 'btab': U.bTab = v; U.sheet = null; U.catAdd = false; render(); break;
-      case 'catopen': U.sheet = v ? { k: 'cat', key: v } : null; U.catAdd = false; render(); break;
+      case 'catopen': if (!v) { U.sheet = null; render(); break; } U.catKey = v; U.catAll = false; U.catAdd = false; go('catlog'); break;
+      case 'catedit': U.sheet = { k: 'cat', key: v }; render(); break;
+      case 'catall': U.catAll = v === '1'; render(); break;
       case 'sheetopen': U.sheet = { k: v }; render(); break;
       case 'mmplan': U.plusOpen = false; render(); mmOpenPlan(mmToday(), 'dinner'); break;
       case 'mmnew': U.plusOpen = false; mmStartEdit(null, 'meals'); break;
@@ -3730,7 +3760,7 @@
       })(); break;
       case 'weeknone': weekDone(U.scan.week, 'none'); track('scan-none'); U.planToast = 'Got it: no purchases this week.'; U.scan = null; U.jTab = null; save(); go('journey'); break;
       case 'weekhand': U.spendBack = 'scan'; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
-      case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
+      case 'spendnew': U.spendBack = U.screen === 'spendadd' ? U.spendBack : U.screen; U.form = { amount: '', note: '', key: v || U.lastSpendKey || '', date: F.isoDay(today()) }; U.formErr = ''; U.spendSaved = ''; go('spendadd'); break;
       case 'spendcat': U.form.key = v; U.formErr = ''; render(); break;
       case 'spendsave':
         if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
