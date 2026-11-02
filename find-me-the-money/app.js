@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01j';
+  var APP_VERSION = '11-01k';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -945,10 +945,17 @@
         return '<button type="button" class="mm-row" data-mm-pedit="' + p.id + '"><span class="mm-em">' + esc(p.emoji || mmGuess(p.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(p.name) + '</span><span class="mm-s">' + (priced ? mmPkgText(p) + ' · ' : '') + 'used in ' + plural(u, 'meal') + '</span></span><span class="mm-r">' + (priced ? mm$(p.price / p.packageAmount) + '/' + mmUnitOne(p.unit) : '—') + '</span></button>';
       }).join('') : '<div class="mm-empty">Ingredients you add to meals show up here.</div>') + '</div>';
   }
+  // ½ tsp, 1¼ cups, 0.3 lb: amounts the way a recipe writes them
+  function mmFrac(n) {
+    n = mmNum(n); if (n == null) return ''; var w = Math.floor(n), f = n - w, F = [[0.25, '¼'], [0.333, '⅓'], [0.5, '½'], [0.667, '⅔'], [0.75, '¾'], [0.125, '⅛']];
+    if (f < 0.01) return String(w); for (var i = 0; i < F.length; i++) if (Math.abs(f - F[i][0]) < 0.01) return (w ? w : '') + F[i][1];
+    return String(mmR2(n));
+  }
+  function mmUses(it) { var n = mmNum(it.amountUsed); return n ? mmFrac(n) + (it.unit === 'count' ? '' : ' ' + (n <= 1 ? mmUnitOne(it.unit) : it.unit)) : ''; }
   function mmIrow(it) {
-    var blank = mmNum(it.price) == null, c = mmLine(it.price, it.packageAmount, it.amountUsed, it.alreadyHave);
-    var sub = it.check ? '<span class="mm-s warn">Check amount' + (it.note ? ' · ' + esc(it.note) : '') + '</span>' : it.alreadyHave ? '<span class="mm-s have">🧺 Already have it</span>' : blank ? '<span class="mm-s">No price · not counted</span>' :
-      mmNum(it.packageAmount) && mmNum(it.amountUsed) ? '<span class="mm-s">' + (+it.amountUsed) + ' of ' + (+it.packageAmount) + (it.unit === 'count' ? '' : ' ' + it.unit) + '</span>' : '<span class="mm-s">Tap to finish</span>';
+    var blank = mmNum(it.price) == null, c = mmLine(it.price, it.packageAmount, it.amountUsed, it.alreadyHave), uses = mmUses(it);
+    var sub = it.check ? '<span class="mm-s warn">Check amount' + (it.note ? ' · ' + esc(it.note) : '') + '</span>' : it.alreadyHave ? '<span class="mm-s have">🧺 Already have it' + (uses ? ' · uses ' + esc(uses) : '') + '</span>' : blank ? '<span class="mm-s">' + (uses ? 'Uses ' + esc(uses) + ' · ' : '') + 'no price yet</span>' :
+      mmNum(it.packageAmount) && mmNum(it.amountUsed) ? '<span class="mm-s">' + mmFrac(it.amountUsed) + ' of ' + mmFrac(it.packageAmount) + (it.unit === 'count' ? '' : ' ' + it.unit) + '</span>' : '<span class="mm-s">Tap to finish</span>';
     return '<button type="button" class="mm-irow" data-mm-iedit="' + it.key + '"><span class="mm-em">' + esc(it.emoji || mmGuess(it.name)) + '</span><span class="mm-mid"><span class="mm-n">' + esc(it.name) + '</span>' + sub + '</span><span class="mm-c">' + (it.alreadyHave || blank ? '—' : mm$(c)) + '</span><span class="mm-chev">›</span></button>';
   }
   function mmEditView() {
