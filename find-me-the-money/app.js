@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01l';
+  var APP_VERSION = '11-01m';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -18,7 +18,7 @@
     // Payday reminders (OneSignal web push). The App ID is public; the key that sends lives only in Supabase.
     oneSignalAppId: '3c20b5fb-493d-4da3-b894-fdc3d9614d3b',
     shareUrl: 'findmethemoney.netlify.app', // printed on share cards
-    supportEmail: '', // TODO(Brad): your support email, for "Message Brad" on the chat's care card and the privacy page (until then: the community link)
+    supportEmail: 'brdlybgrun@aol.com', // "Message Brad" on the chat's care card; also on the privacy page
     youtubeUrl: 'https://www.youtube.com/channel/UCPJ-EMNmCkH4oom-kRxNapQ', // short videos; shown on the Community tab
     communityUrl: 'https://www.skool.com/find-me-the-money-1929/about', // your Skool community link; the Community tab's join button opens it
     coachingUrl: 'https://www.skool.com/find-me-the-money-1929/plans?src=join', // where "Learn about coaching" goes (paid level or booking page); empty uses the community link
