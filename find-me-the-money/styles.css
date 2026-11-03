@@ -1658,3 +1658,5 @@ body.mm-editing .mm-toast { bottom: calc(120px + env(safe-area-inset-bottom, 0px
 .srow-in > span small.srow-gone { color: var(--warn); }
 .srow-in > b { white-space: nowrap; }
 .rpaid { color: var(--green); font-weight: 700; }
+.ccard-out { align-items: center; border-style: dashed; }
+.ccard-out small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }

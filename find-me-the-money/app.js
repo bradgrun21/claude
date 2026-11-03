@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01o';
+  var APP_VERSION = '11-01p';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -796,7 +796,8 @@
     bi({ key: 'basics', type: 'need', label: 'Everything else', icon: '\uD83E\uDDFE', grp: 'spend', cat: 'need', mon: elseMonthly() });
     funds().forEach(function (f) { var nm = f.name || 'Fund'; out.push({ key: 'u:' + f.id, label: nm + ' \u00b7 pay from fund', short: 'Pay from ' + nm, icon: f.icon || '\uD83D\uDCB0', grp: 'fund', cat: 'fund', mon: 0 }, { key: 'u+:' + f.id, label: nm + ' \u00b7 add to fund', short: 'Add to ' + nm, icon: f.icon || '\uD83D\uDCB0', grp: 'fund', cat: 'fund', mon: 0 }); });
     recurring().forEach(function (b) { out.push({ key: 'b:' + b.id, label: b.name || 'Bill', icon: b.icon || iconFor(b.name), grp: 'bill', cat: b.group === 'subs' ? 'want' : 'need', mon: F.billMonthly(b) }); });
-    out.push({ key: 'other', label: 'Something else', icon: '\u2753', grp: 'other', cat: 'other', mon: 0 });
+    // money that doesn't come out of the budget (a reimbursed work expense, an HSA or gift card): shown on Budget, never counted
+    out.push({ key: 'other', label: 'Not in my budget', icon: '\uD83D\uDEAB', grp: 'other', cat: 'other', mon: 0 });
     return out;
   }
   // ---------- end of setup: the plan is built ----------
@@ -2247,7 +2248,7 @@
     var a = c.a, extra = '', row = '', btns = true, done = c.state === 'done', mark = '<span class="ccdone" aria-label="Added">✓</span>';
     if (c.state === 'skipped') return '';
     if (a.type === 'add_purchase') {
-      var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']], l = lines.filter(function (x) { return x.key === c.key; })[0];
+      var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Other']], l = lines.filter(function (x) { return x.key === c.key; })[0];
       row = ccRow(l ? l.icon : '🧾', l ? colorFor(l.key) : 'var(--card2)', esc(a.merchant), (l ? esc(l.short || l.label) : '<span class="ccpick">Pick a category</span>') + ' · ' + chDay(a.date), money2(a.amount),
         done ? mark : '<button type="button" class="ccedit' + (c.edit ? ' on' : '') + '" data-a="chatedit" data-v="' + i + '" aria-label="' + (c.edit ? 'Done editing' : 'Edit') + '">' + (c.edit ? '✓' : PENCIL) + '</button>');
       if (!done && c.edit) extra = '<div class="chatedit"><label>$<input type="number" inputmode="decimal" step="0.01" data-cc="' + i + '" data-ccf="amount" value="' + esc(a.amount) + '" aria-label="Amount"></label><input type="text" data-cc="' + i + '" data-ccf="merchant" value="' + esc(a.merchant) + '" maxlength="40" aria-label="Store"><input type="date" data-cc="' + i + '" data-ccf="date" value="' + esc(a.date) + '" aria-label="Date"></div>';
@@ -2292,7 +2293,7 @@
     if (m.saved) return '<div class="chatcard cc done">' + ccRow('✓', 'var(--green)', plural(m.saved.n, 'purchase') + ' saved', 'From your photo · ' + chDay(F.isoDay(today())), money2(m.saved.total), '') + '</div>';
     var block = m.blocked ? snapBlock() : '';
     if (!m.rows.length) return block ? '<div class="chatcard">' + block + '</div>' : m.err ? '<div class="chatsay"><p>' + esc(m.err) + '</p></div>' : '';
-    var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Not in my budget']];
+    var lines = spendLines(), groups = [['spend', 'Spending'], ['bill', 'Recurring'], ['fund', 'Saving funds'], ['other', 'Other']];
     var select = function (r, k) {
       return '<select data-scan-key="' + k + '" aria-label="Category for ' + esc(r.merchant) + '"' + (r.key ? '' : ' class="unset"') + '><option value="">Choose a category</option>' + groups.map(function (g) {
         var ms = lines.filter(function (l) { return l.grp === g[0]; }); return ms.length ? '<optgroup label="' + g[1] + '">' + ms.map(function (l) { return '<option value="' + l.key + '"' + (l.key === r.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</optgroup>' : '';
@@ -2630,7 +2631,9 @@
         return '<button type="button" class="rrow" data-a="catopen" data-v="b:' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + ' <span class="ttag t-' + typeOf(b) + '">' + TYPES.filter(function (t) { return t[0] === typeOf(b); })[0][1] + '</span></b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + (fromFund(b) ? ' · from ' + esc((funds().filter(function (x) { return x.id === b.fund; })[0] || {}).name || 'fund') : '') + bleft + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
       }).join('') + '</div>' : '') +
       '<button type="button" class="outline" data-a="recuropen" data-v="">+ Add a recurring expense</button>';
-    return top + '<div class="bud-sec"><div><b>Spending</b></div><span>' + money(budget) + '/mo</span></div>' + cards + add +
+    var outside = m.other || 0;
+    var outRow = outside ? '<button type="button" class="ccard ccard-out" data-a="catopen" data-v="other">' + icoBox('\uD83D\uDEAB', 'other') + '<span class="cmid"><b>Not in your budget</b><small>' + money2(outside) + ' ' + (isNow ? 'this month' : 'in ' + monthName(ym)) + ' · doesn\u2019t count against your budget</small></span></button>' : '';
+    return top + '<div class="bud-sec"><div><b>Spending</b></div><span>' + money(budget) + '/mo</span></div>' + cards + outRow + add +
       '<div style="display:flex;gap:10px;flex-wrap:wrap"><button type="button" class="sharebtn" data-a="spendnew">+ Add spending</button><button type="button" class="sharebtn ghost" data-a="go" data-v="spendlog">See all purchases</button></div>' + recHtml;
   }
   function budSave() {
@@ -3305,7 +3308,7 @@
         (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
         '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
-        chips('spend', 'Spending') + chips('bill', 'Recurring') + chips('fund', 'Saving funds') + chips('other', 'Not in my budget') +
+        chips('spend', 'Spending') + chips('bill', 'Recurring') + chips('fund', 'Saving funds') + chips('other', 'Other') +
         '<label class="field">Date<input type="date" data-g="date" value="' + esc(f.date || F.isoDay(today())) + '"></label></div>' +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
         '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button>' + (editing ? '<button type="button" class="outline" data-a="spenddel" data-v="' + esc(f.id) + '">Delete purchase</button>' : '<button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button>') + '</div>';
@@ -3324,8 +3327,9 @@
       var period = wk ? 'This week · ' + weekLabel({ start: wk[0], end: wk[1] }) : monthName(ym);
       return back('plan') + '<div class="catlog-head">' + icoBox(l.icon, l.key) + '<div><div class="eyebrow">' + esc(period) + '</div><h2>' + esc(l.label) + '</h2></div></div>' +
         (l.per === 'week' && isNow ? '<div class="seg" role="group" aria-label="Show">' + [['0', 'This week'], ['1', monthName(ym)]].map(function (o) { var on = (U.catAll ? '1' : '0') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="catall" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' : '') +
-        '<div class="card catlog-sum"><div><b class="' + (lf < -0.5 ? 'over' : '') + '">' + (lf < -0.5 ? money2(-lf) + ' over' : bill && spent && lf < 0.5 ? '\u2713 Paid' : money2(lf) + ' left') + '</b><small>' + money2(spent) + (bill ? ' paid of ' : ' spent of ') + money2(cap) + (bill ? ' due in ' + monthName(ym) : '') + '</small></div></div>' +
-        '<div class="grid2"><button type="button" class="primary" data-a="spendnew" data-v="' + esc(key) + '">' + (bill ? '+ Add a payment' : '+ Add spending') + '</button>' + (bill ? '<button type="button" class="outline" data-a="recuropen" data-v="' + esc(bill.id) + '">Edit</button>' : '<button type="button" class="outline" data-a="catedit" data-v="' + esc(key) + '">Edit category</button>') + '</div>' +
+        (key === 'other' ? '<div class="card catlog-sum"><div><b>' + money2(spent) + '</b><small>Not counted in your budget. For money that doesn\u2019t come out of it, like a work expense you\u2019ll be paid back for.</small></div></div>'
+          : '<div class="card catlog-sum"><div><b class="' + (lf < -0.5 ? 'over' : '') + '">' + (lf < -0.5 ? money2(-lf) + ' over' : bill && spent && lf < 0.5 ? '\u2713 Paid' : money2(lf) + ' left') + '</b><small>' + money2(spent) + (bill ? ' paid of ' : ' spent of ') + money2(cap) + (bill ? ' due in ' + monthName(ym) : '') + '</small></div></div>') +
+        '<div class="grid2"><button type="button" class="primary" data-a="spendnew" data-v="' + esc(key) + '">' + (bill ? '+ Add a payment' : '+ Add spending') + '</button>' + (bill ? '<button type="button" class="outline" data-a="recuropen" data-v="' + esc(bill.id) + '">Edit</button>' : key === 'other' ? '' : '<button type="button" class="outline" data-a="catedit" data-v="' + esc(key) + '">Edit category</button>') + '</div>' +
         (list.length ? Object.keys(days).map(function (d) {
           return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
             return spendRow(x, l);
