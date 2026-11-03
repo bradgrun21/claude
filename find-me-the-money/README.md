@@ -291,6 +291,9 @@ A chat bar at the bottom of Add purchases, and 💬 "Tell me what you spent" in 
 - Events: `chat-local`, `chat-ai`, `chat-confirm`, `chat-limit`, `chat-care`, `chat-report`. Red-team cases for chat are in `tests/ai-redteam.json`.
 
 ## A category's purchases
+**Edit a purchase:** tap any purchase (Budget → See all purchases, or inside a category) to change its category, amount, store or date, or delete it (Add a purchase doubles as Edit purchase). A purchase whose category was removed says "Removed category · tap to pick one". Changing a store's category also updates what the app remembers for that store. Bank-file rows follow the store's line and aren't edited one by one.
+**Recurring expenses:** tapping one opens its month like a spending category: what's been paid toward it, "$1,000.00 left" (or ✓ Paid) of what's due this month, + Add a payment, and Edit (the old sheet). The Budget list shows "· $X left" or "✓ Paid" once a payment is logged.
+
 Tapping a spending category on Budget opens its purchases (was: the edit sheet, now behind "Edit category"): how much is left and spent of what, + Add spending (already set to that category, and back to the list after saving), and the purchases by day, added and imported, with × to delete added ones. A weekly category shows this week (with the week's dates) and a toggle for the whole month; a monthly one shows the month on the Budget screen. A weekly card says "left this week (since Oct 26)" when the week began last month, so last month's purchases in this week aren't mistaken for this month's. Retirement taken out before payday isn't part of the month's budget (only take-home retirement is); its card says "before payday · not in this budget".
 
 ## Saving funds: the day it saves; goals: what they set aside

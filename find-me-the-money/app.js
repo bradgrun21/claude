@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01n';
+  var APP_VERSION = '11-01o';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -2625,7 +2625,9 @@
     var recHtml = '<div class="bud-sec"><div><b>Recurring expenses</b></div><span>' + money(recurring().reduce(function (t, b) { return t + (fromFund(b) ? 0 : billInMonth(b, yy, mo)); }, 0)) + ' in ' + new Date(yy, mo, 1).toLocaleDateString('en-US', { month: 'short' }) + '</span></div>' +
       (rec.length ? '<div class="card rlist">' + rec.map(function (b) {
         var f = b.freq || 'monthly', nx = b.due ? nextDue(b, now) : null;
-        return '<button type="button" class="rrow" data-a="recuropen" data-v="' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + ' <span class="ttag t-' + typeOf(b) + '">' + TYPES.filter(function (t) { return t[0] === typeOf(b); })[0][1] + '</span></b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + (fromFund(b) ? ' · from ' + esc((funds().filter(function (x) { return x.id === b.fund; })[0] || {}).name || 'fund') : '') + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
+        var bm = billInMonth(b, yy, mo), bp = linePurchases('b:' + b.id, F.isoDay(new Date(yy, mo, 1)), F.isoDay(new Date(yy, mo + 1, 0))).reduce(function (t, x) { return t + num(x.amount); }, 0);
+        var bleft = !bm && !bp ? '' : bp && bm - bp < 0.5 ? ' · <span class="rpaid">' + (bp - bm > 0.5 ? money2(bp - bm) + ' over' : '\u2713 Paid') + '</span>' : bp ? ' · ' + money2(bm - bp) + ' left' : '';
+        return '<button type="button" class="rrow" data-a="catopen" data-v="b:' + b.id + '">' + icoBox(b.icon || iconFor(b.name), 'b:' + b.id) + '<span class="cmid"><b>' + esc(b.name || 'Bill') + ' <span class="ttag t-' + typeOf(b) + '">' + TYPES.filter(function (t) { return t[0] === typeOf(b); })[0][1] + '</span></b><small>' + (b.due ? dueText2(b) + (nx ? ' · next ' + dayMonth(F.fromIso(nx)) : '') : 'Add a due date') + (fromFund(b) ? ' · from ' + esc((funds().filter(function (x) { return x.id === b.fund; })[0] || {}).name || 'fund') : '') + bleft + '</small></span><span class="ramt">' + money2(num(b.amount)) + '<small>' + (b.freq ? FREQ_LABEL[f] : b.per === 'yr' ? 'a year' : 'a month') + '</small></span></button>';
       }).join('') + '</div>' : '') +
       '<button type="button" class="outline" data-a="recuropen" data-v="">+ Add a recurring expense</button>';
     return top + '<div class="bud-sec"><div><b>Spending</b></div><span>' + money(budget) + '/mo</span></div>' + cards + add +
@@ -2669,6 +2671,14 @@
       '<button type="button" class="outline" data-a="edit" data-v="debts">' + (list.length === 1 && list[0].lump ? 'List my debts' : 'Edit debts') + '</button>' + homeRow();
   }
   function shortDay(iso) { return F.fromIso(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+  // one purchase in a list: tap it to change the category, amount, store or date (bank-file rows follow the store's line)
+  function spendRow(x, l, showCat) {
+    var gone = !l; l = l || { label: 'Removed category' };
+    var sub = showCat || gone ? '<small class="' + (gone ? 'srow-gone' : '') + '">' + esc(gone ? 'Removed category · tap to pick one' : x.note ? l.label : '') + '</small>' : '';
+    var main = '<span style="min-width:0">' + esc(x.note || (gone ? 'Purchase' : l.label)) + sub + '</span><b>' + money2(num(x.amount)) + '</b>';
+    return '<div class="row srow">' + (x.imported ? '<span class="srow-in">' + main + '</span><span class="impt" title="From your bank file">bank</span>'
+      : '<button type="button" class="srow-in" data-a="spendedit" data-v="' + x.id + '" aria-label="Edit ' + esc(x.note || l.label) + '">' + main + '</button><button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button>') + '</div>';
+  }
   function curSpendMonth() { return U.spendMonth || monthOf(F.isoDay(today())); }
   function monthName(ym) { var a = ym.split('-'); return new Date(+a[0], +a[1] - 1, 1).toLocaleDateString('en-US', { month: 'long' }); }
   // purchases added by hand, plus imported purchases from stores placed in a budget line
@@ -3290,14 +3300,15 @@
         return '<div class="field">' + title + '<div class="chips" style="margin-top:8px">' + mine.map(function (l) {
           var on = last === l.key; return '<button type="button" class="chip' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-a="spendcat" data-v="' + l.key + '">' + esc(l.short || l.label) + '</button>'; }).join('') + '</div></div>';
       };
-      return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><h2>Add a purchase</h2></div>' +
+      var editing = !!f.id;
+      return back(U.spendBack || 'plan') + '<div class="stack" style="gap:6px"><h2>' + (editing ? 'Edit purchase' : 'Add a purchase') + '</h2>' + (editing && !lines.some(function (l) { return l.key === f.key; }) ? '<p style="color:var(--warn)">Its category was removed. Pick a new one.</p>' : '') + '</div>' +
         (U.spendSaved ? '<div class="toast pop" role="status"><b>' + ICON.check('#7ED9C0', 16) + ' ' + U.spendSaved + '</b></div>' : '') +
         '<div class="card stack" style="padding:16px 18px;gap:14px"><label class="field">Amount<input class="bigamt" type="number" inputmode="decimal" min="0" step="any" data-g="amount" value="' + esc(f.amount || '') + '" placeholder="$0.00" autocomplete="off"></label>' +
         '<label class="field">Where? (optional)<input type="text" data-g="note" value="' + esc(f.note || '') + '" placeholder="Like Kroger, Shell or Target" autocomplete="off"></label>' +
         chips('spend', 'Spending') + chips('bill', 'Recurring') + chips('fund', 'Saving funds') + chips('other', 'Not in my budget') +
         '<label class="field">Date<input type="date" data-g="date" value="' + esc(f.date || F.isoDay(today())) + '"></label></div>' +
         (U.formErr ? '<p role="alert" style="color:var(--warn);font-size:14px">' + U.formErr + '</p>' : '') +
-        '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button><button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button></div>';
+        '<div class="push"><button type="button" class="primary" data-a="spendsave">Save</button>' + (editing ? '<button type="button" class="outline" data-a="spenddel" data-v="' + esc(f.id) + '">Delete purchase</button>' : '<button type="button" class="outline" data-a="spendsave" data-v="again">Save &amp; add another</button>') + '</div>';
     },
     // one spending category's purchases: this week for a weekly one (or the whole month), the month for the rest
     catlog: function () {
@@ -3307,16 +3318,17 @@
       var wk = l.per === 'week' && isNow && !U.catAll ? weekOf(today()) : null;
       var from = wk ? wk[0] : ym + '-01', to = wk ? wk[1] : F.isoDay(new Date(y, mo + 1, 0));
       var list = linePurchases(key, from, to), spent = list.reduce(function (t, x) { return t + num(x.amount); }, 0);
-      var cap = wk ? l.amt : (l.per === 'week' ? l.amt * weeksIn(y, mo) : l.mon) * budFrom(ym).share, lf = cap - spent;
+      var bill = l.grp === 'bill' ? P.bills.filter(function (b) { return 'b:' + b.id === key; })[0] : null;
+      var cap = bill ? billInMonth(bill, y, mo) : wk ? l.amt : (l.per === 'week' ? l.amt * weeksIn(y, mo) : l.mon) * budFrom(ym).share, lf = cap - spent;
       var days = {}; list.forEach(function (x) { (days[x.date] = days[x.date] || []).push(x); });
       var period = wk ? 'This week · ' + weekLabel({ start: wk[0], end: wk[1] }) : monthName(ym);
       return back('plan') + '<div class="catlog-head">' + icoBox(l.icon, l.key) + '<div><div class="eyebrow">' + esc(period) + '</div><h2>' + esc(l.label) + '</h2></div></div>' +
         (l.per === 'week' && isNow ? '<div class="seg" role="group" aria-label="Show">' + [['0', 'This week'], ['1', monthName(ym)]].map(function (o) { var on = (U.catAll ? '1' : '0') === o[0]; return '<button type="button" class="' + (on ? 'on' : '') + '" aria-pressed="' + on + '" data-a="catall" data-v="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' : '') +
-        '<div class="card catlog-sum"><div><b class="' + (lf < -0.5 ? 'over' : '') + '">' + (lf < -0.5 ? money2(-lf) + ' over' : money2(lf) + ' left') + '</b><small>' + money2(spent) + ' spent of ' + money2(cap) + '</small></div></div>' +
-        '<div class="grid2"><button type="button" class="primary" data-a="spendnew" data-v="' + esc(key) + '">+ Add spending</button><button type="button" class="outline" data-a="catedit" data-v="' + esc(key) + '">Edit category</button></div>' +
+        '<div class="card catlog-sum"><div><b class="' + (lf < -0.5 ? 'over' : '') + '">' + (lf < -0.5 ? money2(-lf) + ' over' : bill && spent && lf < 0.5 ? '\u2713 Paid' : money2(lf) + ' left') + '</b><small>' + money2(spent) + (bill ? ' paid of ' : ' spent of ') + money2(cap) + (bill ? ' due in ' + monthName(ym) : '') + '</small></div></div>' +
+        '<div class="grid2"><button type="button" class="primary" data-a="spendnew" data-v="' + esc(key) + '">' + (bill ? '+ Add a payment' : '+ Add spending') + '</button>' + (bill ? '<button type="button" class="outline" data-a="recuropen" data-v="' + esc(bill.id) + '">Edit</button>' : '<button type="button" class="outline" data-a="catedit" data-v="' + esc(key) + '">Edit category</button>') + '</div>' +
         (list.length ? Object.keys(days).map(function (d) {
           return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
-            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '</span><span class="bright"><b>' + money2(num(x.amount)) + '</b>' + (x.imported ? '<span class="impt" title="From your bank file">bank</span>' : '<button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button>') + '</span></div>';
+            return spendRow(x, l);
           }).join('') + '</div>';
         }).join('') : '<p style="padding:8px 0">No purchases ' + (wk ? 'this week' : 'in ' + monthName(ym)) + '.</p>');
     },
@@ -3330,8 +3342,7 @@
         '<button type="button" class="primary" data-a="spendnew">+ Add spending</button>' +
         (mine.length ? Object.keys(days).map(function (d) {
           return '<div class="card" style="padding:6px 18px"><div class="eyebrow" style="padding:10px 0 4px">' + dayMonth(F.fromIso(d)) + '</div>' + days[d].map(function (x) {
-            var l = byKey[x.key] || { label: 'Removed category' };
-            return '<div class="row" style="padding:10px 0"><span style="min-width:0">' + esc(x.note || l.label) + '<small>' + esc(x.note ? l.label : '') + '</small></span><span class="bright"><b>' + money2(num(x.amount)) + '</b>' + (x.imported ? '<span class="impt" title="From your bank file">bank</span>' : '<button type="button" class="x" data-a="spenddel" data-v="' + x.id + '" aria-label="Delete ' + esc(x.note || l.label) + '">\u00d7</button>') + '</span></div>';
+            return spendRow(x, byKey[x.key], true);
           }).join('') + '</div>';
         }).join('') : '<p style="padding:8px 0">Nothing yet this month.</p>');
     },
@@ -3988,6 +3999,12 @@
       case 'spendsave':
         if (!(num(U.form.amount) > 0)) { U.formErr = 'Enter how much you spent.'; render(); break; }
         if (!U.form.key) { U.formErr = 'Pick what it was for.'; render(); break; }
+        if (U.form.id) {
+          // editing: change this purchase in place (and remember the store's new category)
+          var ex = P.spends.filter(function (x) { return x.id === U.form.id; })[0];
+          if (ex) { ex.date = U.form.date || ex.date; ex.amount = String(round2(num(U.form.amount))); ex.key = U.form.key; ex.note = String(U.form.note || '').trim(); if (ex.note) { P.merchantMem = P.merchantMem || {}; P.merchantMem[merchKey(ex.note)] = ex.key; } }
+          save(); track('spend-edit'); go(U.spendBack || 'plan'); break;
+        }
         P.spends.push({ id: uid(), date: U.form.date || F.isoDay(today()), amount: String(round2(num(U.form.amount))), key: U.form.key, note: String(U.form.note || '').trim() });
         U.lastSpendKey = U.form.key; wkMark('cat'); markLogged([U.form.date || F.isoDay(today())]);
         if (U.spendBack === 'scan' && U.scan) {
@@ -4004,7 +4021,11 @@
         } else go(U.spendBack || 'plan');
         break;
       case 'spendmonth': (function () { var a = curSpendMonth().split('-'), d = new Date(+a[0], +a[1] - 1 + (+v), 1); U.spendMonth = F.isoDay(d).slice(0, 7); })(); render(); break;
-      case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); render(); break;
+      case 'spenddel': P.spends = P.spends.filter(function (x) { return x.id !== v; }); save(); if (U.screen === 'spendadd' && U.form && U.form.id === v) go(U.spendBack || 'plan'); else render(); break;
+      case 'spendedit': (function () {
+        var x = P.spends.filter(function (y) { return y.id === v; })[0]; if (!x) return;
+        U.spendBack = U.screen; U.form = { id: x.id, amount: x.amount, note: x.note || '', key: x.key, date: x.date }; U.formErr = ''; U.spendSaved = ''; go('spendadd');
+      })(); break;
       case 'plusmenu': U.plusOpen = !U.plusOpen; render(); break;
       case 'plusclose': U.plusOpen = false; render(); break;
       case 'copyplan': (function () {
