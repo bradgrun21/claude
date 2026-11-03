@@ -3,7 +3,7 @@
   'use strict';
   var F = window.FMTM;
   // shown at the bottom of Settings, so it's easy to tell which version a phone is running (keep in step with sw.js)
-  var APP_VERSION = '11-01m';
+  var APP_VERSION = '11-01n';
   // milestones shown in the app ("days stolen back" ones are left out: they depend on payday predictions)
   var BADGES = F.BADGES.filter(function (b) { return !/^days-/.test(b.id); }).concat([{ id: 'ch30-l1', title: 'Level 1 complete', desc: 'Finished the 30-Day Challenge: 30 days in a row.', test: function (f) { return !!f.ch30done; } }]);
 
@@ -1050,7 +1050,7 @@
     var sn = mmSt().snap || {}, ai = U.ai || {}, sc = ai.snaps || {}, lim = sc.limit, left = lim == null ? null : Math.max(0, lim - (sc.used || 0));
     if (sn.kind === kind && sn.reading) return '<div class="mm-snapbox" role="status"><span class="spin" aria-hidden="true"></span><b>' + (kind === 'recipe' ? 'Reading your recipe…' : 'Reading your receipt…') + '</b><small>A few seconds.</small></div>';
     var block = snapBlock(), sub = kind === 'recipe' ? 'Fills in the name and ingredients from a photo.' : 'Reads a grocery receipt and updates what you paid.';
-    var count = ai.level === 'paid' ? ' Unlimited snaps.' : lim != null ? ' Uses 1 snap · ' + left + ' of ' + lim + ' left.' : ' Uses 1 snap.';
+    var count = ai.level === 'paid' ? ' Unlimited Budget Snaps.' : lim != null ? ' Uses 1 Budget Snap · ' + left + ' of ' + lim + ' left.' : ' Uses 1 Budget Snap.';
     return '<div class="mm-snapbox">' + (block ? block : '<label class="mm-btn gold mm-snapbtn">' + (kind === 'recipe' ? '📸 Snap a recipe' : '📸 Update prices from a receipt') + '<input type="file" accept="image/*" multiple data-mm-snap="' + kind + '" class="sr"></label><small>' + sub + count + '</small>') +
       (sn.kind === kind && sn.err ? '<p class="mm-snaperr" role="alert">' + esc(sn.err) + '</p>' : '') + (sn.kind === kind && sn.msg ? '<p class="mm-snapmsg">' + esc(sn.msg) + '</p>' : '') + '</div>';
   }
@@ -1064,15 +1064,15 @@
   }
   function mmAmtText(n, u) { return n == null ? 'no amount' : (+n) + (u === 'count' ? '' : ' ' + (+n <= 1 ? mmUnitOne(u) : u)); }
   function mmSnapErr(er) {
-    return er && er.status === 413 ? 'That photo is too big. Try a screenshot of it instead.' : er && er.status === 502 ? 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute.'
-      : er && (er.status === 401 || er.message === 'signed out') ? 'Sign in to use snaps.' : 'Something went wrong on our side. Your snap wasn’t counted. Try again.';
+    return er && er.status === 413 ? 'That photo is too big. Try a screenshot of it instead.' : er && er.status === 502 ? 'The photo reader is having trouble right now. Your Budget Snap wasn’t counted. Try again in a minute.'
+      : er && (er.status === 401 || er.message === 'signed out') ? 'Sign in to use Budget Snaps.' : 'Something went wrong on our side. Your Budget Snap wasn’t counted. Try again.';
   }
   function mmSnap(kind, input) {
     var st = mmSt(), picked = Array.prototype.slice.call(input.files || []).slice(0, 3), d = st.draft;
     if (!picked.length) return;
     if (kind === 'recipe' && !d) return;
     st.snap = { kind: kind, reading: true }; render();
-    if (!S || !window.FMTMAI) { st.snap = { kind: kind, err: 'Sign in to use snaps.' }; render(); return; }
+    if (!S || !window.FMTMAI) { st.snap = { kind: kind, err: 'Sign in to use Budget Snaps.' }; render(); return; }
     track(kind === 'recipe' ? 'meal-recipe-snap' : 'meal-prices-snap');
     // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
     Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (blobs) {
@@ -2110,7 +2110,7 @@
     var kind = input.getAttribute('data-kind') === 'bank' ? 'bank' : 'receipt', picked = Array.prototype.slice.call(input.files || []), sc = U.scan;
     if (!picked.length || !sc) return;
     sc.attach = false;
-    if (!S || !window.FMTMAI) { sc.msgs.push({ t: 'snap', rows: [], err: 'Sign in to use snaps.' }); render(); chatDown(); return; }
+    if (!S || !window.FMTMAI) { sc.msgs.push({ t: 'snap', rows: [], err: 'Sign in to use Budget Snaps.' }); render(); chatDown(); return; }
     // copy each photo into memory first: iPhone Safari empties picked files once the picker is cleared
     Promise.all(picked.map(function (f) { return f.arrayBuffer().then(function (b) { return new Blob([b], { type: f.type }); }, function () { return f; }); })).then(function (files) {
       input.value = '';
@@ -2146,9 +2146,9 @@
           }, function (er) {
             failed++;
             if (er && er.status === 413) m.err = 'That photo is too big. Try a screenshot of it instead.';
-            else if (er && er.status === 502) m.err = 'The photo reader is having trouble right now. Your snap wasn’t counted. Try again in a minute, or type them in.';
-            else if (er && er.status >= 500) m.err = 'Something went wrong on our side. Your snap wasn’t counted. Try again, or type them in.';
-            else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; m.err = 'Sign in to use snaps.'; }
+            else if (er && er.status === 502) m.err = 'The photo reader is having trouble right now. Your Budget Snap wasn’t counted. Try again in a minute, or type them in.';
+            else if (er && er.status >= 500) m.err = 'Something went wrong on our side. Your Budget Snap wasn’t counted. Try again, or type them in.';
+            else if (er && (er.status === 401 || er.message === 'signed out')) { stop = true; m.err = 'Sign in to use Budget Snaps.'; }
           });
         });
       }, Promise.resolve()).then(function () {
@@ -2314,7 +2314,7 @@
     var sc = U.scan, ai = U.ai || {}, sn = ai.snaps || {}, lim = sn.limit, left = lim == null ? null : Math.max(0, lim - (sn.used || 0));
     var block = snapBlock(), file = function (k) { return '<input type="file" accept="image/*" multiple data-file="snap" data-kind="' + k + '" id="snap-' + k + '" class="sr" tabindex="-1">'; };
     var menu = !sc.attach ? '' : '<div class="chatmenu">' + (block || '<label class="chatopt" for="snap-receipt">🧾<span><b>Snap a receipt</b><small>A photo of a paper receipt</small></span></label><label class="chatopt" for="snap-bank">🏦<span><b>Add a bank screenshot</b><small>Your bank app’s list of purchases</small></span></label>' +
-      '<small class="snapleft">' + (ai.level === 'paid' ? 'Unlimited snaps' : lim != null ? left + ' of ' + lim + ' snaps left this month' : '') + '</small>') +
+      '<small class="snapleft">' + (ai.level === 'paid' ? 'Unlimited Budget Snaps' : lim != null ? left + ' of ' + lim + ' Budget Snaps left this month' : '') + '</small>') +
       '<button type="button" class="chatopt" data-a="weekhand">✍️<span><b>Add one by hand</b><small>Amount, store and category</small></span></button></div>';
     return '<div class="chatdock">' + menu + (block ? '' : file('receipt') + file('bank')) +
       '<form class="chatbar" data-chatform><button type="button" class="chatplus' + (sc.attach ? ' on' : '') + '" data-a="chatattach" aria-label="Add a photo" aria-expanded="' + !!sc.attach + '">' + ICON.plus + '</button>' +
@@ -2357,14 +2357,14 @@
   function snapBlock() {
     var ai = U.ai || {}, sn = ai.snaps || {}, lim = sn.limit, left = lim == null ? null : Math.max(0, lim - (sn.used || 0));
     var typeLine = '<small class="snapfree">You can always type them in. That’s free.</small>';
-    if (!S) return '<div class="snapcard"><b>📸 Snap a receipt or your bank app</b><span>Sign in to use snaps.</span><button type="button" class="outline" data-a="go" data-v="account">Sign in</button>' + typeLine + '</div>';
-    if (ai.paused) return '<div class="snapcard"><b>😴 Snaps are resting until the 1st.</b>' + typeLine + '</div>';
+    if (!S) return '<div class="snapcard"><b>📸 Snap a receipt or your bank app</b><span>Sign in to use Budget Snaps.</span><button type="button" class="outline" data-a="go" data-v="account">Sign in</button>' + typeLine + '</div>';
+    if (ai.paused) return '<div class="snapcard"><b>😴 Budget Snaps are resting until the 1st.</b>' + typeLine + '</div>';
     if (lim != null && left === 0) {
       var alt = U.altOpen ? '<div class="typeit"><input type="email" data-alt autocomplete="email" placeholder="The email you joined with" aria-label="The email you joined the community with"><button type="button" class="sharebtn" data-a="altsave">Save</button></div>' + (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '')
         : (U.altMsg ? '<small class="snapfree">' + esc(U.altMsg) + '</small>' : '<button type="button" class="linkbtn" data-a="altopen">Joined with a different email?</button>');
       return ai.level === 'community'
-        ? '<div class="snapcard"><b>You’ve used your 20 snaps this month.</b><span>Unlimited snaps come with group coaching ($29/mo).</span>' + (CONFIG.coachingUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + typeLine + '</div>'
-        : '<div class="snapcard"><b>You’ve used your 10 snaps this month.</b><span>Join the free community and get 10 more.</span>' + (CONFIG.communityUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community</a>' : '') + alt + typeLine + '</div>';
+        ? '<div class="snapcard"><b>You’ve used your 20 Budget Snaps this month.</b><span>Unlimited Budget Snaps come with group coaching ($29/mo).</span>' + (CONFIG.coachingUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.coachingUrl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a>' : '') + typeLine + '</div>'
+        : '<div class="snapcard"><b>You’ve used your 10 Budget Snaps this month.</b><span>Join the free community and get 10 more.</span>' + (CONFIG.communityUrl ? '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="joincommunity">Join the free community</a>' : '') + alt + typeLine + '</div>';
     }
     return '';
   }
@@ -3481,9 +3481,9 @@
   function coachCard(found) {
     var f = Math.round(found || 0);
     return '<div class="coachcard" role="region" aria-label="Coaching"><h3>Want a coach in your corner?</h3>' +
-      '<p>For $29 a month, get group coaching, people who check in with you, and unlimited snaps.</p>' +
-      '<p class="coachline">' + (f >= 100 ? 'You found ' + money(f) + ' a month. Founding Members pay $29.' : 'Not much found yet? That\u2019s exactly what coaching is for.') + '</p>' +
-      '<a class="coachbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="coachgo">Become a Founding Member</a>' +
+      '<p>For $29 a month, get group coaching, people who check in with you, and unlimited Budget Snaps.</p>' +
+      '<p class="coachline">' + (f >= 100 ? 'You found ' + money(f) + ' a month. Coaching is $29.' : 'Not much found yet? That\u2019s exactly what coaching is for.') + '</p>' +
+      '<a class="coachbtn" href="' + esc(CONFIG.communityUrl) + '" target="_blank" rel="noopener" data-a="coachgo">Learn about coaching</a>' +
       '<button type="button" class="textbtn" data-a="coachlater">Maybe later</button></div>';
   }
   // the found money from "Find my money": monthly, can be $0 (or below, when there's a gap)
@@ -3656,13 +3656,13 @@
     var url = CONFIG.communityUrl, curl = CONFIG.coachingUrl || url; if (!url) return '';
     var ct = U.commTab || '', coach = ct === 'coach';
     var items = coach
-      ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.'], ['Unlimited snaps', 'Snap every receipt and bank screenshot you want.']]
+      ? [['2 live coaching calls a month', 'Bring your questions, leave with a clear next step.'], ['An accountability group', 'People who check in with you on the hard months.'], ['Feedback on your budget', 'A coach looks at your plan and tells you what to change.'], ['Unlimited Budget Snaps', 'Snap every receipt and bank screenshot you want.']]
       : [['Weekly recaps, together', 'Share how your week went. Streaks are easier with company.'], ['Live challenges', 'Run a No-Spend Weekend or Emergency Fund Sprint with a group.'], ['Ask anything', 'Stuck on a bill or a tough month? Ask people on the same path.']];
     return '<div class="card stack commcard" style="padding:16px 18px;gap:10px"><b style="font-size:18px">You don\u2019t have to do this alone</b>' +
       tabChips('commtab', ct, [['free', 'Free Community'], ['coach', 'Partner with a Coach']]) + (!ct ? '</div>' :
       '<div class="stack" style="gap:8px">' + items.map(function (x) { return '<div><b style="font-size:15px">' + x[0] + '</b><small style="display:block;color:var(--muted);font-size:14px">' + x[1] + '</small></div>'; }).join('') + '</div>' +
       (coach ? '<small style="color:var(--muted);font-size:13px"><b>Who\u2019s Brad?</b> I\u2019m a certified financial coach. My family found financial freedom so we could do what we believe God called us to, like my wife staying home with our kids on one income.</small>' +
-          '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">\ud83c\udf05 Founding Members: $29 a month, price locked for life, first 25 only</small>'
+          '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(curl) + '" target="_blank" rel="noopener" data-a="coaching">Learn about coaching</a><small style="text-align:center;color:var(--muted);font-size:13px">Group coaching: $29 a month</small>'
         : '<a class="primary" style="text-decoration:none;display:grid;place-items:center" href="' + esc(url) + '" target="_blank" rel="noopener" data-a="joincommunity">' + (P.communityJoined ? 'Open the community' : 'Join the FREE community') + '</a>') +
       '</div>');
   }
@@ -3964,7 +3964,7 @@
         var el = app.querySelector('[data-alt]'), e = String(el && el.value || '').trim().toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { U.altMsg = 'Enter the email you joined with.'; render(); return; }
         fresh().then(function () { return sb('/rest/v1/people?on_conflict=user_id', { method: 'POST', auth: true, headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: S.uid, alt_email: e } }); })
-          .then(function () { U.altMsg = 'Saved. Your extra snaps show up once the community has your email.'; U.altOpen = false; track('alt-email'); aiStatus(true); render(); }, function () { U.altMsg = 'That didn’t save. Try again.'; render(); });
+          .then(function () { U.altMsg = 'Saved. Your extra Budget Snaps show up once the community has your email.'; U.altOpen = false; track('alt-email'); aiStatus(true); render(); }, function () { U.altMsg = 'That didn’t save. Try again.'; render(); });
       })(); break;
       case 'scanall': (function () { var sm = scanMsg(v); if (!sm || !sm.rows) return; sm.rows.forEach(function (r) { if (!r.skip) r.ok = true; }); sm.err = ''; render(); })(); break;
       case 'scansave': (function () {
