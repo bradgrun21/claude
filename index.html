@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Life City</title>
+  <meta name="description" content="A miniature city that grows with your family's real money steps and habits.">
+  <meta name="theme-color" content="#7FC3E6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Life City">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+</head>
+<body>
+  <canvas id="scene" aria-label="Your Life City, a 3D miniature city. Drag to move, pinch or scroll to zoom, tap a glowing lot to build." tabindex="0"></canvas>
+  <div class="fail" id="fail">This 3D city needs WebGL. Try opening it in Chrome or Safari.</div>
+  <div class="boot" id="boot"><div class="boot-card"><b>Life City</b><span>Raising the island…</span></div></div>
+
+  <div class="hud" id="hud" hidden>
+    <div class="hud-top">
+      <button class="mayor" id="mayorBtn" type="button" aria-label="Open the mayor rating">
+        <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+          <circle cx="26" cy="26" r="22" fill="none" stroke="#E3EEF2" stroke-width="6"/>
+          <circle id="ringHud" cx="26" cy="26" r="22" fill="none" stroke="#4CAF6A" stroke-width="6" stroke-linecap="round" stroke-dasharray="0 138.2" transform="rotate(-90 26 26)"/>
+          <text id="ringHudTxt" x="26" y="32" text-anchor="middle" font-family="Fredoka, sans-serif" font-size="18" font-weight="700" fill="#1E2B3C">0</text>
+        </svg>
+        <span class="txt">
+          <span class="eyebrow" id="ratingWord">Mayor rating</span>
+          <span class="name" id="cityName">Life City</span>
+          <span class="sub" id="popLine"></span>
+        </span>
+      </button>
+      <div class="points" role="status" aria-live="polite"><b id="pts">0</b><span>POINTS</span></div>
+    </div>
+    <div class="mats" id="mats" aria-label="Materials"></div>
+  </div>
+
+  <div class="side" id="side" hidden>
+    <button class="round" id="dayBtn" type="button" aria-label="Switch to night"><svg id="dayIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
+    <button class="round" id="paperBtn" type="button" aria-label="Read the town paper"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h13v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v10a2 2 0 0 1-2 2"/><path d="M7 9h7M7 13h7M7 17h4"/></svg></button>
+    <button class="round" id="soundBtn" type="button" aria-label="Mute sound"><svg id="soundIcon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"></svg></button>
+    <button class="round" id="homeBtn" type="button" aria-label="Recenter the city"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+    <button class="round" id="settingsBtn" type="button" aria-label="Settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
+
+  <div id="tags"></div>
+  <div class="callout" id="callout" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <section class="sheet" id="sheet" aria-label="City controls" hidden>
+    <button class="grab" id="grab" type="button" aria-label="Collapse or expand the panel" aria-expanded="true"></button>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="today" aria-selected="true" aria-controls="paneToday">Today</button>
+      <button type="button" role="tab" data-tab="storm" aria-selected="false" aria-controls="paneStorm">Storm</button>
+      <button type="button" role="tab" data-tab="build" aria-selected="false" aria-controls="paneBuild">Build</button>
+      <button type="button" role="tab" data-tab="together" aria-selected="false" aria-controls="paneTogether">Together</button>
+      <button type="button" role="tab" data-tab="rate" aria-selected="false" aria-controls="paneRate">Rating</button>
+    </div>
+    <div class="pane" id="paneToday" role="tabpanel"></div>
+    <div class="pane" id="paneStorm" role="tabpanel" hidden></div>
+    <div class="pane" id="paneBuild" role="tabpanel" hidden></div>
+    <div class="pane" id="paneTogether" role="tabpanel" hidden></div>
+    <div class="pane" id="paneRate" role="tabpanel" hidden></div>
+  </section>
+
+  <div class="modal paper" id="paper" hidden role="dialog" aria-modal="true" aria-labelledby="paperTitle"><article class="np" id="paperBody"></article></div>
+  <div class="modal" id="card" hidden role="dialog" aria-modal="true" aria-labelledby="cardTitle"><div class="card-box" id="cardBody"></div></div>
+  <div class="modal" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="card-box" id="settingsBody"></div></div>
+  <div class="setup" id="setup" hidden role="dialog" aria-modal="true" aria-labelledby="setupTitle"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
