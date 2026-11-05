@@ -36,6 +36,13 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
 - **Store, Available tasks, Profile** (v2.1): Build opens a Store of category tiles with "New"/ready badges; two original
   characters (Rosie the town planner, Grandpa Joe) hand out quick wins and daily challenges as cards with progress bars and
   **Go** buttons that jump straight to the right screen; a Profile (top-left) shows town level, stats, achievements and the sticker book.
+- **Memories:** after checking off a task, tap **Recap** to add a photo and/or a few words (or add one any time from
+  **Memories**). It's a scrapbook by month and area. Photos are shrunk to about 1024px and stored **on this device only** (IndexedDB).
+  +5 XP each, up to 3 a day.
+- **Calendar + outing budgets:** plan outings (date, time, area, place, who's going, budget). Set a monthly outing budget
+  to see planned vs. budget vs. actually spent. After an outing, tap **We went!** to log what it cost and add a recap
+  (fixed +15 coins / +10 XP for going, never based on the amount). **Add to my calendar** downloads an `.ics` for
+  Apple/Google/Outlook. **Later, with accounts:** shared community events and two-way sync with the family's calendar.
 - **Landscape only on phones.** The installed app asks for landscape; on Android a "Play full screen" button locks it;
   a phone held upright sees a "Turn your phone sideways" screen (browsers can't force rotation on their own, and iPhone Safari never allows a lock).
   Every screen has a compact layout for short, wide phone screens. Tablets and computers can use either orientation.

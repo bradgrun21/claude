@@ -31,6 +31,8 @@ export const IC = {
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+  calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   /* Materials */
   bricks: '<rect x="3" y="6" width="8" height="5" rx="1"/><rect x="13" y="6" width="8" height="5" rx="1"/><rect x="7" y="13" width="10" height="5" rx="1"/>',
   lanterns: '<path d="M9 4h6M12 2v2"/><path d="M8 7h8l-1 11H9z"/><path d="M7 18h10"/><path d="M12 10v5"/>',

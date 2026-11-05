@@ -81,6 +81,8 @@ export const QUICK_WINS = [
   { id: 'home', text: 'Build a home', coins: 30, xp: 20 },
   { id: 'road', text: 'Lay a road', coins: 20, xp: 10 },
   { id: 'area2', text: 'Open a second area', coins: 50, xp: 25 },
+  { id: 'memory', text: 'Add a photo or recap of your day', coins: 20, xp: 15 },
+  { id: 'outing', text: 'Plan an outing on the calendar', coins: 20, xp: 15 },
   { id: 'level3', text: 'Reach level 3', coins: 100, xp: 30 }
 ];
 export function markQuickWin(state, id) {

@@ -30,7 +30,9 @@ export function baseState() {
     tour: { step: 0, done: false },
     stickers: [],
     journal: [],
-    settings: { sound: true, quality: 'auto', night: false }
+    memories: [],
+    events: [],
+    settings: { sound: true, quality: 'auto', night: false, outingBudget: 0 }
   };
 }
 

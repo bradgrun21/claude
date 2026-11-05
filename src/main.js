@@ -32,6 +32,10 @@ import { createList, completeTask, achieveGoal, listFor, dueCount, totalDue, mak
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
+import { addEvent, updateEvent, removeEvent, completeEvent, toIcs, eventsOn } from './systems/calendar.js';
+import { addMemory, removeMemory } from './systems/memories.js';
+import { putPhoto, deletePhoto, clearPhotos, compressImage, hydratePhotos } from './data/photos.js';
+import { renderCalendar, renderEventForm, renderMemoryForm, renderMemories, renderMemoryView } from './ui/journal.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -73,7 +77,7 @@ function boot(state, opts) {
 
   /* ---------- Static HUD art ---------- */
   $('icoPop').innerHTML = ART.people; $('icoCoin').innerHTML = ART.coin; $('menuBtn').innerHTML = svgI('menu', '#fff', 24, 3);
-  $('artBuild').innerHTML = ART.hardhat; $('artLists').innerHTML = ART.clipboard; $('artTrophy').innerHTML = ART.trophy; $('artWins').innerHTML = ART.wins;
+  $('artBuild').innerHTML = ART.hardhat; $('artLists').innerHTML = ART.clipboard; $('artTrophy').innerHTML = ART.trophy; $('artWins').innerHTML = ART.wins; $('artCal').innerHTML = ART.calendar; $('artMem').innerHTML = ART.album;
   $('lvlStar').insertAdjacentHTML('afterbegin', ART.xp);
   $('panelClose').innerHTML = svgI('chevron', '#fff', 22, 3.2);
 
@@ -107,6 +111,7 @@ function boot(state, opts) {
     const badge = (id, n) => { const el = $(id); el.hidden = !n; el.textContent = n; };
     badge('bdgLists', due);
     badge('bdgTrophy', milestoneState(state).filter((m) => m.ready).length);
+    badge('bdgCal', state.events.filter((e) => !e.done && e.date <= today).length);
     const winsLeft = QUICK_WINS.filter((q) => state.quickWins[q.id] !== 'claimed').length;
     $('lblWins').textContent = winsLeft ? 'Quick wins' : 'Challenges';
     badge('bdgWins', requestItems(state, today).length);
@@ -222,6 +227,11 @@ function boot(state, opts) {
     else if (p.kind === 'goal') { title = p.draft.title; body = renderGoalForm(p.draft); }
     else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
+    else if (p.kind === 'calendar') { title = 'Calendar'; body = renderCalendar(state, today, p.ym, p.sel); }
+    else if (p.kind === 'event') { title = p.draft.id ? 'Edit outing' : 'Plan an outing'; body = renderEventForm(p.draft, state); }
+    else if (p.kind === 'memories') { title = 'Memories'; body = renderMemories(state, p.filter); }
+    else if (p.kind === 'memory') { title = p.draft.eventId ? 'How did it go?' : 'Add a memory'; body = renderMemoryForm(p.draft); }
+    else if (p.kind === 'memview') { const m = state.memories.find((x) => x.id === p.id); if (!m) { closePanel(); return; } title = 'Memory'; body = renderMemoryView(state, m); }
     else if (p.kind === 'level') { title = 'Your level'; body = renderLevelInfo(state); }
     else if (p.kind === 'levelup') { title = 'Level up!'; body = renderLevelUp(p.level); }
     else if (p.kind === 'menu') { title = 'Menu'; body = renderMenu(p.confirm); }
@@ -232,6 +242,7 @@ function boot(state, opts) {
     const keepScroll = $('panelBody').scrollTop;
     const focusId = document.activeElement?.closest?.('#panelBody') ? document.activeElement.id || document.activeElement.dataset.tt : null;
     $('panelBody').innerHTML = body;
+    hydratePhotos($('panelBody'));
     $('panelBody').scrollTop = keepScroll;
     if (focusId) { const el = $(focusId) || $('panelBody').querySelector(`[data-tt="${focusId}"]`); el?.focus(); }
   }
@@ -261,7 +272,67 @@ function boot(state, opts) {
     const g = $('gfGoal'); if (g) d.goal = g.value;
     $('panelBody').querySelectorAll('[data-tt]').forEach((i) => { d.tasks[+i.dataset.tt].title = i.value; });
   }
-  $('panelBody').addEventListener('input', () => { if (panel?.kind === 'goal') readGoalForm(); });
+  $('panelBody').addEventListener('input', () => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory') readJournalForm(); });
+  function readJournalForm() {
+    const d = panel?.draft; if (!d) return;
+    const v = (id) => $(id)?.value;
+    if (panel.kind === 'event') { d.title = v('evTitle') ?? d.title; d.date = v('evDate') || d.date; d.time = v('evTime') ?? d.time; d.place = v('evPlace') ?? d.place; d.budget = v('evBudget') ?? d.budget; d.notes = v('evNotes') ?? d.notes; }
+    else { d.text = v('memText') ?? d.text; d.date = v('memDate') || d.date; if ($('memSpent')) d.spent = v('memSpent'); }
+  }
+  $('panelBody').addEventListener('change', async (e) => {
+    if (e.target.id !== 'memPhoto' || !e.target.files?.[0] || panel?.kind !== 'memory') return;
+    readJournalForm();
+    try {
+      const blob = await compressImage(e.target.files[0]);
+      if (panel.draft.preview) URL.revokeObjectURL(panel.draft.preview);
+      panel.draft.blob = blob; panel.draft.preview = URL.createObjectURL(blob);
+      renderPanel();
+    } catch (err) { toast('Couldn’t use that photo', 'Try another one'); }
+  });
+  const ymOf = (k) => k.slice(0, 7);
+  const shiftMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  function openEventForm(o = {}) {
+    const ev = o.id && state.events.find((x) => x.id === o.id);
+    const draft = ev ? { ...ev, who: [...ev.who], budget: ev.budget || '' } : { title: '', date: o.date || today, time: '', section: 'relational', place: '', budget: '', who: state.family.filter((m) => m.kind !== 'pet').map((m) => m.name), notes: '' };
+    openPanel('event', { draft });
+  }
+  function openMemoryForm(o = {}) {
+    openPanel('memory', { draft: { section: o.section || 'relational', date: o.date || today, text: '', taskTitle: o.taskTitle || null, eventId: o.eventId || null, eventTitle: o.eventTitle || null, spent: o.spent ?? null } });
+  }
+  function downloadIcs(events, name) {
+    if (!events.length) return;
+    const blob = new Blob([toIcs(events, state.cityName)], { type: 'text/calendar' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Calendar file ready', 'Open it to add to Apple, Google or Outlook Calendar');
+  }
+  async function saveMemory(el, justDone = false) {
+    readJournalForm();
+    const d = panel.draft;
+    let photoId = null;
+    if (!justDone && d.blob) { photoId = `p${Date.now().toString(36)}`; await putPhoto(photoId, d.blob); }
+    let mem = null, reward = null;
+    if (!justDone) {
+      const r = addMemory(state, { section: d.section, date: d.date, text: d.text, photoId, taskTitle: d.taskTitle, eventId: d.eventId }, today);
+      if (!r && !d.eventId) { toast('Add a photo or a few words', 'Either one is perfect'); return; }
+      if (r) { mem = r.mem; reward = r.reward; }
+    }
+    if (d.eventId) {
+      const c = completeEvent(state, d.eventId, d.spent);
+      if (c?.ev && mem) c.ev.memoryId = mem.id;
+      if (c?.reward) reward = { coins: (reward?.coins || 0) + c.reward.coins, xp: (reward?.xp || 0) + c.reward.xp };
+      note(state, today, 'outing', { title: c?.ev.title });
+    }
+    if (d.preview) URL.revokeObjectURL(d.preview);
+    if (reward) flyRewards(centerOf(el), reward);
+    sound.chime();
+    if (mem) win('memory', centerOf(el));
+    toast(d.eventId ? 'Outing marked done' : 'Memory saved', d.eventId ? 'Nice work getting out together' : 'Find it any time in Memories');
+    const back = d.eventId ? { kind: 'calendar', ym: ymOf(d.date), sel: d.date } : { kind: 'memories' };
+    afterProgress();
+    openPanel(back.kind, back);
+  }
   function saveGoalForm() {
     readGoalForm();
     const d = panel.draft;
@@ -517,6 +588,37 @@ function boot(state, opts) {
     if (d.per) { readGoalForm(); const [i, n] = d.per.split(':').map(Number); const t = panel.draft.tasks[i]; t.per = Math.max(1, Math.min(7, t.per + n)); renderPanel(); return; }
     if (d.addtask) { readGoalForm(); panel.draft.tasks.push({ title: '', kind: 'daily', per: 3 }); renderPanel(); $('panelBody').querySelector(`[data-tt="${panel.draft.tasks.length - 1}"]`)?.focus(); return; }
     if (d.savegoal) { saveGoalForm(); return; }
+    if (d.cal === 'prev' || d.cal === 'next') { panel.ym = shiftMonth(panel.ym, d.cal === 'prev' ? -1 : 1); panel.sel = panel.ym === ymOf(today) ? today : `${panel.ym}-01`; renderPanel(); return; }
+    if (d.cal === 'budget') { const v = parseFloat(String($('outBudget').value).replace(/[^0-9.]/g, '')) || 0; state.settings.outingBudget = Math.round(v); persist(); renderPanel(); toast('Outing budget saved', v ? `$${Math.round(v)} a month for outings` : 'No monthly limit'); return; }
+    if (d.cal === 'new') { openEventForm({ date: d.date }); return; }
+    if (d.cal === 'icsall') { downloadIcs(state.events.filter((e) => e.date >= today && !e.done), 'life-city-outings.ics'); return; }
+    if (d.day && panel?.kind === 'calendar') { panel.sel = d.day; panel.ym = ymOf(d.day); renderPanel(); return; }
+    if (d.ics) { const ev = state.events.find((x) => x.id === d.ics); if (ev) downloadIcs([ev], `${ev.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'outing'}.ics`); return; }
+    if (d.evedit) { openEventForm({ id: d.evedit }); return; }
+    if (d.esec) { readJournalForm(); panel.draft.section = d.esec; renderPanel(); return; }
+    if (d.who) { readJournalForm(); const w = panel.draft.who; const i = w.indexOf(d.who); if (i >= 0) w.splice(i, 1); else w.push(d.who); renderPanel(); return; }
+    if (d.evsave) {
+      readJournalForm();
+      const dr = panel.draft;
+      if (!dr.title.trim()) { toast('Give it a name', 'Like “Zoo day” or “Pizza and a movie”'); $('evTitle')?.focus(); return; }
+      if (dr.id) updateEvent(state, dr.id, { title: dr.title.trim(), date: dr.date, time: dr.time, section: dr.section, place: dr.place, budget: dr.budget, who: dr.who, notes: dr.notes });
+      else { addEvent(state, dr); win('outing', centerOf(b)); sound.chime(); }
+      note(state, today, 'planned', { title: dr.title });
+      persist(); hud();
+      openPanel('calendar', { ym: ymOf(dr.date), sel: dr.date });
+      toast(dr.id ? 'Outing updated' : 'Outing added', dr.budget ? `$${dr.budget} set aside in this month's plan` : 'Tap “Add to my calendar” to put it on your phone');
+      return;
+    }
+    if (d.evdel) { const dr = panel.draft; removeEvent(state, dr.id); persist(); hud(); openPanel('calendar', { ym: ymOf(dr.date), sel: dr.date }); return; }
+    if (d.went) { const ev = state.events.find((x) => x.id === d.went); if (ev) openMemoryForm({ section: ev.section, date: ev.date, eventId: ev.id, eventTitle: ev.title, spent: ev.budget || '' }); return; }
+    if (d.mem === 'new') { openMemoryForm({ date: d.date }); return; }
+    if (d.memo) { const [lid, tid] = d.memo.split(':'); const l = state.lists.find((x) => x.id === lid); const t = l?.tasks.find((x) => x.id === tid); if (l) openMemoryForm({ section: l.section, taskTitle: t?.title }); return; }
+    if (d.msec) { readJournalForm(); panel.draft.section = d.msec; renderPanel(); return; }
+    if (d.memsave) { saveMemory(b); return; }
+    if (d.memskip) { saveMemory(b, true); return; }
+    if (d.mfilter !== undefined) { panel.filter = d.mfilter || null; renderPanel(); return; }
+    if (d.memview) { openPanel('memview', { id: d.memview }); return; }
+    if (d.memdel) { const m = removeMemory(state, d.memdel); if (m?.photoId) deletePhoto(m.photoId); persist(); openPanel('memories'); toast('Memory removed'); return; }
     if (d.ttab) { panel.tab = d.ttab; renderPanel(); return; }
     if (d.claimc) { const c = claimChallenge(state, d.claimc, today); if (c) { flyRewards(centerOf(b), c); sound.chime(); afterProgress(); renderPanel(); } return; }
     if (d.claimm) { const m = claimMilestone(state, d.claimm); if (m) { flyRewards(centerOf(b), m); sound.chime(); afterProgress(); renderPanel(); } return; }
@@ -566,7 +668,7 @@ function boot(state, opts) {
     if (a.startsWith('q:')) { const v = a.slice(2); state.settings.quality = v; stage.setQuality(v === 'auto' ? detectQuality() : v); autoChecked = true; }
     if (a === 'tour') { closePanel(); state.tour = { step: 0, done: false }; runTour(); return; }
     if (a === 'ask') { panel.confirm = true; }
-    if (a === 'reset') { clearSave(); location.reload(); return; }
+    if (a === 'reset') { clearSave(); clearPhotos().finally(() => location.reload()); return; }
     persist(); renderPanel();
   }
   function renderPaper() {
@@ -592,6 +694,8 @@ function boot(state, opts) {
   $('btnLists').onclick = () => { sound.tap(); openPanel('lists', { due: false }); };
   $('btnToday').onclick = () => { sound.tap(); openPanel('lists', { due: true }); };
   $('btnTrophy').onclick = () => { sound.tap(); openPanel('profile', { tab: 'achievements' }); };
+  $('btnCal').onclick = () => { sound.tap(); openPanel('calendar', { ym: ymOf(today), sel: today }); };
+  $('btnMem').onclick = () => { sound.tap(); openPanel('memories'); };
   $('btnWins').onclick = () => { sound.tap(); openPanel('requests'); };
   $('profileBtn').onclick = () => { sound.tap(); openPanel('profile', { tab: 'info' }); };
   function goAction(code) {
@@ -603,6 +707,8 @@ function boot(state, opts) {
       if (id === 'home') return openPanel('build', { tab: 'homes' });
       if (id === 'road') return startRoads();
       if (id === 'level3') return openPanel('level');
+      if (id === 'memory') return openMemoryForm();
+      if (id === 'outing') return openEventForm();
       return openPanel('build', { tab: unopened || null });
     }
     if (id === 'build') return openPanel('build');

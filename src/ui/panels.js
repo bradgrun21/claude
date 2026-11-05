@@ -74,7 +74,7 @@ export function renderListCard(state, list, day, { compact = false } = {}) {
   const rows = list.tasks.map((t) => {
     const avail = isAvailable(t, day);
     return `<div class="task${avail ? '' : ' done'}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : 'Done'} ${esc(t.title)}">${avail ? '' : svgI('check', '#fff', 18, 3)}</button>
-      <span class="tx"><b>${esc(t.title)}</b><small>${progressLabel(t, day)}</small></span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
+      <span class="tx"><b>${esc(t.title)}</b><small>${progressLabel(t, day)}</small></span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 16)}<span>Recap</span></button>` : ''}</div>`;
   }).join('');
   const g = goalReward(list.tier);
   return `<div class="listcard" style="--c:${SECTIONS[list.section].color}">
@@ -182,7 +182,7 @@ export function renderStore(state) {
 }
 
 /* ---------- Available tasks (quick wins + daily challenges, given by characters) ---------- */
-const WIN_ICON = { goal: 'board', place: 'home', task: 'check', home: 'home', road: 'road', area2: 'plus', level3: 'up' };
+const WIN_ICON = { goal: 'board', place: 'home', task: 'check', home: 'home', road: 'road', area2: 'plus', memory: 'camera', outing: 'calendar', level3: 'up' };
 export function requestItems(state, day) {
   const items = [];
   const open = new Set(state.lists.map((l) => l.section)).size;
