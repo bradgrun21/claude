@@ -1,7 +1,7 @@
 /*
  * Two quality levels.
- *   High          — soft shadows (2048), tilt-shift post effects, up to 2× pixel ratio.
- *   Battery saver — no post effects, smaller shadow map (1024), up to 1.5× pixel ratio.
+ *   High          — soft shadows (2048), up to 2× pixel ratio.
+ *   Battery saver — smaller hard-edged shadow map (1024), up to 1.5× pixel ratio.
  * "Auto" picks by device, then watches the frame rate for the first seconds and steps down if needed.
  */
 export function detectQuality() {
@@ -14,8 +14,8 @@ export function detectQuality() {
 }
 
 export const QUALITY = {
-  high: { post: true, shadow: 2048, soft: true, maxDpr: 2 },
-  saver: { post: false, shadow: 1024, soft: false, maxDpr: 1.5 }
+  high: { shadow: 2048, soft: true, maxDpr: 2 },
+  saver: { shadow: 1024, soft: false, maxDpr: 1.5 }
 };
 
 /* Rolling frame-rate meter used by the auto mode and the ?fps debug overlay. */

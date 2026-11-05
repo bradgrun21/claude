@@ -1,38 +1,46 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { HALF } from '../data/map.js';
 
-const HOME_TARGET = new THREE.Vector3(1.9, 0, 1.9);
-const DIR = new THREE.Vector3(1, 0.86, 1).normalize();
-const DIR_TALL = new THREE.Vector3(0.42, 0.98, 1).normalize();
-const TARGET_TALL = new THREE.Vector3(3.0, 0, 0.6);
+/* Fixed three-quarter view (like a classic town builder): drag to pan, pinch or scroll to zoom. No rotation. */
+const DIR = new THREE.Vector3(1, 1.32, 1).normalize();
 
 export function createCamera(canvas) {
-  const camera = new THREE.PerspectiveCamera(30, 1, 0.5, 200);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.5, 260);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
+  controls.dampingFactor = 0.1;
+  controls.enableRotate = false;
   controls.screenSpacePanning = false;
-  controls.minDistance = 11;
-  controls.maxDistance = 64;
-  controls.minPolarAngle = 0.55;
-  controls.maxPolarAngle = 1.2;
-  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
-  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
-  controls.addEventListener('change', () => {
-    controls.target.x = THREE.MathUtils.clamp(controls.target.x, -7, 14);
-    controls.target.z = THREE.MathUtils.clamp(controls.target.z, -7, 10);
-    controls.target.y = 0;
-  });
+  controls.minDistance = 9;
+  controls.maxDistance = 46;
+  controls.zoomSpeed = 1.1;
+  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  const clampTarget = () => {
+    const t = controls.target, lim = HALF + 2;
+    const cx = THREE.MathUtils.clamp(t.x, -lim, lim), cz = THREE.MathUtils.clamp(t.z, -lim, lim);
+    const dx = cx - t.x, dz = cz - t.z;
+    if (dx || dz || t.y) { t.set(cx, 0, cz); camera.position.x += dx; camera.position.z += dz; }
+  };
+  controls.addEventListener('change', clampTarget);
+  const home = { target: new THREE.Vector3(1.5, 0, 1.5), dist: 26 };
   function homeView() {
     const a = innerWidth / innerHeight;
-    if (a < 0.8) return { dir: DIR_TALL, target: TARGET_TALL, dist: 56 };
-    return { dir: DIR, target: HOME_TARGET, dist: a < 1.2 ? 42 : 40 };
+    return { dir: DIR, target: home.target, dist: a < 0.8 ? 35 : home.dist };
   }
   function resetView() {
     const v = homeView();
     controls.target.copy(v.target);
-    camera.position.copy(v.target).addScaledVector(v.dir, v.dist);
+    camera.position.copy(v.target).addScaledVector(DIR, v.dist);
     controls.update();
   }
-  return { camera, controls, homeView, resetView };
+  function setHome(x, z) { home.target.set(x, 0, z); }
+  function flyTo(p, tween, ease, dist = null) {
+    const t0 = controls.target.clone(), c0 = camera.position.clone();
+    const d0 = c0.distanceTo(t0), d1 = dist ?? d0;
+    const t1 = new THREE.Vector3(p.x, 0, p.z);
+    tween(900, (k) => { const e = ease(k); controls.target.lerpVectors(t0, t1, e); camera.position.copy(controls.target).addScaledVector(DIR, d0 + (d1 - d0) * e); });
+  }
+  return { camera, controls, homeView, resetView, setHome, flyTo, DIR };
 }

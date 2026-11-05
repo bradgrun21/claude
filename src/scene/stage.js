@@ -1,14 +1,13 @@
 import * as THREE from 'three';
-import { createSky, DAY, NIGHT, STORM } from './sky.js';
+import { createSky, DAY, NIGHT } from './sky.js';
 import { createCamera } from './camera.js';
 import { createLights } from './lights.js';
 import { createWater } from './water.js';
-import { createPost } from './post.js';
 import { QUALITY } from './quality.js';
 import { mat } from '../world/palette.js';
 
-/* Renderer + scene + camera + lights + water + post effects in one place. */
-export function createStage(canvas, sheet) {
+/* Renderer + scene + camera + lights + sea. Crisp, bright, no blur. */
+export function createStage(canvas) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -17,20 +16,20 @@ export function createStage(canvas, sheet) {
   }
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMapping = THREE.NoToneMapping;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(DAY.fog.clone(), 34, 78);
+  scene.fog = new THREE.Fog(DAY.fog.clone(), 60, 140);
   const sky = createSky(scene);
   const cam = createCamera(canvas);
   const lights = createLights(scene);
   const water = createWater(scene);
-  const post = createPost(renderer, scene, cam.camera);
+  water.position.y = -0.38;
+  const sunOffset = lights.sun.position.clone().sub(lights.sun.target.position);
 
   const stage = {
-    renderer, scene, sky, water, post, ...cam, ...lights,
-    quality: 'high', night: 0, storm: 0,
+    renderer, scene, sky, water, ...cam, ...lights,
+    quality: 'high', night: 0,
     setQuality(level) {
       const q = QUALITY[level] || QUALITY.high;
       stage.quality = level;
@@ -43,40 +42,35 @@ export function createStage(canvas, sheet) {
     resize() {
       const q = QUALITY[stage.quality] || QUALITY.high;
       const w = innerWidth, h = innerHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, q.maxDpr);
-      renderer.setPixelRatio(dpr);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.maxDpr));
       renderer.setSize(w, h, false);
-      post.composer.setPixelRatio(dpr);
-      post.composer.setSize(w, h);
       cam.camera.aspect = w / h;
-      const topH = 96, panelH = sheet ? sheet.getBoundingClientRect().height : 0;
-      const shift = Math.max(0, panelH - topH);
-      cam.camera.setViewOffset(w, h + shift, 0, shift, w, h);
       cam.camera.updateProjectionMatrix();
-      const centerY = (h - shift) / 2;
-      post.setFocus(w, h, 1 - (centerY + 30) / h);
     },
-    /* Day/night + storm mood. k = night 0..1, sv = storm visual 0..1. */
-    applyMood(k, sv) {
+    /* Shadows follow wherever the camera is looking, so the whole map can be lit. */
+    followShadows() {
+      const t = cam.controls.target;
+      lights.sun.target.position.set(Math.round(t.x), 0, Math.round(t.z));
+      lights.sun.position.copy(lights.sun.target.position).add(sunOffset);
+      const d = cam.camera.position.distanceTo(t);
+      const half = THREE.MathUtils.clamp(d * 0.62, 10, 26);
+      const sc = lights.sun.shadow.camera;
+      if (Math.abs(sc.right - half) > 0.5) { sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half; sc.updateProjectionMatrix(); }
+    },
+    applyMood(k) {
       const { sun, hemi, amb } = lights;
-      sun.intensity = THREE.MathUtils.lerp(2.7, 0.35, k) * (1 - 0.6 * sv);
-      sun.color.set('#FFF0D6').lerp(_c.set('#C9D3DC'), sv).lerp(_c2.set('#9FB4FF'), k);
-      hemi.intensity = THREE.MathUtils.lerp(1.15, 0.32, k) * (1 - 0.3 * sv);
-      amb.intensity = THREE.MathUtils.lerp(0.18, 0.12, k);
-      mat.win.emissiveIntensity = 1.6 * Math.max(k, sv * 0.35);
-      mat.lamp.emissiveIntensity = 0.15 + 3.2 * Math.max(k, sv * 0.4);
-      scene.fog.color.copy(DAY.fog).lerp(STORM.fog, sv).lerp(NIGHT.fog, k);
-      mat.water.color.copy(DAY.water).lerp(STORM.water, sv).lerp(NIGHT.water, k);
-      mat.cloud.color.set('#FFFFFF').lerp(_c.set('#8E9AA4'), sv);
-      mat.cloud.emissiveIntensity = 0.45 * (1 - sv);
-      renderer.toneMappingExposure = THREE.MathUtils.lerp(1.0, 1.15, k);
-      sky.paint(k, sv);
+      sun.intensity = THREE.MathUtils.lerp(2.3, 0.35, k);
+      sun.color.set('#FFF3DC').lerp(_c.set('#9FB4FF'), k);
+      hemi.intensity = THREE.MathUtils.lerp(1.05, 0.3, k);
+      amb.intensity = THREE.MathUtils.lerp(0.22, 0.12, k);
+      mat.win.emissiveIntensity = 1.6 * k;
+      mat.lamp.emissiveIntensity = 0.15 + 3.2 * k;
+      scene.fog.color.copy(DAY.fog).lerp(NIGHT.fog, k);
+      mat.water.color.copy(DAY.water).lerp(NIGHT.water, k);
+      sky.paint(k, 0);
     },
-    render() {
-      if ((QUALITY[stage.quality] || QUALITY.high).post) post.composer.render();
-      else renderer.render(scene, cam.camera);
-    }
+    render() { renderer.render(scene, cam.camera); }
   };
   return stage;
 }
-const _c = new THREE.Color(), _c2 = new THREE.Color();
+const _c = new THREE.Color();

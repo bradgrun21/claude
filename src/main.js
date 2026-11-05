@@ -1,758 +1,680 @@
 import './fonts.js';
 import './styles.css';
 import * as THREE from 'three';
-import { load, save, clearSave, createFromSetup } from './data/state.js';
+import { load, save, clearSave, newCity } from './data/state.js';
 import { demoState } from './data/demo.js';
-import { AREA_INFO, MATERIALS } from './data/areas.js';
-import { DISTRICTS } from './data/layout.js';
+import { byId, SECTIONS, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from './data/catalog.js';
+import { HALF, tileOf } from './data/map.js';
 import { createStage } from './scene/stage.js';
 import { detectQuality, fpsMeter } from './scene/quality.js';
 import { waterUniforms } from './scene/water.js';
 import { swayUniforms } from './world/bake.js';
-import { createCity, tileW } from './world/city.js';
-import { createActors } from './world/actors.js';
+import { createTerrain } from './world/terrain.js';
+import { createRoads } from './world/roads.js';
+import { createBuildings, createGhost, createWalkers, footprintCenter } from './world/town.js';
+import { buildModel } from './world/townModels.js';
+import { bakeGroup } from './world/bake.js';
 import { createSurprises } from './world/surprises.js';
-import { createRain } from './world/rain.js';
-import { createTrain } from './world/train.js';
 import { createTags } from './world/tags.js';
 import { createEffects } from './world/effects.js';
-import { loadArtPack } from './world/gltf.js';
 import { tween, tickTweens, easeInOut, REDUCED, later } from './world/tween.js';
-import { mat, mesh, rand, pick } from './world/palette.js';
+import { pick } from './world/palette.js';
 import { createSound } from './audio/sound.js';
 import { runSetup } from './ui/setup.js';
-import { svgI, IC, esc, fmt$ } from './ui/icons.js';
-import { renderHud, renderToday, renderStorm, renderBuild, renderTogether, renderRating, matIcon } from './ui/panes.js';
-import { dateKey, addDays, shortDate, monthYear, advancePayday, weekday } from './systems/time.js';
-import { stormLabel, stormVisual, waterY, STARTER_CUSHION } from './systems/storm.js';
-import { currentRating, ratingWord, easeBars } from './systems/rating.js';
-import { completeTask } from './systems/tasks.js';
-import { spend, COSTS, MAX_FLOORS } from './systems/build.js';
-import { takeMaterials } from './systems/materials.js';
-import { recipeById, effectiveNeeds, canBuildRecipe } from './systems/recipes.js';
-import { refillOrders, deliverOrder, skipOrder, anyDeliverable, swapOrdersAtPayday } from './systems/orders.js';
-import { trainArrives, openCrate, activeMaterials, starsNow, DECORATIONS } from './systems/train.js';
-import { applyPayday, extraDebtPayment, stall, setPayoffDate, stormNow, checkUnlocks, debtClock, fullSafetyNet, DISTRICT_NEED } from './systems/money.js';
+import { createTour } from './ui/tour.js';
+import { svgI, IC, esc } from './ui/icons.js';
+import { ART } from './ui/art.js';
+import { buildTabs, renderBuild, renderLists, renderBuilding, renderGoalForm, renderTrophy, renderWins, renderLevelInfo, renderLevelUp } from './ui/panels.js';
+import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
+import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
+import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint } from './systems/placement.js';
+import { createList, completeTask, achieveGoal, listFor, dueCount, totalDue, makeTask, MAX_TASKS, streak } from './systems/lists.js';
+import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
-import { note } from './systems/journal.js';
-import { buildPaper, cushionPct } from './systems/paper.js';
+import { note, since } from './systems/journal.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug') || params.has('fps');
 
-/* ---------- Start: setup on first open, otherwise straight into the city ---------- */
 function start() {
   const saved = load();
-  if (saved && saved.setup.done) { boot(saved, { first: false }); return; }
+  if (saved) { boot(saved, {}); return; }
   $('boot').classList.add('done');
   runSetup($('setup'), {
-    today: dateKey(),
-    onDone: (input) => { const s = createFromSetup(input, dateKey()); save(s, true); boot(s, { first: true }); },
-    onDemo: () => { const s = demoState(dateKey()); save(s, true); boot(s, { first: true, demo: true }); }
+    onDone: (input) => { const s = newCity(input, dateKey()); save(s, true); boot(s, { tour: true }); },
+    onDemo: () => { const s = demoState(dateKey()); save(s, true); boot(s, {}); }
   });
 }
 
 function boot(state, opts) {
-  const sheet = $('sheet');
-  ['hud', 'side', 'sheet'].forEach((id) => { $(id).hidden = false; });
+  $('hud').hidden = false;
   $('boot').classList.remove('done');
-  const T = [['start', performance.now()]];
-  const mark = (n) => T.push([n, performance.now()]);
-  const stage = createStage($('scene'), sheet);
-  if (!stage) { $('fail').style.display = 'flex'; ['hud', 'side', 'sheet', 'boot'].forEach((id) => { $(id).hidden = true; }); return; }
-  const { scene, camera, controls } = stage;
-  const quality = state.settings.quality === 'auto' ? detectQuality() : state.settings.quality;
-  stage.setQuality(quality);
+  const stage = createStage($('scene'));
+  if (!stage) { $('fail').style.display = 'flex'; $('hud').hidden = true; $('boot').hidden = true; return; }
+  const { scene, camera, controls, renderer } = stage;
+  stage.setQuality(state.settings.quality === 'auto' ? detectQuality() : state.settings.quality);
 
   let today = dateKey();
-  const tags = createTags($('tags'));
+  state.stats.lastDay = today;
+  const terrain = createTerrain(scene, renderer);
+  const roads = createRoads(scene);
   const fx = createEffects(scene, camera);
-  mark('stage');
-  const city = createCity({ stage, state, tags, fx });
-  mark('city');
-  const actors = createActors({ scene, city, state });
-  const sur = createSurprises(scene, camera);
-  const rain = createRain(scene);
-  const train = createTrain(scene, fx);
-  mark('actors+train');
+  const bld = createBuildings(scene, fx);
+  const ghost = createGhost(scene);
+  const walkers = createWalkers(scene);
+  const sur = createSurprises(scene);
+  const tags = createTags($('tags'));
   const sound = createSound(state.settings);
   const meter = fpsMeter();
   const persist = () => save(state);
+  for (const b of state.buildings) bld.add(b);
+  walkers.addFamily(state.family);
 
-  /* ---------- Derived values + rendering ---------- */
-  let selected = null;
-  let tab = 'today';
-  const ctx = () => {
-    const storm = stormNow(state);
-    const rating = currentRating(state);
-    return { state, today, storm, rating, ratingWord: ratingWord(rating), selected, activeMats: activeMaterials(state) };
-  };
-  const hudEls = { ringHud: $('ringHud'), ringHudTxt: $('ringHudTxt'), ratingWord: $('ratingWord'), cityName: $('cityName'), popLine: $('popLine'), pts: $('pts'), mats: $('mats') };
-  const PANES = { today: ['paneToday', renderToday], storm: ['paneStorm', renderStorm], build: ['paneBuild', renderBuild], together: ['paneTogether', renderTogether], rate: ['paneRate', renderRating] };
-  function render() {
-    const c = ctx();
-    renderHud(c, hudEls);
-    const [id, fn] = PANES[tab];
-    const pane = $(id);
-    const scroll = pane.scrollTop;
-    const focusId = document.activeElement && pane.contains(document.activeElement) ? document.activeElement.id : null;
-    pane.innerHTML = fn(c);
-    pane.scrollTop = scroll;
-    if (focusId && $(focusId)) $(focusId).focus();
-    const dot = state.orders.list.some((o) => (state.materials[o.material] || 0) >= o.qty) || state.train.cars.some((x) => !x.opened);
-    const tb = sheet.querySelector('[data-tab="today"]');
-    tb.innerHTML = 'Today' + (dot && tab !== 'today' ? '<span class="dot" aria-hidden="true"></span>' : '');
-    refreshTags();
-  }
-  function showTab(which) {
-    tab = which;
-    sheet.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === which));
-    for (const [k, [id]] of Object.entries(PANES)) $(id).hidden = k !== which;
-    render();
-  }
-  function setMin(m) { sheet.classList.toggle('min', m); $('grab').setAttribute('aria-expanded', !m); }
-  function bump(el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  /* ---------- Static HUD art ---------- */
+  $('icoPop').innerHTML = ART.people; $('icoCoin').innerHTML = ART.coin; $('menuBtn').innerHTML = svgI('menu', '#fff', 24, 3);
+  $('artBuild').innerHTML = ART.hardhat; $('artLists').innerHTML = ART.clipboard; $('artTrophy').innerHTML = ART.trophy; $('artWins').innerHTML = ART.wins;
+  $('lvlStar').insertAdjacentHTML('afterbegin', ART.xp);
+  $('panelClose').innerHTML = svgI('chevron', '#fff', 22, 3.2);
 
-  /* ---------- Toast + cards ---------- */
+  /* ---------- World sync ---------- */
+  function syncWorld() {
+    roads.rebuild(state.roads);
+    const blocked = new Set(state.roads);
+    for (const b of state.buildings) for (const [i, j] of footprint(b.type, b.i, b.j, b.rot)) blocked.add(`${i},${j}`);
+    terrain.sync(blocked);
+    walkers.setRoads(state.roads);
+    walkers.setCounts(Math.min(16, 2 + Math.floor(population(state) / 4)), Math.min(8, Math.floor(state.roads.length / 7)));
+  }
+  syncWorld();
+  const th = state.buildings.find((b) => b.type === 'townhall');
+  const thc = footprintCenter('townhall', th.i, th.j, 0);
+  stage.setHome(thc.x + 1, thc.z + 2);
+
+  /* ---------- HUD ---------- */
+  function hud() {
+    const need = levelNeed(state.level);
+    const blocker = levelBlocker(state);
+    $('lvl').textContent = state.level;
+    $('xpFill').style.width = `${Math.min(100, (state.xp / need.xp) * 100).toFixed(1)}%`;
+    $('xpTxt').textContent = blocker ? (blocker.kind === 'pop' ? `Need ${blocker.need} people` : `Upgrade Town Hall`) : `${state.xp} / ${need.xp}`;
+    $('lvlBtn').classList.toggle('blocked', !!blocker);
+    $('pop').textContent = population(state);
+    $('coins').textContent = state.coins.toLocaleString('en-US');
+    const due = totalDue(state, today);
+    $('todayN').textContent = due;
+    $('btnToday').classList.toggle('quiet', !due);
+    const badge = (id, n) => { const el = $(id); el.hidden = !n; el.textContent = n; };
+    badge('bdgLists', due);
+    const claim = dailyChallenges(state, today).filter((c) => !c.claimed && challengeProgress(state, c, today) >= c.need).length + milestoneState(state).filter((m) => m.ready).length;
+    badge('bdgTrophy', claim);
+    const winsLeft = QUICK_WINS.filter((q) => state.quickWins[q.id] !== 'claimed').length;
+    $('btnWins').hidden = !winsLeft;
+    badge('bdgWins', winsLeft);
+    refreshBubbles();
+  }
+  const bubbles = new Map();
+  function refreshBubbles() {
+    const want = new Map();
+    for (const b of state.buildings) {
+      const def = byId[b.type];
+      if (def.kind === 'section') {
+        const list = listFor(state, b.id);
+        if (!list) want.set(b.id, { sig: 'add', html: bubbleHtml(svgI('plus', SECTIONS[def.section].color, 20, 3), 'Add a list', b.id, def.section) });
+        else { const n = dueCount(list, today); if (n) want.set(b.id, { sig: `due${n}`, html: bubbleHtml(svgI(SECTIONS[def.section].icon, SECTIONS[def.section].color, 20, 2.4), `${n} to do`, b.id, def.section) }); }
+      } else if (def.kind === 'civic' && canUpgradeTownHall(state).ok) want.set(b.id, { sig: 'up', html: bubbleHtml(svgI('up', '#C98E25', 20, 3), 'Upgrade ready', b.id, null) });
+    }
+    for (const [id, t] of bubbles) if (!want.has(id) || want.get(id).sig !== t.sig) { tags.remove(t.tag, false); bubbles.delete(id); }
+    for (const [id, w] of want) if (!bubbles.has(id)) { const v = bld.views.get(id); if (v) bubbles.set(id, { sig: w.sig, tag: tags.add(w.html, v.top, 'bubble', { bubble: true }) }); }
+  }
+  const bubbleHtml = (icon, label, id, section) => `<button type="button" class="bub" data-bub="${id}" style="--c:${section ? SECTIONS[section].color : '#F2B54A'}" aria-label="${esc(label)}">${icon}</button><span class="bl">${esc(label)}</span>`;
+  $('tags').addEventListener('click', (e) => { const b = e.target.closest('[data-bub]'); if (b) { sound.tap(); openPanel('building', { id: b.dataset.bub }); } });
+
+  /* ---------- Toast + flying rewards ---------- */
   let toastTimer = 0;
   function toast(main, sub) {
     const t = $('toast');
     t.innerHTML = esc(main) + (sub ? `<small>${esc(sub)}</small>` : '');
     t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2800);
   }
-  let cardActions = {};
-  function openCard(title, html, buttons = []) {
-    cardActions = {};
-    const btns = buttons.map((b, i) => { cardActions['c' + i] = b.run; return `<button type="button" class="btn ${b.main ? 'main' : 'soft'}" data-card="c${i}"${b.disabled ? ' disabled' : ''}>${esc(b.label)}</button>`; }).join('');
-    $('cardBody').innerHTML = `<h2 id="cardTitle">${esc(title)}</h2>${html}<div class="btns" style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">${btns}<button type="button" class="btn soft" data-card="close" style="margin-left:auto">Close</button></div>`;
-    $('card').hidden = false;
-    ($('cardBody').querySelector('input') || $('cardBody').querySelector('[data-card]')).focus();
-  }
-  const closeCard = () => { $('card').hidden = true; };
-  $('card').addEventListener('click', (e) => {
-    if (e.target.id === 'card') { closeCard(); return; }
-    const b = e.target.closest('[data-card]'); if (!b) return;
-    if (b.dataset.card === 'close') { closeCard(); return; }
-    const run = cardActions[b.dataset.card];
-    closeCard();
-    run && run($('cardBody'));
-  });
-
-  /* ---------- Floating tags ---------- */
-  const UP = { townhall: 1.45, chapel: 1.75, park: 1.0, home: 1.55, diner: 1.25, bank: 1.2, grocery: 1.2, board: 1.05 };
-  const placeObj = (place) => (place === 'home' ? city.specials.home : city.specials[place]);
-  const bubbles = new Map();
-  let boardBubble = null;
-  const crateBubbles = [];
-  const districtTags = {};
-  const lockIcon = svgI('lock', 'currentColor', 13, 2.6);
-  for (const key of ['riverside', 'bridgeview', 'hillside']) {
-    if (state.unlocked[key]) continue;
-    const d = DISTRICTS[key];
-    districtTags[key] = tags.add(`<span class="t1">${lockIcon}${d.name}</span><span class="t2" data-need="${key}"></span>`, new THREE.Vector3(d.cx, 1.5, d.cz), '', { wideOnly: key !== 'riverside' });
-  }
-  const towerTag = tags.add('<span class="t1" style="color:#2E6E99">Cushion tower</span><span class="t2" id="towerPct"></span>', city.specials.tower.position.clone().add(new THREE.Vector3(0, 2.0, 0)), 'small');
-  const clockTag = tags.add('<span class="t1" style="color:#4F5E6E">Debt-free clock</span><span class="t2" id="clockTxt"></span>', city.specials.clock.position.clone().add(new THREE.Vector3(0, 2.45, 0)), 'small', { wideOnly: true });
-  const kidNames = state.family.filter((m) => m.kind === 'kid').map((m) => m.name);
-  tags.add(`<span class="t1" style="color:#B0476A">${esc(kidNames.length ? (kidNames.length === 1 ? `${kidNames[0]}'s Corner` : `${kidNames.slice(0, 2).join(' & ')}'s Corner`) : 'Play Park')}</span>`, new THREE.Vector3(city.kidsCenter.x + 1.3, 1.25, city.kidsCenter.z - 1.2), 'small', { wideOnly: true });
-  const stationTag = tags.add('<span class="t1" style="color:#2F6B43">Station</span><span class="t2" id="stationTxt"></span>', train.stationPos.clone().add(new THREE.Vector3(0, 0.6, 0)), 'small', { wideOnly: true });
-  const owner = state.setup.cityName.match(/^(.+)'s Life City$/i)?.[1];
-  const famLabel = state.family.length === 1 ? state.family[0].name : owner ? `${owner}'s family` : 'The family';
-  const famTag = state.family.length ? tags.add(`<span class="t1" style="color:#B97F62">${esc(famLabel)}</span><span class="t2">Tap to say hi</span>`, new THREE.Vector3(), 'small', { bubble: true }) : null;
-  if (famTag) famTag.el.querySelector('.card').addEventListener('click', () => sayHi());
-
-  function bubbleHtml(icon, label, data, cls = '') {
-    return `<button type="button" class="bub ${cls}" ${data} aria-label="${esc(label)}">${icon}</button><span class="bl">${esc(label)}</span>`;
-  }
-  function refreshTags() {
-    /* Goal bubbles: only the family's own goals that aren't logged yet today. */
-    const want = new Set();
-    const perPlace = {};
-    for (const g of state.goals) {
-      if (!(g.perWeek > 0) || g.done.includes(today)) continue;
-      want.add(g.id);
-      if (bubbles.has(g.id)) continue;
-      const place = AREA_INFO[g.area].place;
-      const obj = placeObj(place);
-      if (!obj) continue;
-      const n = perPlace[place] = (perPlace[place] || 0) + state.goals.filter((x) => x.id !== g.id && AREA_INFO[x.area].place === place && bubbles.has(x.id)).length;
-      const p = obj.position.clone().add(new THREE.Vector3(n * 0.42, UP[place] + n * 0.18, -n * 0.1));
-      bubbles.set(g.id, tags.add(bubbleHtml(svgI(AREA_INFO[g.area].icon, '#8A5A10', 20), g.label, `data-task="${g.id}"`), p, 'bubble', { bubble: true }));
-    }
-    for (const [id, t] of bubbles) if (!want.has(id)) { tags.remove(t); bubbles.delete(id); }
-    /* Order board bubble */
-    const can = anyDeliverable(state);
-    if (can && !boardBubble) boardBubble = tags.add(bubbleHtml(svgI('board', '#2E6E99', 20), 'Order ready', 'data-board="1"', 'blue'), city.specials.board.position.clone().add(new THREE.Vector3(0, UP.board, 0)), 'bubble', { bubble: true });
-    if (!can && boardBubble) { tags.remove(boardBubble); boardBubble = null; }
-    city.setBoardNotes(state.orders.list.length);
-    /* Crate bubbles over the train cars */
-    const cars = state.train.cars.slice(-3);
-    for (let i = 0; i < 3; i++) {
-      const c = cars[i];
-      const show = c && !c.opened && !train.moving;
-      if (show && !crateBubbles[i]) crateBubbles[i] = tags.add(bubbleHtml(svgI('crate', '#2F6B43', 20), 'Open crate', `data-crate="${c.id}"`, 'leafy'), train.carPos(i), 'bubble', { bubble: true });
-      else if (show && crateBubbles[i]) crateBubbles[i].el.querySelector('[data-crate]').dataset.crate = c.id;
-      if (!show && crateBubbles[i]) { tags.remove(crateBubbles[i]); crateBubbles[i] = null; }
-    }
-    /* Labels */
-    const cp = cushionPct(state.money);
-    const tp = $('towerPct'); if (tp) tp.textContent = cp.label === 'Starter Cushion' ? `${cp.pct}% full` : `Safety net ${cp.pct}%`;
-    const clock = debtClock(state.money, today);
-    const ct = $('clockTxt');
-    if (ct) ct.textContent = clock.status === 'counting' ? `${monthYear(clock.date)}${clock.stolen ? ` · ${clock.stolen} ${clock.stolen === 1 ? 'day' : 'days'} stolen back` : ''}` : clock.status === 'free' ? 'Debt-free!' : clock.status === 'none' ? 'No debt to count' : 'Add a monthly payment';
-    const st = $('stationTxt'); if (st) st.textContent = state.setup.pay.next ? `Next train ${weekday(state.setup.pay.next)}` : '';
-    for (const [key, t] of Object.entries(districtTags)) {
-      const el = t.el.querySelector('[data-need]');
-      if (el) el.textContent = key === 'riverside' && state.money.cushion < STARTER_CUSHION ? `Starter Cushion · ${fmt$(STARTER_CUSHION - state.money.cushion)} to go` : `Opens with: ${DISTRICT_NEED[key]}`;
+  function bump(el) { if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  function flyRewards(from, { coins = 0, xp = 0, pop = 0 }) {
+    const targets = [['coin', coins, $('coinBtn')], ['xp', xp, $('lvlStar')], ['people', pop, $('popBtn')]];
+    for (const [art, amount, target] of targets) {
+      if (!amount) continue;
+      const tr = target.getBoundingClientRect();
+      const n = Math.min(5, Math.max(1, Math.round(amount / 10)));
+      for (let k = 0; k < n; k++) {
+        const el = document.createElement('i');
+        el.className = 'flyer'; el.innerHTML = ART[art];
+        $('fly').appendChild(el);
+        const sx = from.x + (Math.random() - 0.5) * 50, sy = from.y + (Math.random() - 0.5) * 30;
+        const ex = tr.left + 16, ey = tr.top + tr.height / 2;
+        if (REDUCED || !el.animate) { el.remove(); bump(target); continue; }
+        const a = el.animate([
+          { transform: `translate(${sx}px, ${sy}px) scale(.4)`, opacity: 0 },
+          { transform: `translate(${sx}px, ${sy - 40}px) scale(1.1)`, opacity: 1, offset: 0.25 },
+          { transform: `translate(${ex}px, ${ey}px) scale(.7)`, opacity: 1 }
+        ], { duration: 750 + k * 90, easing: 'cubic-bezier(.5,0,.4,1)' });
+        a.onfinish = () => { el.remove(); bump(target); };
+      }
+      const label = document.createElement('b');
+      label.className = 'flylabel'; label.textContent = `+${amount}${art === 'xp' ? ' XP' : ''}`;
+      label.style.transform = `translate(${from.x}px, ${from.y - (art === 'xp' ? 22 : 0)}px)`;
+      $('fly').appendChild(label);
+      setTimeout(() => label.remove(), 1200);
     }
   }
+  const centerOf = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; };
+  const screenOf = (v3) => { const v = v3.clone().project(camera); return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight }; };
 
-  /* ---------- Storm visuals ---------- */
-  let stormTarget = stormNow(state);
-  stage.storm = opts.first ? Math.min(1, stormTarget + 0.05) : stormTarget;
-  let lastLabel = stormLabel(stormTarget);
-  function updateStorm(dur = 1800) {
-    const target = stormNow(state), s0 = stage.storm;
-    const label = stormLabel(target);
-    if (label !== lastLabel) { note(state, today, 'storm', { from: lastLabel, to: label }); lastLabel = label; }
-    if (target < 0.25 && s0 > 0.4) later(Math.min(dur, 1800), () => { sur.showRainbow(); sticker('rainbow'); });
-    stormTarget = target;
-    tween(dur, (k) => { stage.storm = s0 + (target - s0) * easeInOut(k); });
-    setTowerFill(true);
-    setWalls(true);
-  }
-  let towerFill = 0;
-  function setTowerFill(animate) {
-    const m = state.money;
-    const to = m.cushion < STARTER_CUSHION ? m.cushion / STARTER_CUSHION : m.cushion / fullSafetyNet(m);
-    const f0 = towerFill;
-    if (!animate) { towerFill = to; city.setTowerFill(to); return; }
-    tween(1400, (k) => { towerFill = f0 + (to - f0) * easeInOut(k); city.setTowerFill(towerFill); });
-  }
-  function setWalls(animate) {
-    const h = state.money.cushion >= STARTER_CUSHION ? 0.42 : state.money.payoffDate ? 0.24 : 0;
-    if (h !== city.wallH) city.setWall(h, animate);
-  }
-  setTowerFill(false);
-  setWalls(false);
-  city.setGarden(state.garden.length);
-  train.show(state.train.cars.slice(-3));
+  /* ---------- Events for the tour ---------- */
+  const listeners = [];
+  const emit = (name, data) => listeners.forEach((fn) => fn(name, data));
 
-  /* ---------- Night ---------- */
-  stage.night = state.settings.night ? 1 : 0;
-  function setNightIcon() {
-    $('dayIcon').innerHTML = state.settings.night ? IC.sun : IC.moon;
-    $('dayBtn').setAttribute('aria-label', state.settings.night ? 'Switch to day' : 'Switch to night');
+  /* ---------- Progress: quick wins, level ups ---------- */
+  function win(id, from) {
+    if (!markQuickWin(state, id)) return;
+    const q = claimQuickWin(state, id);
+    if (!q) return;
+    later(450, () => { flyRewards(from || { x: innerWidth / 2, y: innerHeight / 2 }, q); toast(`Quick win: ${q.text}`, `+${q.coins} coins · +${q.xp} XP`); sound.chime(); });
   }
-  setNightIcon();
-  $('dayBtn').onclick = () => {
-    state.settings.night = !state.settings.night;
-    setNightIcon();
-    const n0 = stage.night, n1 = state.settings.night ? 1 : 0;
-    tween(1400, (k) => { stage.night = n0 + (n1 - n0) * easeInOut(k); });
-    persist();
-  };
-  function setSoundIcon() {
-    $('soundIcon').innerHTML = state.settings.sound ? IC.sound : IC.mute;
-    $('soundBtn').setAttribute('aria-label', state.settings.sound ? 'Mute sound' : 'Turn sound on');
-  }
-  setSoundIcon();
-  $('soundBtn').onclick = () => { sound.setEnabled(!state.settings.sound); setSoundIcon(); persist(); if (state.settings.sound) sound.pop(); };
-  $('homeBtn').onclick = () => stage.resetView();
-  $('grab').onclick = () => setMin(!sheet.classList.contains('min'));
-  $('mayorBtn').onclick = () => { setMin(false); showTab('rate'); };
-  sheet.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { setMin(false); showTab(b.dataset.tab); } });
-
-  /* ---------- Selection marker ---------- */
-  const marker = new THREE.Group();
-  { const cone = mesh(new THREE.ConeGeometry(0.14, 0.3, 4), mat.gold, true, false); cone.rotation.x = Math.PI; cone.rotation.y = Math.PI / 4; marker.add(cone); }
-  marker.visible = false; scene.add(marker);
-  function select(target) {
-    selected = target;
-    if (target) {
-      let p, y = 0.75;
-      if (target.kind === 'lot') p = city.lotByKey(target.key)?.pos;
-      else { const b = state.buildings.find((x) => x.id === target.id); p = city.views.get(target.id)?.pos; y = 1.35 + (b?.floors || 1) * 0.3; }
-      if (!p) { selected = null; marker.visible = false; render(); return; }
-      marker.position.set(p.x, y, p.z); marker.userData.baseY = y; marker.visible = true;
-      if (sheet.classList.contains('min')) setMin(false);
-      showTab('build');
-    } else { marker.visible = false; render(); }
+  function afterProgress() {
+    const levels = checkLevelUp(state);
+    if (levels.length) {
+      const lv = levels.at(-1);
+      note(state, today, 'levelup', { level: lv });
+      if (lv >= 3) win('level3');
+      later(700, () => {
+        sound.chime(); sound.firework();
+        fx.fireworks(controls.target, 5, () => sound.firework());
+        if (spotSticker(state, 'fireworks')) persist();
+        openPanel('levelup', { level: lv });
+        emit('levelup', lv);
+      });
+    }
+    if (new Set(state.lists.map((l) => l.section)).size >= 2) win('area2');
+    persist(); hud();
   }
 
-  /* ---------- Actions ---------- */
-  const fly = (p) => {
-    const t0 = controls.target.clone(), off = camera.position.clone().sub(t0);
-    const t1 = new THREE.Vector3(p.x, 0, p.z);
-    tween(900, (k) => { const e = easeInOut(k); controls.target.lerpVectors(t0, t1, e); camera.position.copy(controls.target).add(off); });
-  };
-  function sticker(kind) {
-    if (spotSticker(state, kind)) { note(state, today, 'sticker', { kind }); toast(`You spotted ${STICKERS[kind]}!`, `Sticker book: ${state.stickers.length} of ${Object.keys(STICKERS).length} · just for fun`); persist(); if (tab === 'together') render(); }
+  /* ---------- Panels ---------- */
+  let panel = null;
+  function openPanel(kind, o = {}) {
+    if (mode) return;
+    panel = { kind, ...o };
+    if (kind === 'build' && !panel.tab) panel.tab = 'todo';
+    if (kind === 'trophy' && !panel.tab) panel.tab = 'today';
+    renderPanel();
+    $('panel').hidden = false;
+    $('panelBody').scrollTop = 0;
+    emit('panel:' + kind);
   }
-  function logTask(id) {
-    const r = completeTask(state, id, today);
-    if (!r) return;
-    const place = AREA_INFO[r.goal.area].place;
-    const obj = placeObj(place);
-    if (obj) { fx.coinBurst(obj.position.clone().add(new THREE.Vector3(0, (UP[place] || 1) - 0.5, 0))); fx.bounce(obj); }
-    sound.pop(); later(120, () => sound.coin());
-    bump(document.querySelector('.points'));
-    const mk = AREA_INFO[r.goal.area].material;
-    if (r.material) later(50, () => { const chip = document.querySelector(`[data-mat="${mk}"]`); chip && bump(chip); });
-    if (r.planted) city.setGarden(state.garden.length, true);
-    const matLine = r.material ? `+1 ${MATERIALS[mk].one}` : `That's 3 ${MATERIALS[mk].label.toLowerCase()} today, the daily max`;
-    toast(`${r.goal.label} +${r.points} points`, `${matLine} · ${Math.min(r.doneWeek, r.perWeek)} of ${r.perWeek} this week${r.planted ? ' · a crop sprouted' : ''}`);
-    const all = state.goals.filter((g) => g.perWeek > 0).every((g) => g.done.includes(today));
-    if (all) later(900, () => { fireworks(5); toast('Full day! The town is celebrating', 'Every goal in town is logged today'); });
-    persist(); render();
+  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); }
+  function renderPanel() {
+    if (!panel) return;
+    let title = '', tabs = '', body = '';
+    const p = panel;
+    $('win').dataset.kind = p.kind;
+    if (p.kind === 'build') { title = 'Build'; tabs = buildTabs(p.tab); body = renderBuild(state, p.tab); }
+    else if (p.kind === 'lists') { title = p.due ? 'Due today' : 'Your lists'; tabs = `<button type="button" class="wtab${p.due ? ' on' : ''}" data-due="1">Due today</button><button type="button" class="wtab${p.due ? '' : ' on'}" data-due="0">All lists</button>`; body = renderLists(state, today, p.due); }
+    else if (p.kind === 'building') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBuilding(state, b, today); }
+    else if (p.kind === 'goal') { title = p.draft.title; body = renderGoalForm(p.draft); }
+    else if (p.kind === 'trophy') { title = 'Goals & challenges'; body = renderTrophy(state, today, p.tab); }
+    else if (p.kind === 'wins') { title = 'Quick wins'; body = renderWins(state); }
+    else if (p.kind === 'level') { title = 'Your level'; body = renderLevelInfo(state); }
+    else if (p.kind === 'levelup') { title = 'Level up!'; body = renderLevelUp(p.level); }
+    else if (p.kind === 'menu') { title = 'Menu'; body = renderMenu(p.confirm); }
+    else if (p.kind === 'paper') { title = 'Town paper'; body = renderPaper(); }
+    $('panelTitle').textContent = title;
+    $('panelTabs').innerHTML = tabs;
+    $('panelTabs').hidden = !tabs;
+    const keepScroll = $('panelBody').scrollTop;
+    const focusId = document.activeElement?.closest?.('#panelBody') ? document.activeElement.id || document.activeElement.dataset.tt : null;
+    $('panelBody').innerHTML = body;
+    $('panelBody').scrollTop = keepScroll;
+    if (focusId) { const el = $(focusId) || $('panelBody').querySelector(`[data-tt="${focusId}"]`); el?.focus(); }
   }
-  function fireworks(n) {
-    fx.fireworks(new THREE.Vector3(DISTRICTS.starter.cx, 0, DISTRICTS.starter.cz), n, () => sound.firework());
-    sticker('fireworks');
-  }
-  const daysLogged = () => state.loggedDays.length;
-  const logLine = () => { const n = daysLogged(); return `${n} ${n === 1 ? 'day' : 'days'} of logging`; };
-  function newBuilding(kind, lot, extra = {}) {
-    const rec = { id: `b${state.buildSeq++}`, kind, district: lot.d, x: lot.x, z: lot.z, rot: 0, variant: Math.floor(rand() * 5), floors: 1, builtOn: today, ...extra };
-    state.buildings.push(rec);
-    city.addBuilding(rec, true);
-    city.syncLots(false);
-    sound.thud();
-    note(state, today, 'built', { name: extra.name || kind, kind });
-    return rec;
-  }
-  function buildSmall(kind) {
-    if (!selected) return;
-    if (kind === 'upgrade') {
-      const b = state.buildings.find((x) => x.id === selected.id);
-      if (!b || b.floors >= MAX_FLOORS || !spend(state, 'upgrade')) return;
-      b.floors++;
-      (b.upgrades = b.upgrades || []).push({ on: today, days: daysLogged() });
-      city.rebuild(b, true);
-      sound.thud();
-      note(state, today, 'built', { name: 'New floor', kind: 'upgrade' });
-      toast(b.kind === 'family-home' ? 'Your home got a new floor' : 'Home upgraded', `−${COSTS.upgrade} points · +2 people`);
+  $('panelClose').onclick = closePanel;
+  $('panel').addEventListener('click', (e) => { if (e.target.id === 'panel') closePanel(); });
+
+  /* ---------- Goal form ---------- */
+  function openGoalForm(o) {
+    const draft = { mode: o.mode, type: o.type, buildingId: o.buildingId, listId: o.listId, goal: '', tasks: [] };
+    if (o.mode === 'unlock') {
+      const def = byId[o.type];
+      Object.assign(draft, { section: def.section, title: `Open ${SECTIONS[def.section].name}`, intro: `Set one big ${SECTIONS[def.section].name.toLowerCase()} goal. Your ${def.name} is free.`, saveLabel: `Save & place the ${def.name}` });
+    } else if (o.mode === 'new') {
+      const b = state.buildings.find((x) => x.id === o.buildingId); const def = byId[b.type];
+      Object.assign(draft, { section: def.section, title: `${def.name} list`, intro: `A new ${SECTIONS[def.section].name.toLowerCase()} goal. Tasks here pay ${[1, 1.5, 2, 3][def.tier - 1]}× coins.`, saveLabel: 'Save list' });
     } else {
-      const lot = city.lotByKey(selected.key);
-      if (!lot || !spend(state, kind)) return;
-      const names = { road: 'Road', park: 'Park', home: 'Home' };
-      newBuilding(kind, lot, { name: names[kind], story: logLine() });
-      toast(kind === 'home' ? 'New home built' : kind === 'park' ? 'New park planted' : 'Road paved', `−${COSTS[kind]} points${kind === 'home' ? ' · +2 people moved in' : ''}`);
+      const l = state.lists.find((x) => x.id === o.listId);
+      Object.assign(draft, { section: l.section, title: 'Edit list', intro: 'Change the goal or the tasks. Progress on tasks you keep is saved.', saveLabel: 'Save', goal: l.goal, tasks: l.tasks.map((t) => ({ id: t.id, title: t.title, kind: t.kind, per: t.per })) });
     }
-    selected = null; marker.visible = false;
-    persist(); render();
+    if (!draft.tasks.length) draft.tasks = [{ title: '', kind: 'daily', per: 3 }, { title: '', kind: 'weekly', per: 3 }];
+    draft.placeholder = { spiritual: 'like “Read through the Psalms”', physical: 'like “Walk a 5K by spring”', financial: 'like “Save a $1,000 cushion”', relational: 'like “Weekly date night”', todo: 'like “Clean out the garage”' }[draft.section];
+    openPanel('goal', { draft });
+    emit('goalform');
   }
-  function buildRecipe(id) {
-    const r = recipeById(id);
-    const lot = selected?.kind === 'lot' ? city.lotByKey(selected.key) : null;
-    if (!r || !lot || !canBuildRecipe(r, state, activeMaterials(state))) return;
-    const needs = effectiveNeeds(r, activeMaterials(state));
-    takeMaterials(state, needs);
-    state.points -= r.points;
-    const used = Object.entries(needs).map(([k, n]) => `${n} ${n === 1 ? MATERIALS[k].one : MATERIALS[k].label.toLowerCase()}`);
-    newBuilding(r.type, lot, { recipe: r.id, name: r.name, story: `${used.join(', ')} + ${r.points} points` });
-    later(500, () => fireworks(r.type === 'landmark' ? 6 : 3));
-    toast(`${r.name} built!`, `${used.join(', ')} + ${r.points} points`);
-    selected = null; marker.visible = false;
-    persist(); render();
+  function readGoalForm() {
+    const d = panel?.draft; if (!d) return;
+    const g = $('gfGoal'); if (g) d.goal = g.value;
+    $('panelBody').querySelectorAll('[data-tt]').forEach((i) => { d.tasks[+i.dataset.tt].title = i.value; });
   }
-  function placeDeco(id) {
-    const d = state.decorations.find((x) => x.id === id);
-    const lot = selected?.kind === 'lot' ? city.lotByKey(selected.key) : null;
-    if (!d || d.placed || !lot) return;
-    d.placed = true;
-    const name = DECORATIONS.find((x) => x.id === d.kind)?.name || 'Decoration';
-    newBuilding('deco', lot, { deco: d.kind, name, story: 'a gift from the payday train' });
-    toast(`${name} placed`, 'Just for looks');
-    selected = null; marker.visible = false;
-    persist(); render();
-  }
-  function deliver(id) {
-    const o = deliverOrder(state, id);
-    if (!o) return;
-    sound.chime();
-    fx.coinBurst(city.specials.board.position.clone().add(new THREE.Vector3(0, 0.7, 0)), '#4E9BCB');
-    note(state, today, 'delivered', { resident: o.resident, area: o.area });
-    toast(`${o.resident} says thanks! +1 star`, `Stamp ${state.residents[o.resident].stamps} on their card · ${starsNow(state, today)} stars for the payday train`);
-    persist(); render();
-  }
-  function skip(id) {
-    const o = skipOrder(state, id, today);
-    if (!o) return;
-    toast('No problem', `${o.resident} will ask again another week`);
-    persist(); render();
+  $('panelBody').addEventListener('input', () => { if (panel?.kind === 'goal') readGoalForm(); });
+  function saveGoalForm() {
+    readGoalForm();
+    const d = panel.draft;
+    const tasks = d.tasks.filter((t) => t.title.trim());
+    if (!d.goal.trim()) { toast('Add your big goal first', 'One sentence is plenty'); $('gfGoal')?.focus(); return; }
+    if (!tasks.length) { toast('Add at least one small task', 'Something you can check off this week'); return; }
+    if (d.mode === 'unlock') {
+      closePanel();
+      win('goal');
+      const pending = { goal: d.goal, tasks };
+      startPlacement({
+        type: d.type,
+        onPlace: (rec) => {
+          if (byId[d.type].section === 'spiritual') state.spiritualStyle = d.type === 'garden' ? 'garden' : 'church';
+          rec.story = `your first ${SECTIONS[byId[d.type].section].name.toLowerCase()} goal: “${pending.goal}”`;
+          createList(state, rec, pending.goal, pending.tasks, today);
+          note(state, today, 'opened', { section: byId[d.type].section });
+          win('place', screenOf(bld.views.get(rec.id).top));
+          toast(`${SECTIONS[byId[d.type].section].name} is open!`, 'Tap the bubble to check off a task');
+        }
+      });
+      return;
+    }
+    if (d.mode === 'new') {
+      const b = state.buildings.find((x) => x.id === d.buildingId);
+      createList(state, b, d.goal, tasks, today);
+      win('goal');
+      closePanel(); toast('List saved', 'Tap the bubble when you check something off');
+    } else {
+      const l = state.lists.find((x) => x.id === d.listId);
+      l.goal = d.goal.trim();
+      l.tasks = tasks.slice(0, MAX_TASKS).map((t) => { const old = l.tasks.find((x) => x.id === t.id); if (old) { old.title = t.title.trim(); old.kind = t.kind; old.per = t.kind === 'weekly' ? t.per : 1; return old; } return makeTask(t.title, t.kind, t.per); });
+      closePanel(); toast('List updated');
+    }
+    afterProgress();
   }
 
-  /* Payday: money steps, then the train pulls in. */
-  function advanceNextPayday() {
-    let n = state.setup.pay.next || today;
-    let guard = 0;
-    while (n <= today && guard++ < 60) n = advancePayday(n, state.setup.pay.freq);
-    state.setup.pay.next = n;
-  }
-  function doUnlocks() {
-    const opened = checkUnlocks(state, today);
-    opened.forEach((key, i) => later(600 + i * 2400, () => {
-      note(state, today, 'unlock', { district: key });
-      city.unlock(key, true);
-      if (districtTags[key]) { tags.remove(districtTags[key]); delete districtTags[key]; }
-      later(1400, () => fireworks(6));
-      toast(`${DISTRICTS[key].name} is open!`, `${DISTRICT_NEED[key]} · new lots are ready`);
-      persist(); render();
-    }));
-    return opened;
-  }
-  function payday(amount) {
-    const r = applyPayday(state, amount);
-    const parts = [];
-    if (r.toCushion) parts.push(`${fmt$(r.toCushion)} to the cushion`);
-    if (r.toDebt) parts.push(`${fmt$(r.toDebt)} extra to debt`);
-    if (r.toNet) parts.push(`${fmt$(r.toNet)} to the safety net`);
-    if (r.toDebt) { city.spinClock(2); }
-    if (parts.length) toast('The water dropped', parts.join(' · '));
-    else toast('Payday logged', 'Nothing toward the plan this time. The water crept up a little. One step pushes it back.');
-    note(state, today, 'money', {});
-    updateStorm();
-    doUnlocks();
-    advanceNextPayday();
-    if (state.demo || state.train.lastPayday !== today || !state.train.arrivals) later(parts.length ? 1600 : 1200, () => trainArrive());
-    persist(); render();
-  }
-  function trainArrive(auto = false) {
-    const r = trainArrives(state, today);
-    swapOrdersAtPayday(state, today);
-    note(state, today, 'payday', { cars: r.cars, stars: r.stars, crops: r.crops });
-    persist();
-    fly(train.stationPos);
-    sound.whistle();
-    train.arrive(state.train.cars.slice(-3), () => {
-      sound.whistle();
-      if (r.crops) { fx.coinBurst(city.specials.garden.position.clone().add(new THREE.Vector3(0, 0.3, 0))); city.setGarden(0); bump(document.querySelector('.points')); sound.coin(); }
-      toast(`The payday train is in! ${r.cars} ${r.cars === 1 ? 'car' : 'cars'}`, `${r.stars} ${r.stars === 1 ? 'star' : 'stars'} earned · harvest: ${r.crops} ${r.crops === 1 ? 'crop' : 'crops'} → +${r.points} points${auto ? ' · log your payday in the Storm tab' : ''}`);
-      render();
+  /* ---------- Building things ---------- */
+  function pickBuilding(id) {
+    const def = byId[id];
+    if (def.kind === 'section' && def.tier === 1) { openGoalForm({ mode: 'unlock', type: id }); return; }
+    const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
+    if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
+    if (!open) { toast(`Open ${SECTIONS[def.section].name} first`, `Set a goal at the ${mainBuildingFor(def.section, state.spiritualStyle || 'church').name}`); return; }
+    if (state.coins < def.cost) { toast(`${def.cost - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
+    startPlacement({
+      type: id,
+      onPlace: (rec) => {
+        spend(state, def.cost);
+        flyRewards(screenOf(bld.views.get(rec.id).top), { pop: def.pop || 0 });
+        if (def.kind === 'home') { win('home'); toast(`${def.name} built`, `+${def.pop} people moved in`); emit('home'); }
+        else if (def.kind === 'section') later(700, () => openGoalForm({ mode: 'new', buildingId: rec.id }));
+        else toast(`${def.name} placed`);
+      }
     });
-    render();
   }
-  function openCrateById(id) {
-    const car = openCrate(state, id);
-    if (!car) return;
-    train.openCrate(id);
-    sound.coin(); sound.pop();
-    const items = Object.entries(car.mats).map(([k, n]) => `${n} ${n === 1 ? MATERIALS[k].one : MATERIALS[k].label.toLowerCase()}`);
-    const deco = DECORATIONS.find((d) => d.id === car.deco)?.name || 'a decoration';
-    toast('Crate opened!', `${items.join(', ')} + ${deco.toLowerCase()}`);
-    Object.keys(car.mats).forEach((k) => { const chip = document.querySelector(`[data-mat="${k}"]`); chip && bump(chip); });
-    persist(); render();
+  function upgradeHome(id) {
+    const b = state.buildings.find((x) => x.id === id);
+    const lv = b.level || 1;
+    if (lv >= MAX_HOME_LEVEL) return;
+    const cost = homeUpgradeCost(b.type, lv);
+    if (!spend(state, cost)) { toast(`${cost - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
+    const gain = homePop(b.type, lv + 1) - homePop(b.type, lv);
+    b.level = lv + 1;
+    bld.rebuild(b, true);
+    sound.thud(); noteBuild(state, today);
+    flyRewards(screenOf(bld.views.get(b.id).top), { pop: gain });
+    toast(`${byId[b.type].name} upgraded`, `+${gain} people`);
+    syncWorld(); afterProgress(); renderPanel();
   }
-  function setLevee() {
-    if (state.money.payoffDate) return;
-    const c = debtClock(state.money, today);
-    setPayoffDate(state, c.key || addDays(today, 365 * 3));
-    note(state, today, 'levee', {});
-    toast('A wall went up', `Payoff date set${c.key ? ` for ${monthYear(c.date)}` : ''}. The water stays back while you keep pace.`);
-    updateStorm();
-    persist(); render();
-  }
-  function askAmount(title, text, def, run) {
-    openCard(title, `<p>${esc(text)}</p><div class="money-in"><label for="amt">Amount</label><input class="field small" id="amt" inputmode="decimal" value="${def}"></div>`, [{ label: 'Log it', main: true, run: (body) => run(parseFloat(String(body.querySelector('#amt').value).replace(/[^0-9.]/g, '')) || 0) }]);
+  function upgradeTownHall() {
+    const c = canUpgradeTownHall(state);
+    if (!c.ok) return;
+    spend(state, c.next.coins);
+    state.tcLevel = c.next.level;
+    th.level = state.tcLevel;
+    bld.rebuild(th, true);
+    sound.thud(); noteBuild(state, today);
+    note(state, today, 'built', { name: `Town Hall level ${state.tcLevel}` });
+    fx.fireworks(thc, 4, () => sound.firework());
+    toast(`Town Hall is level ${state.tcLevel}!`, `Tasks pay +${(state.tcLevel - 1) * 10}% coins`);
+    closePanel(); afterProgress();
   }
 
-  /* ---------- Story cards (tap any building) ---------- */
-  const SPECIAL_INFO = {
-    chapel: ['Chapel', 'Faith'], bank: ['Bank', 'Money'], grocery: ['Grocery', 'Home'], diner: ['Diner', 'Friends'], townhall: ['Town Hall', null], park: ['Main park', 'Health'], home: ['Your home', 'Marriage'],
-    kids: ['Kids’ Corner', null]
-  };
-  function storyFor(rec) {
-    if (rec.starter) return rec.kind === 'family-home' ? `Built ${shortDate(rec.builtOn)}: the day your family founded the city.` : `Here since ${shortDate(rec.builtOn)}, when the city was founded.`;
-    let s = rec.kind === 'deco' ? `Placed ${shortDate(rec.builtOn)}: ${rec.story}.` : `Built ${shortDate(rec.builtOn)}: ${rec.story}.`;
-    for (const u of rec.upgrades || []) s += ` New floor ${shortDate(u.on)}: ${u.days} ${u.days === 1 ? 'day' : 'days'} of logging.`;
-    return s;
+  /* ---------- Placement mode ---------- */
+  let mode = null;
+  const modebar = $('modebar');
+  function setModeUI(on) { $('bottombar').hidden = on; modebar.hidden = !on; terrain.showGrid(on); }
+  function startPlacement(o) {
+    closePanel();
+    const def = byId[o.type];
+    mode = { kind: 'place', ...o, rot: o.rot || 0 };
+    const t = controls.target;
+    const near = o.start || { i: t.x + HALF, j: t.z + HALF };
+    const spot = o.start || suggestSpot(state, o.type, near) || { i: Math.floor(near.i), j: Math.floor(near.j) };
+    ghost.show(o.type, spot.i, spot.j, mode.rot, () => bakeGroup(buildModel(o.type, def.size[0], o.level || 1, 1)));
+    if (o.ignoreId) bld.views.get(o.ignoreId).obj.visible = false;
+    setModeUI(true);
+    modebar.innerHTML = `<span class="mhint" id="mhint"></span><div class="mbtns"><button type="button" class="btn soft" data-m="cancel">Cancel</button><button type="button" class="btn soft icon" data-m="rotate" aria-label="Rotate">${svgI('rotate', 'currentColor', 20, 2.6)}</button><button type="button" class="btn go-btn" data-m="place" id="placeBtn">Place</button></div>`;
+    validate();
+    stage.flyTo(footprintCenter(o.type, spot.i, spot.j, mode.rot), tween, easeInOut);
+    emit('placing');
   }
-  function showBuilding(id) {
-    const rec = state.buildings.find((b) => b.id === id);
-    if (!rec) return;
-    const title = rec.kind === 'family-home' ? 'Your home' : rec.name || (rec.kind === 'home' ? 'Neighbor’s home' : rec.kind[0].toUpperCase() + rec.kind.slice(1));
-    const homey = rec.kind === 'home' || rec.kind === 'family-home';
-    const goals = rec.kind === 'family-home' ? state.goals.filter((g) => g.area === 'Marriage') : [];
-    const html = `<p class="big" style="font-size:16px">${esc(storyFor(rec))}</p>${homey ? `<p>${rec.floors} ${rec.floors === 1 ? 'floor' : 'floors'}${rec.floors < MAX_FLOORS ? ` · a new floor costs ${COSTS.upgrade} points` : ' · fully upgraded'}</p>` : ''}${goals.length ? `<p>Goals logged here: ${goals.map((g) => esc(g.label)).join(', ')}</p>` : ''}`;
-    const btns = homey && rec.floors < MAX_FLOORS ? [{ label: `Add a floor (${COSTS.upgrade})`, main: true, disabled: state.points < COSTS.upgrade, run: () => { selected = { kind: 'building', id }; buildSmall('upgrade'); } }] : [];
-    openCard(title, html, btns);
+  function validate() {
+    if (mode?.kind !== 'place') return;
+    const r = canPlace(state, mode.type, ghost.i, ghost.j, ghost.rot, mode.ignoreId);
+    ghost.setValid(r.ok); mode.ok = r.ok;
+    $('mhint').textContent = r.ok ? `Drag to move it, then tap Place.` : r.reason;
+    $('mhint').classList.toggle('warn', !r.ok);
   }
-  function showSpecial(id) {
-    const founded = shortDate(state.startDate);
-    if (id === 'board') { setMin(false); showTab('today'); later(50, () => { const h = [...$('paneToday').querySelectorAll('.h2')][0]; h && h.scrollIntoView({ block: 'start', behavior: REDUCED ? 'auto' : 'smooth' }); }); return; }
-    if (id === 'clock') {
-      const c = debtClock(state.money, today);
-      const body = c.status === 'counting' ? `<p class="big">${monthYear(c.date)}</p><p>Your debt-free date at today's pace.${c.stolen ? ` Extra payments have stolen back <b>${c.stolen} ${c.stolen === 1 ? 'day' : 'days'}</b> so far.` : ' Every extra payment moves it sooner.'}</p>` : c.status === 'free' ? '<p class="big">Debt-free</p><p>The clock tower rings for your family.</p>' : c.status === 'none' ? '<p>No debt to count down. Nice.</p>' : '<p>Add a monthly debt payment to see the date.</p>';
-      openCard('Debt-free clock tower', body + `<p>Built ${founded}: the day your family founded the city.</p>`, state.money.debt > 0 ? [{ label: 'Log an extra payment', main: true, run: () => askAmount('Extra debt payment', 'Anything above the minimum steals days back.', 100, (a) => { const p = extraDebtPayment(state, a); if (p) { city.spinClock(3); note(state, today, 'money', {}); toast('Days stolen back!', `${fmt$(p)} extra to debt`); updateStorm(); doUnlocks(); persist(); render(); } }) }] : []);
+  function confirmPlace() {
+    if (!mode.ok) { toast('Can’t place it there', canPlace(state, mode.type, ghost.i, ghost.j, ghost.rot, mode.ignoreId).reason); return; }
+    const o = mode;
+    const { i, j, rot } = ghost;
+    endMode();
+    if (o.ignoreId) {
+      const rec = state.buildings.find((b) => b.id === o.ignoreId);
+      Object.assign(rec, { i, j, rot });
+      bld.rebuild(rec, false);
+      syncWorld(); persist(); hud();
       return;
     }
-    if (id === 'tower') {
-      const cp = cushionPct(state.money);
-      openCard('Cushion tower', `<p class="big">${cp.pct}%</p><p>${cp.label} full. The fuller the tower, the lower the water.</p><p>Built ${founded}: the day your family founded the city.</p>`);
-      return;
+    const rec = { id: `b${state.buildSeq++}`, type: o.type, i, j, rot, level: 1, builtOn: today, story: '' };
+    state.buildings.push(rec);
+    bld.add(rec, true);
+    sound.thud(); noteBuild(state, today);
+    note(state, today, 'built', { name: byId[o.type].name });
+    syncWorld();
+    o.onPlace && o.onPlace(rec);
+    emit('placed', rec);
+    afterProgress();
+  }
+  function endMode() {
+    if (mode?.ignoreId) { const v = bld.views.get(mode.ignoreId); if (v) v.obj.visible = true; }
+    mode = null; ghost.hide(); setModeUI(false); controls.enabled = true;
+  }
+  function startRoads() {
+    closePanel();
+    mode = { kind: 'road', erase: false, added: 0 };
+    setModeUI(true);
+    const draw = () => {
+      modebar.innerHTML = `<span class="mhint" id="mhint">${mode.erase ? 'Tap or drag along a road to remove it.' : `Tap or drag across the grass to lay road · ${ROAD_COST} coins a tile`}</span><div class="mbtns"><div class="seg"><button type="button" data-m="lay" aria-pressed="${!mode.erase}">Lay road</button><button type="button" data-m="erase" aria-pressed="${mode.erase}">Remove</button></div><button type="button" class="btn go-btn" data-m="done">Done</button></div>`;
+    };
+    mode.draw = draw; draw();
+  }
+  function paintRoad(i, j) {
+    const k = `${i},${j}`;
+    if (mode.erase) {
+      const r = canRemoveRoad(state, i, j);
+      if (!r.ok) { if (state.roads.includes(k)) toast('That road is needed', r.reason); return; }
+      state.roads.splice(state.roads.indexOf(k), 1);
+    } else {
+      if (!canPlaceRoad(state, i, j).ok) return;
+      if (!spend(state, ROAD_COST)) { toast('Out of coins for roads', 'Check off tasks to earn more'); return; }
+      state.roads.push(k); mode.added++;
+      if (mode.added === 1) { win('road'); sound.pop(); }
     }
-    if (id === 'garden') {
-      openCard('Family garden', `<p class="big">${state.garden.length} ${state.garden.length === 1 ? 'crop' : 'crops'}</p><p>Every day you log anything, one crop sprouts. The payday train harvests them at 5 build points each.</p><p>Built ${founded}: the day your family founded the city.</p>`);
-      return;
-    }
-    const [name, area] = SPECIAL_INFO[id] || [id, null];
-    const goals = area ? state.goals.filter((g) => g.area === area) : [];
-    openCard(name, `<p>Built ${founded}: the day your family founded the city.</p>${goals.length ? `<p>${area} goals are logged here: ${goals.map((g) => esc(g.label)).join(', ')}.</p>` : area ? `<p>No ${area.toLowerCase()} goal set, so this one rests.</p>` : ''}`);
+    syncWorld(); hud(); persist();
   }
-  function showStation() {
-    const stars = starsNow(state, today);
-    openCard('Payday train station', `<p>The train comes every payday. Next: <b>${state.setup.pay.next ? `${weekday(state.setup.pay.next)}, ${shortDate(state.setup.pay.next)}` : 'soon'}</b>.</p><p>${stars} ${stars === 1 ? 'star' : 'stars'} so far. Every car brings 3 materials and a decoration, and the train harvests your garden.</p>`);
-  }
-  const FAM_LINES = () => {
-    const kid = state.family.find((m) => m.kind === 'kid'), adult = state.family.find((m) => m.kind === 'adult') || state.family[0];
-    const open = state.goals.find((g) => g.perWeek > 0 && !g.done.includes(today));
-    if (open && adult) return [adult.name, `Want to ${open.label.toLowerCase()} today?`];
-    if (kid) return [kid.name, 'Can we go to the park?'];
-    if (state.money.cushion < STARTER_CUSHION && adult) return [adult.name, `${Math.round((state.money.cushion / STARTER_CUSHION) * 100)}% of the way to a full cushion!`];
-    return [adult?.name || 'Us', 'This town feels good.'];
-  };
-  let famLineTimer = 0;
-  function sayHi() {
-    if (!famTag) return;
-    const [who, line] = FAM_LINES();
-    famTag.el.querySelector('.t2').textContent = `${who}: "${line}"`;
-    clearTimeout(famLineTimer); famLineTimer = setTimeout(() => { famTag.el.querySelector('.t2').textContent = 'Tap to say hi'; }, 4200);
-  }
-
-  /* ---------- Paper + settings ---------- */
-  function openPaper() {
-    const p = buildPaper(state, today, stormNow(state));
-    $('paperBody').innerHTML = `<div class="mast" id="paperTitle">${esc(p.title)}</div><div class="dateline"><span>${esc(p.date)}</span><span>${esc(p.city)}</span></div>
-      <h2>${esc(p.headline)}</h2><p>${esc(p.lede)}</p>
-      <div class="npcols"><div><h3>${p.cols[0].h}</h3><p>${esc(p.cols[0].p)}</p></div><div><h3>${p.cols[1].h}</h3><p>${esc(p.cols[1].p)}</p></div></div>
-      <div class="npcols"><div><h3>${p.cols[2].h}</h3><p>${esc(p.cols[2].p)}</p></div><div><h3>${p.cols[3].h}</h3><p>${esc(p.cols[3].p)}</p></div></div>
-      <button type="button" class="npclose" id="paperClose">Fold up the paper</button>`;
-    $('paper').hidden = false;
-    $('paperClose').focus();
-  }
-  $('paperBtn').onclick = openPaper;
-  $('paper').addEventListener('click', (e) => { if (e.target.id === 'paper' || e.target.id === 'paperClose') $('paper').hidden = true; });
-  function openSettings(confirming = false) {
-    const q = state.settings.quality;
-    const seg = (v, l) => `<button type="button" data-q="${v}" aria-pressed="${q === v}">${l}</button>`;
-    $('settingsBody').innerHTML = `<h2 id="settingsTitle">Settings</h2>
-      <div class="set-row"><span>Sound and haptics</span><label class="toggle"><input type="checkbox" id="setSound"${state.settings.sound ? ' checked' : ''}> On</label></div>
-      <div class="set-row"><span>Quality<br><small style="font-weight:700;color:var(--ink-soft)">Now: ${stage.quality === 'high' ? 'High' : 'Battery saver'}</small></span><div class="seg">${seg('auto', 'Auto')}${seg('high', 'High')}${seg('saver', 'Battery saver')}</div></div>
-      <div class="set-row"><span>Gentle mode<br><small style="font-weight:700;color:var(--ink-soft)">Softer storm visuals</small></span><label class="toggle"><input type="checkbox" id="setGentle"${state.settings.gentle ? ' checked' : ''}> On</label></div>
-      <div class="set-row"><span>Start over<br><small style="font-weight:700;color:var(--ink-soft)">Clears this city from this device</small></span>${confirming ? '<button type="button" class="btn main" data-s="reset">Yes, start over</button>' : '<button type="button" class="btn soft" data-s="ask">Start over</button>'}</div>
-      <p class="foot">Life City · Phase 1 demo · progress is saved in this browser only.${state.demo ? ' You are looking at the sample city.' : ''}</p>
-      <button type="button" class="btn soft close" data-s="close">Done</button>`;
-    $('settings').hidden = false;
-  }
-  $('settingsBtn').onclick = () => openSettings();
-  $('settings').addEventListener('click', (e) => {
-    if (e.target.id === 'settings') { $('settings').hidden = true; return; }
-    const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.q) {
-      state.settings.quality = b.dataset.q;
-      stage.setQuality(b.dataset.q === 'auto' ? detectQuality() : b.dataset.q);
-      autoChecked = true;
-      persist(); openSettings();
-    }
-    if (b.dataset.s === 'close') $('settings').hidden = true;
-    if (b.dataset.s === 'ask') openSettings(true);
-    if (b.dataset.s === 'reset') { clearSave(); location.reload(); }
-  });
-  $('settings').addEventListener('change', (e) => {
-    if (e.target.id === 'setSound') { sound.setEnabled(e.target.checked); setSoundIcon(); }
-    if (e.target.id === 'setGentle') { state.settings.gentle = e.target.checked; render(); }
-    persist();
-  });
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('paper').hidden = true; $('settings').hidden = true; closeCard(); } });
-
-  /* ---------- Panel clicks ---------- */
-  sheet.addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if (!b) return;
-    const d = b.dataset;
-    if (d.go) {
-      const g = state.goals.find((x) => x.id === d.go);
-      const obj = g && placeObj(AREA_INFO[g.area].place);
-      if (obj) fly(obj.position);
-      const bub = bubbles.get(d.go);
-      if (bub) { const el = bub.el.querySelector('.bub'); el.classList.remove('ping'); void el.offsetWidth; el.classList.add('ping'); }
-    }
-    if (d.deliver) deliver(d.deliver);
-    if (d.skip) skip(d.skip);
-    if (d.build) buildSmall(d.build);
-    if (d.recipe) buildRecipe(d.recipe);
-    if (d.deco) placeDeco(d.deco);
-    if (d.a === 'crates') { fly(train.stationPos); }
-    if (d.a === 'paper') openPaper();
-    if (d.a === 'payday') payday(parseFloat(String($('payAmt')?.value || '0').replace(/[^0-9.]/g, '')) || 0);
-    if (d.a === 'levee') setLevee();
-    if (d.a === 'extra') askAmount('Extra debt payment', 'Anything above the minimum payment steals days back on the clock tower.', 100, (a) => { const p = extraDebtPayment(state, a); if (p) { city.spinClock(3); note(state, today, 'money', {}); toast('Days stolen back!', `${fmt$(p)} extra to debt · ${fmt$(state.money.debt)} left`); updateStorm(); doUnlocks(); persist(); render(); } });
-    if (d.a === 'debtpaid') openCard('Paid off a debt?', '<p>Mark this when one whole debt is paid to zero. It’s a real money step, so it opens Bridgeview.</p>', [{ label: 'Yes, we paid one off', main: true, run: () => { state.money.firstDebtPaid = true; note(state, today, 'money', {}); doUnlocks(); updateStorm(); persist(); render(); } }]);
-    if (d.a === 'stall') { stall(state, 2); toast('Two paydays, no progress', 'The water crept up a little. One step pushes it back.'); updateStorm(2600); persist(); render(); }
-  });
-  sheet.addEventListener('change', (e) => { if (e.target.id === 'gentle') { state.settings.gentle = e.target.checked; persist(); } });
-  $('tags').addEventListener('click', (e) => {
-    const t = e.target.closest('[data-task]'); if (t) { logTask(t.dataset.task); return; }
-    if (e.target.closest('[data-board]')) { showSpecial('board'); return; }
-    const c = e.target.closest('[data-crate]'); if (c) openCrateById(c.dataset.crate);
+  modebar.addEventListener('click', (e) => {
+    const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
+    if (m === 'cancel') endMode();
+    if (m === 'rotate') { ghost.move(ghost.i, ghost.j, (ghost.rot + 1) % 4); validate(); }
+    if (m === 'place') confirmPlace();
+    if (m === 'lay' || m === 'erase') { mode.erase = m === 'erase'; mode.draw(); }
+    if (m === 'done') { if (mode.added) noteBuild(state, today); endMode(); afterProgress(); }
   });
 
-  /* ---------- Tap vs drag in the 3D view ---------- */
-  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  let down = null;
+  /* ---------- Pointer input ---------- */
   const canvas = $('scene');
-  canvas.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
-  canvas.addEventListener('pointerup', (e) => {
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3();
+  const pointers = new Set();
+  let down = null, drag = null;
+  function groundAt(e) {
+    ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    return ray.ray.intersectPlane(ground, hitP) ? hitP.clone() : null;
+  }
+  const tileUnder = (p, fw = 1, fd = 1) => ({ i: Math.round(p.x + HALF - fw / 2), j: Math.round(p.z + HALF - fd / 2) });
+  canvas.addEventListener('pointerdown', (e) => {
+    pointers.add(e.pointerId);
+    down = { x: e.clientX, y: e.clientY, t: performance.now() };
+    if (pointers.size > 1) { drag = null; return; }
+    const p = groundAt(e);
+    if (mode?.kind === 'place' && p) {
+      const [w, d] = byId[mode.type].size; const [fw, fd] = ghost.rot % 2 ? [d, w] : [w, d];
+      const c = footprintCenter(mode.type, ghost.i, ghost.j, ghost.rot);
+      if (Math.abs(p.x - c.x) <= fw / 2 + 0.3 && Math.abs(p.z - c.z) <= fd / 2 + 0.3) { drag = { kind: 'ghost', fw, fd }; controls.enabled = false; }
+    } else if (mode?.kind === 'road' && p && e.pointerType !== 'mouse' || (mode?.kind === 'road' && e.button === 0)) {
+      drag = { kind: 'road', last: null }; controls.enabled = false;
+      if (p) { const [ti, tj] = tileOf(p.x, p.z); drag.last = `${ti},${tj}`; paintRoad(ti, tj); }
+    }
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const p = groundAt(e); if (!p) return;
+    if (drag.kind === 'ghost') { const t = tileUnder(p, drag.fw, drag.fd); if (t.i !== ghost.i || t.j !== ghost.j) { ghost.move(t.i, t.j); validate(); } }
+    if (drag.kind === 'road') { const [ti, tj] = tileOf(p.x, p.z); const k = `${ti},${tj}`; if (k !== drag.last) { drag.last = k; paintRoad(ti, tj); } }
+  });
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    if (drag) { drag = null; controls.enabled = true; return; }
     if (!down) return;
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), quick = performance.now() - down.t < 450;
     down = null;
-    if (moved > 8 || !quick) return;
-    ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
-    ray.setFromCamera(ndc, camera);
-    const surprise = ray.intersectObjects([...sur.targets, ...actors.tapTargets], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible !== false; });
-    if (surprise) {
-      let o = surprise.object; while (o && !o.userData.surprise) o = o.parent;
+    if (moved > 8 || !quick || e.type === 'pointercancel') return;
+    onTap(e);
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  function onTap(e) {
+    const p = groundAt(e);
+    if (mode?.kind === 'place') { if (p) { const [w, d] = byId[mode.type].size; const t = tileUnder(p, ghost.rot % 2 ? d : w, ghost.rot % 2 ? w : d); ghost.move(t.i, t.j); validate(); } return; }
+    if (mode) return;
+    ray.setFromCamera(ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+    const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
+    if (sh) {
+      let o = sh.object; while (o && !o.userData.surprise) o = o.parent;
       const kind = o.userData.surprise;
-      if (kind === 'family') { sayHi(); return; }
-      if (kind === 'pets') { actors.wag(); fx.heartPop(o.position); sticker('pets'); return; }
-      if (kind === 'balloon') fx.heartPop(o.position);
-      sound.pop(); sticker(kind); return;
+      if (kind === 'family') { const m = o.userData.member; toast(`${m.name} says hi!`, pick(['Nice work today.', 'This town feels like home.', 'What should we build next?', 'Let’s check something off together.'])); fx.heartPop(o.position); return; }
+      fx.heartPop(o.position); sound.pop();
+      if (spotSticker(state, kind)) { toast(`You spotted ${STICKERS[kind]}!`, `Sticker book ${state.stickers.length} of ${Object.keys(STICKERS).length} · just for fun`); persist(); }
+      return;
     }
-    const th = ray.intersectObjects(train.tapTargets, true)[0];
-    if (th) {
-      let o = th.object; while (o && o.userData.carId === undefined && o.parent && !train.tapTargets.includes(o)) o = o.parent;
-      const id = o.userData.carId;
-      const car = id && state.train.cars.find((c) => c.id === id);
-      if (car && !car.opened && !train.moving) { openCrateById(id); return; }
-      showStation(); return;
-    }
-    const hit = ray.intersectObjects(city.hitRoot.children, false)[0];
-    if (!hit) { select(null); return; }
-    const u = hit.object.userData;
-    sound.tap();
-    if (u.kind === 'lot') select({ kind: 'lot', key: u.key });
-    else if (u.kind === 'building') { select({ kind: 'building', id: u.id }); showBuilding(u.id); }
-    else if (u.kind === 'special') { select(null); showSpecial(u.id); }
-  });
-  /* Sound waits for the first tap anywhere. */
+    const hit = ray.intersectObjects(bld.hits.children, false)[0];
+    if (hit) { sound.tap(); bld.bounce(hit.object.userData.id); openPanel('building', { id: hit.object.userData.id }); }
+  }
   addEventListener('pointerdown', () => sound.unlock(), { once: true, capture: true });
 
-  /* ---------- Layout ---------- */
-  let tagMinY = 170;
-  function resize() {
-    stage.resize();
-    tagMinY = $('hud').getBoundingClientRect().bottom + 52;
-    document.documentElement.style.setProperty('--sheet-h', sheet.getBoundingClientRect().height + 'px');
+  /* ---------- Panel clicks ---------- */
+  $('panel').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b || b.id === 'panelClose') return;
+    const d = b.dataset;
+    if (d.tab) { panel.tab = d.tab; renderPanel(); $('panelBody').scrollTop = 0; emit('tab:' + d.tab); return; }
+    if (d.due !== undefined) { panel.due = d.due === '1'; renderPanel(); return; }
+    if (d.pick) { pickBuilding(d.pick); return; }
+    if (d.road) { startRoads(); return; }
+    if (d.thup) { upgradeTownHall(); return; }
+    if (d.done) { const [l, t] = d.done.split(':'); doTask(l, t, b); return; }
+    if (d.goaldone) { goalReached(d.goaldone, b); return; }
+    if (d.editlist) { openGoalForm({ mode: 'edit', listId: d.editlist }); return; }
+    if (d.newlist) { openGoalForm({ mode: 'new', buildingId: d.newlist }); return; }
+    if (d.upgrade) { upgradeHome(d.upgrade); return; }
+    if (d.move) { const r = state.buildings.find((x) => x.id === d.move); startPlacement({ type: r.type, ignoreId: r.id, start: { i: r.i, j: r.j }, rot: r.rot, level: r.level }); return; }
+    if (d.remove) { const r = state.buildings.find((x) => x.id === d.remove); state.buildings.splice(state.buildings.indexOf(r), 1); bld.remove(r.id); syncWorld(); closePanel(); persist(); hud(); return; }
+    if (d.kind) { readGoalForm(); const [i, k] = d.kind.split(':'); panel.draft.tasks[+i].kind = k; renderPanel(); return; }
+    if (d.per) { readGoalForm(); const [i, n] = d.per.split(':').map(Number); const t = panel.draft.tasks[i]; t.per = Math.max(1, Math.min(7, t.per + n)); renderPanel(); return; }
+    if (d.addtask) { readGoalForm(); panel.draft.tasks.push({ title: '', kind: 'daily', per: 3 }); renderPanel(); $('panelBody').querySelector(`[data-tt="${panel.draft.tasks.length - 1}"]`)?.focus(); return; }
+    if (d.savegoal) { saveGoalForm(); return; }
+    if (d.ttab) { panel.tab = d.ttab; renderPanel(); return; }
+    if (d.claimc) { const c = claimChallenge(state, d.claimc, today); if (c) { flyRewards(centerOf(b), c); sound.chime(); afterProgress(); renderPanel(); } return; }
+    if (d.claimm) { const m = claimMilestone(state, d.claimm); if (m) { flyRewards(centerOf(b), m); sound.chime(); afterProgress(); renderPanel(); } return; }
+    if (d.close) { closePanel(); return; }
+    if (d.menu) { menuAction(d.menu, b); }
+  });
+  function doTask(listId, taskId, el) {
+    const r = completeTask(state, listId, taskId, today);
+    if (!r) return;
+    sound.pop(); later(120, () => sound.coin());
+    flyRewards(centerOf(el), r.reward);
+    bld.bounce(r.list.buildingId);
+    const v = bld.views.get(r.list.buildingId);
+    if (v) fx.coinBurst(v.top.clone().add(new THREE.Vector3(0, -0.2, 0)));
+    win('task', centerOf(el));
+    if (totalDue(state, today) === 0) later(900, () => { fx.fireworks(controls.target, 4, () => sound.firework()); toast('Everything due today is done!', 'The town is celebrating'); });
+    emit('task');
+    afterProgress(); renderPanel();
   }
-  addEventListener('resize', resize);
-  new ResizeObserver(resize).observe(sheet);
-
-  /* ---------- Daily refresh (on load and when the date changes) ---------- */
-  function daily() {
-    today = dateKey();
-    easeBars(state, today);
-    refillOrders(state, today);
-    let arrived = false;
-    if (state.setup.pay.next && state.setup.pay.next <= today && (!state.train.lastPayday || state.train.lastPayday < state.setup.pay.next)) {
-      advanceNextPayday();
-      arrived = true;
-    } else if (state.setup.pay.next && state.setup.pay.next < today) advanceNextPayday();
-    persist();
-    return arrived;
+  function goalReached(listId, el) {
+    const r = achieveGoal(state, listId, today);
+    if (!r) return;
+    note(state, today, 'goal', { goal: r.list.achieved.at(-1).goal, section: r.list.section });
+    sound.chime(); flyRewards(centerOf(el), r.reward);
+    fx.fireworks(bld.views.get(r.list.buildingId)?.top || controls.target, 5, () => sound.firework());
+    toast('Big goal reached!', `+${r.reward.coins} coins · +${r.reward.xp} XP · set the next one when you're ready`);
+    afterProgress(); renderPanel();
   }
-  const paydayDue = daily();
-  setInterval(() => { if (dateKey() !== today) { if (daily()) trainArrive(true); render(); } }, 60000);
 
-  /* ---------- Art pack (if Brad has added one) ---------- */
-  loadArtPack().then((art) => {
-    if (!Object.keys(art).length) return;
-    city.applyArt(art);
-    if (art.car) actors.makeCars(art);
-  }).catch(() => {});
+  /* ---------- Menu + paper ---------- */
+  function renderMenu(confirm) {
+    const q = state.settings.quality;
+    const seg = (v, l) => `<button type="button" data-menu="q:${v}" aria-pressed="${q === v}">${l}</button>`;
+    return `<p class="hint"><b>${esc(state.cityName)}</b> · started ${shortDate(state.startDate)} · ${streak(state, today)}-day streak</p>
+      <div class="set-row"><span>Town paper</span><button type="button" class="btn soft small" data-menu="paper">Read it</button></div>
+      <div class="set-row"><span>Sound and haptics</span><button type="button" class="btn soft small" data-menu="sound">${state.settings.sound ? 'On' : 'Off'}</button></div>
+      <div class="set-row"><span>Night</span><button type="button" class="btn soft small" data-menu="night">${state.settings.night ? 'On' : 'Off'}</button></div>
+      <div class="set-row"><span>Quality<br><small>Now: ${stage.quality === 'high' ? 'High' : 'Battery saver'}</small></span><div class="seg">${seg('auto', 'Auto')}${seg('high', 'High')}${seg('saver', 'Battery saver')}</div></div>
+      <div class="set-row"><span>Guided tour</span><button type="button" class="btn soft small" data-menu="tour">Replay</button></div>
+      <div class="set-row"><span>Start over<br><small>Clears this town from this device</small></span>${confirm ? '<button type="button" class="btn go-btn small" data-menu="reset">Yes, start over</button>' : '<button type="button" class="btn soft small" data-menu="ask">Start over</button>'}</div>
+      <p class="foot">Life City · progress is saved in this browser only.${state.demo ? ' You are looking at the sample town.' : ''}</p>`;
+  }
+  function menuAction(a) {
+    if (a === 'paper') { openPanel('paper'); return; }
+    if (a === 'sound') { sound.setEnabled(!state.settings.sound); if (state.settings.sound) sound.pop(); }
+    if (a === 'night') { state.settings.night = !state.settings.night; const n0 = stage.night, n1 = state.settings.night ? 1 : 0; tween(1400, (k) => { stage.night = n0 + (n1 - n0) * easeInOut(k); }); }
+    if (a.startsWith('q:')) { const v = a.slice(2); state.settings.quality = v; stage.setQuality(v === 'auto' ? detectQuality() : v); autoChecked = true; }
+    if (a === 'tour') { closePanel(); state.tour = { step: 0, done: false }; runTour(); return; }
+    if (a === 'ask') { panel.confirm = true; }
+    if (a === 'reset') { clearSave(); location.reload(); return; }
+    persist(); renderPanel();
+  }
+  function renderPaper() {
+    const from = addDays(today, -6);
+    const week = since(state, from);
+    const doneIn = (l) => l.tasks.reduce((n, t) => n + t.done.filter((d) => d >= from && d <= today).length, 0);
+    const bySec = {};
+    for (const l of state.lists) bySec[l.section] = (bySec[l.section] || 0) + doneIn(l);
+    const total = Object.values(bySec).reduce((a, b) => a + b, 0);
+    const best = Object.entries(bySec).sort((a, b) => b[1] - a[1])[0];
+    const goals = week.filter((e) => e.type === 'goal'), built = week.filter((e) => e.type === 'built'), lv = week.filter((e) => e.type === 'levelup').at(-1);
+    const headline = lv ? `${state.cityName} reaches level ${lv.level}` : goals.length ? `Family reaches a big goal: “${goals.at(-1).goal}”` : built.length ? (built.length === 1 ? `New ${built[0].name} opens in town` : `${built.length} new builds go up around town`) : total ? `${total} tasks checked off this week` : `A quiet week in ${state.cityName}`;
+    return `<article class="np"><div class="mast">The Life City Gazette</div><div class="dateline"><span>${weekday(today)}, ${shortDate(today)}</span><span>${esc(state.cityName)}</span></div>
+      <h2>${esc(headline)}</h2><p>${total ? `The family checked off ${total} ${total === 1 ? 'task' : 'tasks'} this week${best && best[1] ? `, most of them in ${SECTIONS[best[0]].name.toLowerCase()}` : ''}.` : 'One check mark at any building wakes the town back up.'} Population is now ${population(state)}.</p>
+      <div class="npcols"><div><h3>Around town</h3><p>${built.length ? `New this week: ${built.map((b) => esc(b.name)).join(', ')}.` : 'No new buildings this week.'}</p></div>
+      <div><h3>By area</h3><p>${Object.entries(bySec).map(([s, n]) => `${SECTIONS[s].name} ${n}`).join(' · ') || 'No areas open yet.'}</p></div></div>
+      <div class="npcols"><div><h3>Goals reached</h3><p>${goals.length ? goals.map((g) => `“${esc(g.goal)}”`).join(', ') : 'Keep going, the next one is close.'}</p></div>
+      <div><h3>Streak</h3><p>${streak(state, today)} ${streak(state, today) === 1 ? 'day' : 'days'} in a row with something checked off.</p></div></div></article>`;
+  }
+
+  /* ---------- Bottom buttons ---------- */
+  $('btnBuild').onclick = () => { sound.tap(); openPanel('build'); };
+  $('btnLists').onclick = () => { sound.tap(); openPanel('lists', { due: false }); };
+  $('btnToday').onclick = () => { sound.tap(); openPanel('lists', { due: true }); };
+  $('btnTrophy').onclick = () => { sound.tap(); openPanel('trophy'); };
+  $('btnWins').onclick = () => { sound.tap(); openPanel('wins'); };
+  $('lvlBtn').onclick = () => openPanel('level');
+  $('popBtn').onclick = () => openPanel('build', { tab: 'homes' });
+  $('coinBtn').onclick = () => openPanel('lists', { due: true });
+  $('menuBtn').onclick = () => openPanel('menu');
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (mode) endMode(); else closePanel(); } });
+
+  /* ---------- Guided tour ---------- */
+  const tourEl = createTour($('tour'), { onSkip: () => { state.tour.done = true; persist(); } });
+  const rectOf = (sel) => () => { const el = typeof sel === 'string' ? document.querySelector(sel) : sel(); if (!el || el.offsetParent === null) return null; return el.getBoundingClientRect(); };
+  const firstSection = () => state.buildings.find((b) => byId[b.type].kind === 'section');
+  const TOUR = [
+    { title: `Welcome to ${state.cityName}!`, text: 'I’m Rosie, your town planner. In this town, real-life goals are what build things. Let’s set up your first one.', button: 'Let’s go', cardAt: 'mid' },
+    { title: 'Open the Build menu', text: 'Every part of life has its own building. Tap Build.', target: rectOf('#btnBuild'), until: 'panel:build', cardAt: 'mid' },
+    { title: 'Start with To-Do', text: 'Tap the Community Job Board. It holds everyday chores and projects.', target: rectOf('[data-pick="jobboard"]'), until: 'goalform', cardAt: 'top', enter: () => { if (panel?.kind === 'build') { panel.tab = 'todo'; renderPanel(); } } },
+    { title: 'Set your goal', text: 'Write one thing you want to get done, add a task or two that move it forward, then tap Save.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
+    { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
+    { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
+    { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Homes, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : $('panelTabs').querySelector('[data-tab="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
+    { title: 'You’re on your way!', text: 'Open Spiritual, Physical, Financial and Relational by setting a goal in each. Quick wins have more rewards, and leveling up unlocks new buildings with new lists.', target: rectOf('#btnWins'), button: 'Finish tour', cardAt: 'mid' }
+  ];
+  function runTour() {
+    const s = TOUR[state.tour.step];
+    if (!s || state.tour.done) { tourEl.hide(); state.tour.done = true; persist(); return; }
+    tourEl.show({ ...s, onButton: () => advance() });
+    s.enter && s.enter();
+  }
+  function advance() { state.tour.step++; persist(); later(250, runTour); }
+  listeners.push((name) => {
+    const s = TOUR[state.tour.step];
+    if (state.tour.done || !s || tourEl.current == null) return;
+    if (s.until === name) advance();
+    if (name === 'panel:build' && state.tour.step === 2) TOUR[2].enter?.();
+  });
+
+  /* ---------- Layout + daily refresh ---------- */
+  addEventListener('resize', () => stage.resize());
+  setInterval(() => { if (dateKey() !== today) { today = dateKey(); state.stats.lastDay = today; hud(); renderPanel(); persist(); } }, 60000);
 
   /* ---------- Loop ---------- */
   const clock = new THREE.Clock();
   let autoChecked = state.settings.quality !== 'auto' || stage.quality !== 'high';
-  let autoStart = 0, rainT = 0;
-  const fpsEl = DEBUG ? Object.assign(document.createElement('div'), { style: 'position:fixed;left:8px;bottom:8px;z-index:50;background:#1E2B3C;color:#fff;font:700 12px monospace;padding:4px 8px;border-radius:8px;pointer-events:none' }) : null;
-  if (fpsEl) document.body.appendChild(fpsEl);
-  const _up = new THREE.Vector3(0, 0.55, 0);
+  let autoStart = 0;
   stage.renderer.info.autoReset = false;
+  const fpsEl = DEBUG ? Object.assign(document.createElement('div'), { className: 'dbg' }) : null;
+  if (fpsEl) document.body.appendChild(fpsEl);
+  stage.night = state.settings.night ? 1 : 0;
+  waterUniforms.uStorm.value = 0.05;
   function frame(now) {
     stage.renderer.info.reset();
     const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
     tickTweens(now);
     meter.tick(now);
-    const sv = stormVisual(stage.storm, state.settings.gentle);
-    waterUniforms.uTime.value = REDUCED ? 0 : t; waterUniforms.uStorm.value = sv;
-    swayUniforms.uTime.value = REDUCED ? 0 : t; swayUniforms.uSway.value = REDUCED ? 0 : 0.06 + sv * 0.16; swayUniforms.uSpeed.value = 1.3 + sv * 1.5;
-    stage.applyMood(stage.night, sv);
-    const wy = waterY(sv); stage.water.position.y = wy; city.setWaterLevel(wy);
-    rain.tick(t, sv);
-    if ((rainT += dt) > 0.5) { rainT = 0; sound.setRain(rain.intensity); }
-    city.tick(dt, t);
-    actors.tick(dt, t, sv);
+    waterUniforms.uTime.value = REDUCED ? 0 : t;
+    swayUniforms.uTime.value = REDUCED ? 0 : t; swayUniforms.uSway.value = REDUCED ? 0 : 0.05;
+    stage.applyMood(stage.night);
+    walkers.tick(dt, t);
     sur.tick(dt, t);
     fx.tick(dt);
-    if (marker.visible) marker.position.y = marker.userData.baseY + Math.sin(t * 4) * 0.08;
-    if (famTag && actors.leaderPos()) famTag.pos.copy(actors.leaderPos()).add(_up);
-    crateBubbles.forEach((b, i) => { if (b) b.pos.copy(train.carPos(i)); });
+    ghost.tick(t);
     controls.update();
-    const cd = camera.position.distanceTo(controls.target); scene.fog.near = cd * 0.95; scene.fog.far = cd * 2.3;
-    tags.place(camera, tagMinY);
+    stage.followShadows();
+    const cd = camera.position.distanceTo(controls.target); scene.fog.near = cd * 1.4; scene.fog.far = cd * 3.2;
+    tags.place(camera, 0);
     stage.render();
-    /* Auto quality: if High can't hold ~45 fps after warm-up, step down to Battery saver. */
     if (!autoChecked) {
       if (!autoStart) autoStart = now;
-      if (now - autoStart > 6000) {
-        autoChecked = true;
-        if (meter.fps < 42) { stage.setQuality('saver'); toast('Switched to Battery saver', 'For smoother play on this device. Change it in Settings.'); }
-      }
+      if (now - autoStart > 6000) { autoChecked = true; if (meter.fps < 42) { stage.setQuality('saver'); toast('Switched to Battery saver', 'For smoother play on this device. Change it in the menu.'); } }
     }
     if (fpsEl && Math.floor(t * 4) !== Math.floor((t - dt) * 4)) fpsEl.textContent = `${meter.fps.toFixed(0)} fps · ${stage.quality} · ${stage.renderer.info.render.calls} draws`;
     requestAnimationFrame(frame);
   }
 
-  resize();
+  stage.resize();
   stage.resetView();
-  showTab('today');
+  hud();
   if (!REDUCED) {
-    const endPos = camera.position.clone();
-    const hv = stage.homeView();
-    const startPos = hv.target.clone().addScaledVector(hv.dir, hv.dist * 1.45).add(new THREE.Vector3(-6, 3, 4));
+    const end = camera.position.clone();
+    const startPos = end.clone().add(new THREE.Vector3(-8, 14, 10));
     camera.position.copy(startPos);
-    tween(2200, (k) => { camera.position.lerpVectors(startPos, endPos, easeInOut(k)); });
+    tween(2000, (k) => { camera.position.lerpVectors(startPos, end, easeInOut(k)); });
   }
-  mark('ui');
-  requestAnimationFrame((n) => { frame(n); mark('first frame'); if (DEBUG) console.info('[timing] ' + T.map(([k, v], i) => i ? k + ' ' + Math.round(v - T[i - 1][1]) + 'ms' : '').join(' · ')); $('boot').classList.add('done'); });
-  later(1600, () => updateStorm(3200));
-  setInterval(() => { if (!document.hidden && !REDUCED) { const k = pick(['balloon', 'birds', 'icecream']); if (sur.launch(k) && k === 'birds') sound.birds(); } }, 16000);
-  later(6000, () => sur.launch('balloon'));
-  if (paydayDue) later(3000, () => trainArrive(true));
-
-  /* First visit: the city appears at the family's real storm level, then one move drops the water. */
-  if (opts.first && state.firstMove) later(2600, () => showFirstMove());
-  function showFirstMove() {
-    const el = $('callout');
-    const lvl = stormLabel(stormNow(state));
-    let html;
-    if (state.money.debt > 0 && !state.money.payoffDate) html = `<b>Storm level: ${lvl}</b><p>That's your real starting point, and it's okay. One move drops it right now: pick a payoff date and a wall goes up.</p><button type="button" class="btn main" data-f="levee">Set a payoff date</button> <button type="button" class="btn link" data-f="later">Look around first</button>`;
-    else if (state.money.cushion < STARTER_CUSHION) html = `<b>Storm level: ${lvl}</b><p>The next payday toward your Starter Cushion pushes it back. Open the Storm tab when it lands.</p><button type="button" class="btn main" data-f="storm">Open the Storm tab</button> <button type="button" class="btn link" data-f="later">Look around first</button>`;
-    else html = `<b>Calm water around ${esc(state.setup.cityName)}</b><p>Log a goal at any bubble to earn your first build points.</p><button type="button" class="btn main" data-f="later">Let's go</button>`;
-    el.innerHTML = html; el.hidden = false;
-    el.onclick = (e) => {
-      const f = e.target.closest('[data-f]')?.dataset.f; if (!f) return;
-      el.hidden = true; state.firstMove = false; persist();
-      if (f === 'levee') setLevee();
-      if (f === 'storm') { setMin(false); showTab('storm'); }
-    };
-  }
-
-  if (DEBUG) window.__lc = { state, stage, city, train, meter, actions: { logTask, payday, trainArrive, openCrateById, deliver, setLevee, select, buildSmall, buildRecipe } };
+  requestAnimationFrame((n) => { frame(n); $('boot').classList.add('done'); });
+  setInterval(() => { if (!document.hidden && !REDUCED) { const k = pick(['balloon', 'birds']); if (sur.launch(k) && k === 'birds') sound.birds(); } }, 20000);
+  later(8000, () => sur.launch('balloon'));
+  if (opts.tour || (!state.tour.done && state.tour.step > 0)) later(2200, runTour);
+  persist();
+  if (DEBUG) window.__lc = { state, stage, bld, meter, actions: { openPanel, pickBuilding, startPlacement, confirmPlace, doTask, startRoads, paintRoad, endMode, upgradeTownHall } };
 }
 
-/* ---------- PWA: offline cache (production builds only) ---------- */
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
 }
