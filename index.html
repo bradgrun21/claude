@@ -21,6 +21,7 @@
 
   <div class="hud" id="hud" hidden>
     <div class="topbar">
+      <button class="avatar-btn" id="profileBtn" type="button" aria-label="Profile"><span id="avatarIn"></span></button>
       <button class="pill level" id="lvlBtn" type="button" aria-label="Level and XP">
         <span class="badge-star" id="lvlStar"><b id="lvl">1</b></span>
         <span class="bar"><i id="xpFill"></i><em id="xpTxt">0 / 60</em></span>
@@ -33,8 +34,8 @@
       <div class="left">
         <button class="big" id="btnBuild" type="button"><span class="art" id="artBuild"></span><span class="lbl">Build</span></button>
         <button class="big" id="btnLists" type="button"><span class="art" id="artLists"></span><span class="lbl">Lists</span><span class="badge" id="bdgLists" hidden></span></button>
-        <button class="big" id="btnTrophy" type="button"><span class="art" id="artTrophy"></span><span class="lbl">Goals</span><span class="badge" id="bdgTrophy" hidden></span></button>
-        <button class="big" id="btnWins" type="button"><span class="art" id="artWins"></span><span class="lbl">Quick wins</span><span class="badge" id="bdgWins" hidden></span></button>
+        <button class="big" id="btnTrophy" type="button"><span class="art" id="artTrophy"></span><span class="lbl">Awards</span><span class="badge" id="bdgTrophy" hidden></span></button>
+        <button class="big" id="btnWins" type="button"><span class="art" id="artWins"></span><span class="lbl" id="lblWins">Quick wins</span><span class="badge" id="bdgWins" hidden></span></button>
       </div>
       <button class="go" id="btnToday" type="button"><b id="todayN">0</b><span>Today</span></button>
     </div>

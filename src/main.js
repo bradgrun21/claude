@@ -24,7 +24,7 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { buildTabs, renderBuild, renderLists, renderBuilding, renderGoalForm, renderTrophy, renderWins, renderLevelInfo, renderLevelUp } from './ui/panels.js';
+import { renderBuild, renderLists, renderBuilding, renderGoalForm, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint } from './systems/placement.js';
@@ -106,11 +106,13 @@ function boot(state, opts) {
     $('btnToday').classList.toggle('quiet', !due);
     const badge = (id, n) => { const el = $(id); el.hidden = !n; el.textContent = n; };
     badge('bdgLists', due);
-    const claim = dailyChallenges(state, today).filter((c) => !c.claimed && challengeProgress(state, c, today) >= c.need).length + milestoneState(state).filter((m) => m.ready).length;
-    badge('bdgTrophy', claim);
+    badge('bdgTrophy', milestoneState(state).filter((m) => m.ready).length);
     const winsLeft = QUICK_WINS.filter((q) => state.quickWins[q.id] !== 'claimed').length;
-    $('btnWins').hidden = !winsLeft;
-    badge('bdgWins', winsLeft);
+    $('lblWins').textContent = winsLeft ? 'Quick wins' : 'Challenges';
+    badge('bdgWins', requestItems(state, today).length);
+    const first = state.family[0];
+    $('avatarIn').textContent = (state.cityName || 'L').trim()[0].toUpperCase();
+    $('profileBtn').style.setProperty('--c', first ? first.color : '#3F8FE0');
     refreshBubbles();
   }
   const bubbles = new Map();
@@ -202,8 +204,7 @@ function boot(state, opts) {
   function openPanel(kind, o = {}) {
     if (mode) return;
     panel = { kind, ...o };
-    if (kind === 'build' && !panel.tab) panel.tab = 'todo';
-    if (kind === 'trophy' && !panel.tab) panel.tab = 'today';
+    if (kind === 'profile' && !panel.tab) panel.tab = 'info';
     renderPanel();
     $('panel').hidden = false;
     $('panelBody').scrollTop = 0;
@@ -215,12 +216,12 @@ function boot(state, opts) {
     let title = '', tabs = '', body = '';
     const p = panel;
     $('win').dataset.kind = p.kind;
-    if (p.kind === 'build') { title = 'Build'; tabs = buildTabs(p.tab); body = renderBuild(state, p.tab); }
+    if (p.kind === 'build') { if (!p.tab) { title = 'Store'; body = renderStore(state); } else { title = STORE.find((c) => c.id === p.tab).label; tabs = `<button type="button" class="wtab back" data-back="1">‹ Store</button>`; body = renderBuild(state, p.tab); } }
     else if (p.kind === 'lists') { title = p.due ? 'Due today' : 'Your lists'; tabs = `<button type="button" class="wtab${p.due ? ' on' : ''}" data-due="1">Due today</button><button type="button" class="wtab${p.due ? '' : ' on'}" data-due="0">All lists</button>`; body = renderLists(state, today, p.due); }
     else if (p.kind === 'building') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBuilding(state, b, today); }
     else if (p.kind === 'goal') { title = p.draft.title; body = renderGoalForm(p.draft); }
-    else if (p.kind === 'trophy') { title = 'Goals & challenges'; body = renderTrophy(state, today, p.tab); }
-    else if (p.kind === 'wins') { title = 'Quick wins'; body = renderWins(state); }
+    else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
+    else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
     else if (p.kind === 'level') { title = 'Your level'; body = renderLevelInfo(state); }
     else if (p.kind === 'levelup') { title = 'Level up!'; body = renderLevelUp(p.level); }
     else if (p.kind === 'menu') { title = 'Menu'; body = renderMenu(p.confirm); }
@@ -495,6 +496,12 @@ function boot(state, opts) {
     const b = e.target.closest('button'); if (!b || b.id === 'panelClose') return;
     const d = b.dataset;
     if (d.tab) { panel.tab = d.tab; renderPanel(); $('panelBody').scrollTop = 0; emit('tab:' + d.tab); return; }
+    if (d.cat) { sound.tap(); panel.tab = d.cat; renderPanel(); $('panelBody').scrollTop = 0; emit('tab:' + d.cat); return; }
+    if (d.back) { panel.tab = null; renderPanel(); return; }
+    if (d.go) { goAction(d.go); return; }
+    if (d.ptab) { panel.tab = d.ptab; panel.editing = false; renderPanel(); return; }
+    if (d.pf === 'edit') { panel.editing = true; renderPanel(); $('cityNameIn')?.focus(); return; }
+    if (d.pf === 'save') { const v = $('cityNameIn').value.trim(); if (v) state.cityName = v; panel.editing = false; persist(); hud(); renderPanel(); return; }
     if (d.due !== undefined) { panel.due = d.due === '1'; renderPanel(); return; }
     if (d.pick) { pickBuilding(d.pick); return; }
     if (d.road) { startRoads(); return; }
@@ -584,8 +591,23 @@ function boot(state, opts) {
   $('btnBuild').onclick = () => { sound.tap(); openPanel('build'); };
   $('btnLists').onclick = () => { sound.tap(); openPanel('lists', { due: false }); };
   $('btnToday').onclick = () => { sound.tap(); openPanel('lists', { due: true }); };
-  $('btnTrophy').onclick = () => { sound.tap(); openPanel('trophy'); };
-  $('btnWins').onclick = () => { sound.tap(); openPanel('wins'); };
+  $('btnTrophy').onclick = () => { sound.tap(); openPanel('profile', { tab: 'achievements' }); };
+  $('btnWins').onclick = () => { sound.tap(); openPanel('requests'); };
+  $('profileBtn').onclick = () => { sound.tap(); openPanel('profile', { tab: 'info' }); };
+  function goAction(code) {
+    const [kind, id] = code.split(':');
+    closePanel();
+    const unopened = ['todo', 'physical', 'financial', 'relational', 'spiritual'].find((s) => !state.lists.some((l) => l.section === s));
+    if (kind === 'win') {
+      if (id === 'task') return openPanel('lists', { due: true });
+      if (id === 'home') return openPanel('build', { tab: 'homes' });
+      if (id === 'road') return startRoads();
+      if (id === 'level3') return openPanel('level');
+      return openPanel('build', { tab: unopened || null });
+    }
+    if (id === 'build') return openPanel('build');
+    return openPanel('lists', { due: true });
+  }
   $('lvlBtn').onclick = () => openPanel('level');
   $('popBtn').onclick = () => openPanel('build', { tab: 'homes' });
   $('coinBtn').onclick = () => openPanel('lists', { due: true });
@@ -603,7 +625,7 @@ function boot(state, opts) {
     { title: 'Set your goal', text: 'Write one thing you want to get done, add a task or two that move it forward, then tap Save.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
     { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
     { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
-    { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Homes, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : $('panelTabs').querySelector('[data-tab="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
+    { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Housing, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : panel.tab ? $('panelTabs').querySelector('[data-back]') : $('panelBody').querySelector('[data-cat="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
     { title: 'You’re on your way!', text: 'Open Spiritual, Physical, Financial and Relational by setting a goal in each. Quick wins have more rewards, and leveling up unlocks new buildings with new lists.', target: rectOf('#btnWins'), button: 'Finish tour', cardAt: 'mid' }
   ];
   function runTour() {

@@ -13,12 +13,6 @@ const xpTag = (n) => `<span class="cost xp"><i class="ci">${ART.xp}</i>${n}</spa
 const sectionChip = (s) => `<span class="schip" style="--c:${SECTIONS[s].color}">${svgI(SECTIONS[s].icon, '#fff', 13, 2.4)}${SECTIONS[s].name}</span>`;
 const img = (type) => { const u = thumb(type); return u ? `<img src="${u}" alt="" draggable="false">` : `<span class="noimg">${svgI('home', '#9AA6B2', 30)}</span>`; };
 
-export const BUILD_TABS = [...SECTION_KEYS.map((k) => ({ id: k, label: SECTIONS[k].name })), { id: 'homes', label: 'Homes' }, { id: 'roads', label: 'Roads & Decor' }, { id: 'townhall', label: 'Town Hall' }];
-
-export function buildTabs(active) {
-  return BUILD_TABS.map((t) => `<button type="button" class="wtab${t.id === active ? ' on' : ''}" data-tab="${t.id}"${SECTIONS[t.id] ? ` style="--c:${SECTIONS[t.id].color}"` : ''}>${t.label}</button>`).join('');
-}
-
 function card(def, state, { note, action = 'pick', locked, lockText, disabled, price } = {}) {
   return `<button type="button" class="bcard${locked ? ' locked' : ''}${disabled ? ' dim' : ''}" data-${action}="${def.id}"${locked ? ' aria-disabled="true"' : ''}>
     <span class="bimg">${img(def.id)}${locked ? `<span class="lock">${svgI('lock', '#fff', 16, 2.6)}${esc(lockText)}</span>` : ''}</span>
@@ -140,29 +134,6 @@ export function renderGoalForm(draft) {
     <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(draft.saveLabel)}</button></div>`;
 }
 
-/* ---------- Trophy: challenges, milestones, stickers ---------- */
-export function renderTrophy(state, day, tab) {
-  const tabs = [['today', "Today's challenges"], ['milestones', 'Milestones'], ['stickers', 'Sticker book']];
-  const head = `<div class="seg wide">${tabs.map(([k, l]) => `<button type="button" data-ttab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
-  if (tab === 'milestones') {
-    const ms = milestoneState(state).sort((a, b) => (b.ready - a.ready) || (a.claimed - b.claimed));
-    return head + ms.map((m) => `<div class="card2 ch${m.claimed ? ' claimed' : ''}"><div class="row"><b>${esc(m.text)}</b><span class="rws">${xpTag(m.xp)}${m.coins ? coin(m.coins) : ''}</span></div><div class="pbar"><i style="width:${((m.now / m.at) * 100).toFixed(0)}%"></i></div>
-      <div class="row"><small>${m.now} of ${m.at}</small>${m.claimed ? '<small class="ok">Claimed</small>' : `<button type="button" class="btn go-btn small" data-claimm="${m.id}"${m.ready ? '' : ' disabled'}>Claim</button>`}</div></div>`).join('');
-  }
-  if (tab === 'stickers') {
-    const em = { balloon: '🎈', birds: '🐦', fireworks: '🎆', pets: '🐾' };
-    return head + `<div class="stickers">${Object.entries(STICKER_NAMES).map(([k, n]) => `<div class="sticker${state.stickers.includes(k) ? ' got' : ''}"><span class="em">${em[k]}</span>${state.stickers.includes(k) ? n : 'Keep watching'}</div>`).join('')}</div><p class="foot">Surprises are just for fun. Tap them when you see them.</p>`;
-  }
-  const items = dailyChallenges(state, day);
-  return head + items.map((c) => { const p = challengeProgress(state, c, day); return `<div class="card2 ch${c.claimed ? ' claimed' : ''}"><div class="row"><b>${esc(c.text)}</b><span class="rws">${xpTag(c.xp)}${c.coins ? coin(c.coins) : ''}</span></div><div class="pbar"><i style="width:${((p / c.need) * 100).toFixed(0)}%"></i></div>
-    <div class="row"><small>${p} of ${c.need}</small>${c.claimed ? '<small class="ok">Claimed</small>' : `<button type="button" class="btn go-btn small" data-claimc="${c.id}"${p >= c.need ? '' : ' disabled'}>Claim</button>`}</div></div>`; }).join('') + '<p class="foot">New challenges every morning.</p>';
-}
-
-export function renderWins(state) {
-  const done = QUICK_WINS.filter((q) => state.quickWins[q.id] === 'claimed').length;
-  return `<p class="hint">Small first steps, each with a reward. ${done} of ${QUICK_WINS.length} done.</p>` + QUICK_WINS.map((q) => { const d = state.quickWins[q.id] === 'claimed'; return `<div class="win-row${d ? ' done' : ''}"><span class="wc">${d ? svgI('check', '#fff', 16, 3) : ''}</span><b>${esc(q.text)}</b><span class="rws">${coin(q.coins)}${xpTag(q.xp)}</span></div>`; }).join('');
-}
-
 export function renderLevelInfo(state) {
   const need = levelNeed(state.level);
   const pop = population(state);
@@ -180,4 +151,93 @@ export function renderLevelUp(level) {
   return `<div class="lvlup"><span class="burst">${ART.xp}<b>${level}</b></span><b class="ttl">Level ${level}!</b>
     ${items.length ? `<p>New to build:</p><div class="unlocks">${items.map((d) => `<span class="un">${img(d.id)}<small>${esc(d.name)}</small></span>`).join('')}</div>` : '<p>Your town is growing.</p>'}
     <button type="button" class="btn go-btn" data-close="1">Keep building</button></div>`;
+}
+
+/* ---------- Store landing: category tiles ---------- */
+export const STORE = [
+  { id: 'spiritual', label: 'Spiritual', rep: (s) => (s.spiritualStyle === 'garden' ? 'garden' : 'church') },
+  { id: 'physical', label: 'Physical', rep: () => 'gym' },
+  { id: 'financial', label: 'Financial', rep: () => 'bank' },
+  { id: 'relational', label: 'Relational', rep: () => 'park' },
+  { id: 'todo', label: 'To-Do', rep: () => 'jobboard' },
+  { id: 'homes', label: 'Housing', rep: () => 'house' },
+  { id: 'roads', label: 'Decor & Roads', rep: () => 'fountain' },
+  { id: 'townhall', label: 'Town Hall', rep: () => 'townhall' }
+];
+/* How many things in a category are ready right now (unlocked, not built, affordable). */
+export function readyCount(state, cat) {
+  const built = (id) => state.buildings.some((b) => b.type === id);
+  if (SECTIONS[cat]) {
+    const open = state.lists.some((l) => l.section === cat);
+    if (!open) return 1;
+    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && state.level >= b.level && state.coins >= b.cost).length;
+  }
+  if (cat === 'homes') return BUILDINGS.filter((b) => b.kind === 'home' && state.level >= b.level && state.coins >= b.cost).length ? 1 : 0;
+  if (cat === 'townhall') return canUpgradeTownHall(state).ok ? 1 : 0;
+  return 0;
+}
+export function renderStore(state) {
+  return `<div class="store">${STORE.map((c) => { const n = readyCount(state, c.id); return `<button type="button" class="stile" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>
+    <span class="stitle">${esc(c.label)}</span><span class="sart">${img(c.rep(state))}</span>${n ? `<span class="badge">${SECTIONS[c.id] && !state.lists.some((l) => l.section === c.id) ? 'New' : n}</span>` : ''}</button>`; }).join('')}</div>`;
+}
+
+/* ---------- Available tasks (quick wins + daily challenges, given by characters) ---------- */
+const WIN_ICON = { goal: 'board', place: 'home', task: 'check', home: 'home', road: 'road', area2: 'plus', level3: 'up' };
+export function requestItems(state, day) {
+  const items = [];
+  const open = new Set(state.lists.map((l) => l.section)).size;
+  for (const q of QUICK_WINS) {
+    if (state.quickWins[q.id] === 'claimed') continue;
+    const [have, need] = q.id === 'level3' ? [Math.min(3, state.level), 3] : q.id === 'area2' ? [Math.min(2, open), 2] : [state.quickWins[q.id] ? 1 : 0, 1];
+    items.push({ who: 'rosie', kind: 'win', id: q.id, text: q.text, have, need, coins: q.coins, xp: q.xp, icon: WIN_ICON[q.id] });
+    if (items.length === 2) break;
+  }
+  for (const c of dailyChallenges(state, day)) {
+    if (c.claimed) continue;
+    items.push({ who: 'joe', kind: 'challenge', id: c.id, text: c.text, have: challengeProgress(state, c, day), need: c.need, coins: c.coins, xp: c.xp, icon: c.track === 'builds' ? 'home' : 'check' });
+  }
+  return items.slice(0, 3);
+}
+export function renderRequests(state, day) {
+  const items = requestItems(state, day);
+  if (!items.length) return `<div class="req-empty">${ART.joe}<div class="bubble-card"><b>All caught up!</b><p class="hint">New challenges arrive every morning.</p></div></div>`;
+  return `<div class="requests">${items.map((r) => {
+    const ready = r.have >= r.need;
+    return `<div class="reqcol"><div class="bubble-card">
+      <div class="rq-top"><span class="rq-icon">${svgI(r.icon, '#2F86D8', 30, 2.4)}</span><div class="rq-bar"><div class="pbar"><i style="width:${((r.have / r.need) * 100).toFixed(0)}%"></i><em>${r.have}/${r.need}</em></div><span class="rq-gift">${ART.gift}</span></div></div>
+      <b class="rq-title">${esc(r.text)}</b>
+      <span class="rws">${coin(r.coins)}${xpTag(r.xp)}</span>
+      ${ready && r.kind === 'challenge' ? `<button type="button" class="btn go-btn" data-claimc="${r.id}">Claim</button>` : `<button type="button" class="btn blue-btn" data-go="${r.kind}:${r.id}">Go</button>`}
+      <small class="rq-from">${r.kind === 'win' ? 'Quick win from Rosie' : 'Daily challenge from Grandpa Joe'}</small></div>
+      <span class="rq-char">${ART[r.who]}</span></div>`;
+  }).join('')}</div>`;
+}
+
+/* ---------- Profile: player info + achievements ---------- */
+export function renderProfile(state, day, tab, streakNow, editing) {
+  const pop = population(state);
+  const first = state.family[0];
+  const initial = (state.cityName || 'L').trim()[0].toUpperCase();
+  const d = new Date(state.startDate + 'T00:00');
+  const stat = (icon, label, value) => `<div class="stat"><span class="st-ic">${icon}</span><b>${label}</b><span class="st-v">${value}</span></div>`;
+  const side = `<div class="pside"><span class="avatar" style="--c:${first ? first.color : '#3F8FE0'}">${esc(initial)}</span>
+    ${editing ? `<input class="field" id="cityNameIn" maxlength="32" value="${esc(state.cityName)}"><button type="button" class="btn go-btn small" data-pf="save">Save</button>` : `<b class="pname">${esc(state.cityName)}</b><span class="since">${svgI('clock', '#8A5A30', 15)} ${d.getMonth() + 1}/${d.getFullYear()}</span>
+    <span class="fam">${state.family.map((m) => `<i style="background:${m.color}" title="${esc(m.name)}">${esc(m.name[0])}</i>`).join('')}</span>
+    <button type="button" class="btn go-btn small" data-pf="edit">${svgI('edit', '#fff', 15)} Edit</button>`}</div>`;
+  const tabs = `<div class="seg wide">${[['info', 'Player info'], ['achievements', 'Achievements'], ['stickers', 'Sticker book']].map(([k, l]) => `<button type="button" data-ptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
+  let body;
+  if (tab === 'achievements') {
+    body = `<div class="ach-grid">${milestoneState(state).map((m) => `<div class="ach${m.claimed ? ' got' : m.ready ? ' ready' : ''}"><span class="ach-ic">${m.claimed || m.ready ? ART.trophy : `${ART.trophy}<i class="lk">${svgI('lock', '#fff', 12, 3)}</i>`}</span>
+      <b>${esc(m.text)}</b><div class="pbar"><i style="width:${((m.now / m.at) * 100).toFixed(0)}%"></i><em>${m.now}/${m.at}</em></div>
+      ${m.ready ? `<button type="button" class="btn go-btn small" data-claimm="${m.id}">Claim ${m.xp} XP</button>` : m.claimed ? '<small class="ok">Earned</small>' : ''}</div>`).join('')}</div>`;
+  } else if (tab === 'stickers') {
+    const em = { balloon: '🎈', birds: '🐦', fireworks: '🎆', pets: '🐾' };
+    body = `<div class="stickers">${Object.entries(STICKER_NAMES).map(([k, n]) => `<div class="sticker${state.stickers.includes(k) ? ' got' : ''}"><span class="em">${em[k]}</span>${state.stickers.includes(k) ? n : 'Keep watching'}</div>`).join('')}</div><p class="foot">Surprises are just for fun. Tap them when you see them.</p>`;
+  } else {
+    const areas = new Set(state.lists.map((l) => l.section)).size;
+    body = `<div class="lv-row"><span class="lv-star">${ART.xp}<b>${state.level}</b></span><b>Town level</b></div>
+      <div class="stats">${stat(svgI('check', '#3E8E57', 28, 3), 'Tasks done', state.stats.tasksDone || 0)}${stat(ART.trophy, 'Big goals reached', state.stats.goalsDone || 0)}${stat(svgI('clock', '#D9774A', 28, 2.6), 'Day streak', streakNow)}
+      ${stat(ART.people, 'Population', pop)}${stat(svgI('home', '#3F8FE0', 28, 2.4), 'Areas open', `${areas} of 5`)}${stat(ART.coin, 'Coins earned', (state.stats.coinsEarned || 0).toLocaleString('en-US'))}</div>`;
+  }
+  return `<div class="profile">${side}<div class="pmain">${tabs}${body}</div></div>`;
 }

@@ -33,6 +33,9 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   checklist pays out for the next first steps.
 - **Never sold:** progress, levels, coins, unlocks. No paid currency, timers, energy, or countdown sales.
   No red, no X's, no "missed". The weekly town paper never shows dollar amounts.
+- **Store, Available tasks, Profile** (v2.1): Build opens a Store of category tiles with "New"/ready badges; two original
+  characters (Rosie the town planner, Grandpa Joe) hand out quick wins and daily challenges as cards with progress bars and
+  **Go** buttons that jump straight to the right screen; a Profile (top-left) shows town level, stats, achievements and the sticker book.
 - Also: building stories (tap any building), move/rotate buildings, day/night, sound and haptics (silent until first tap,
   mute in the menu), sticker book for cosmetic surprises, offline play, install to home screen.
 
