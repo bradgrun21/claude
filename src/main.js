@@ -701,4 +701,33 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
 }
 
+/*
+ * Landscape only on phones. Browsers can't force a rotation by themselves, so:
+ *  - the installed app's manifest asks for landscape (Android honors it),
+ *  - Android Chrome can lock landscape once it's full screen (button on the rotate screen),
+ *  - otherwise a held-upright phone sees a friendly "turn your phone sideways" screen.
+ * Tablets and computers can use either orientation.
+ */
+const isPhone = () => (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) && Math.min(screen.width, screen.height) <= 600;
+const canFull = !!(document.documentElement.requestFullscreen && screen.orientation && screen.orientation.lock);
+async function lockLandscape(goFull) {
+  try {
+    if (goFull && !document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    await screen.orientation.lock('landscape');
+  } catch (e) { /* not allowed here (iPhone, desktop): the rotate screen covers it */ }
+}
+function checkOrientation() {
+  const portraitPhone = isPhone() && innerHeight > innerWidth;
+  $('rotate').hidden = !portraitPhone;
+  $('rotateFull').hidden = !canFull;
+  document.body.classList.toggle('phone', isPhone());
+}
+addEventListener('resize', checkOrientation);
+addEventListener('orientationchange', () => setTimeout(checkOrientation, 120));
+$('rotateFull').addEventListener('click', () => lockLandscape(true));
+if (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches) {
+  addEventListener('pointerdown', () => lockLandscape(false), { once: true });
+}
+checkOrientation();
+
 start();

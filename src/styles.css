@@ -364,3 +364,71 @@ body.touring-panel .toast { top: calc(env(safe-area-inset-top, 0px) + 60px); bot
 @media (max-width: 420px) { .avatar-btn { width: 38px; height: 38px; } .topbar { gap: 6px; } .pill.level { min-width: 88px; } }
 .ach .pbar em, .card2 .pbar em { color: var(--brown); text-shadow: none; }
 @media (max-width: 640px) { .sart { aspect-ratio: 1.7; } .stile { padding-top: 8px; } .stitle { font-size: 13.5px; } }
+
+/* ======== Landscape-only on phones ======== */
+.rotate { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: linear-gradient(180deg, #8ED2F5, #7CC74C); color: var(--ink); }
+.rotate b { font-family: var(--font-display); font-weight: 700; font-size: 26px; color: #fff; text-shadow: 0 2px 0 rgba(20,60,30,.45); }
+.rotate p { margin: 0 0 6px; font-weight: 800; color: #1E3B22; max-width: 280px; line-height: 1.4; }
+.rot-phone { width: 70px; height: 116px; border-radius: 14px; border: 6px solid #fff; background: #3F8FE0; box-shadow: 0 6px 0 rgba(0,0,0,.15); position: relative; animation: turn 2.2s ease-in-out infinite; margin-bottom: 18px; }
+.rot-phone i { position: absolute; left: 50%; bottom: 6px; width: 16px; height: 4px; margin-left: -8px; border-radius: 2px; background: rgba(255,255,255,.7); }
+@keyframes turn { 0%, 25% { transform: rotate(0deg); } 55%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .rot-phone { animation: none; transform: rotate(-90deg); } }
+
+/* Short, wide phone screens (landscape) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .topbar { top: calc(env(safe-area-inset-top, 0px) + 6px); left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); }
+  .pill.level { max-width: 220px; }
+  .bottombar { bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); }
+  .big { width: 58px; height: 58px; border-radius: 15px; }
+  .big .art { width: 34px; height: 32px; }
+  .big .lbl { font-size: 10.5px; }
+  .go { width: 68px; height: 68px; border-radius: 20px; }
+  .go b { font-size: 24px; } .go span { font-size: 12px; }
+  .toast { top: calc(env(safe-area-inset-top, 0px) + 50px); font-size: 14.5px; padding: 8px 14px; }
+  .modebar { width: min(560px, calc(100% - 180px)); padding: 6px 10px; gap: 4px; bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); }
+  .mbtns .btn { padding: 8px 14px; }
+  .modal { padding: calc(env(safe-area-inset-top, 0px) + 6px) max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 6px) max(12px, env(safe-area-inset-left, 0px)); }
+  .win { width: min(860px, 100%) !important; border-width: 4px; border-radius: 22px; }
+  .ribbon { min-height: 42px; }
+  .ribbon h2 { font-size: 19px; }
+  .close { width: 34px; height: 34px; }
+  .win-tabs { padding-bottom: 6px; }
+  .win-body { margin: 0 8px 8px; padding: 8px; }
+  .store { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .sart { aspect-ratio: 1.9; }
+  .stitle { font-size: 13px; padding-bottom: 2px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .bcard .bimg { aspect-ratio: 1.6; }
+  .requests { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .rq-char { width: 74px; height: 86px; margin-top: 6px; }
+  .rq-icon { width: 44px; height: 44px; }
+  .rq-title { font-size: 15px; }
+  .blue-btn { padding: 7px 26px; font-size: 16px; }
+  .profile { grid-template-columns: 170px 1fr; }
+  .pside { flex-direction: column; flex-wrap: nowrap; }
+  .avatar { width: 72px; height: 72px; font-size: 34px; }
+  .lv-star { width: 58px; height: 58px; } .lv-star b { font-size: 21px; }
+  .stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .lvlup .burst { width: 76px; height: 76px; }
+  .th .bimg.bigimg { width: 84px; height: 76px; }
+  /* tour card sits on the left so the panel keeps its height */
+  .tour-card { width: min(380px, 46vw); }
+  .tour-card.top { top: calc(env(safe-area-inset-top, 0px) + 50px); }
+  .tour-card.mid { top: 22%; }
+  .tour-card.bottom { left: max(10px, env(safe-area-inset-left, 0px)); transform: none; width: 250px; bottom: auto; top: 50%; translate: 0 -50%; }
+  body.touring-panel .modal { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); padding-left: 272px; }
+  body.touring .toast, body.touring-panel .toast { top: auto; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); }
+  .tg { width: 40px; height: 40px; } .tt b { font-size: 15px; } .tt p { font-size: 12.5px; margin-bottom: 4px; }
+  /* setup screen */
+  .setup { padding-top: calc(env(safe-area-inset-top, 0px) + 12px); }
+  .su { width: min(620px, 100%); padding: 16px; }
+  .su-hero { margin-top: 0; }
+  .su-guide { width: 70px; height: 70px; }
+  .su h1 { font-size: 23px; }
+  .su .lead { margin-bottom: 10px; font-size: 14px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .sart { aspect-ratio: auto; height: 19vh; }
+  .stile { padding: 6px 4px 4px; gap: 2px; }
+  body.touring .toast, body.touring-panel .toast { bottom: calc(env(safe-area-inset-bottom, 0px) + 100px); }
+}

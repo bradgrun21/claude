@@ -36,6 +36,9 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
 - **Store, Available tasks, Profile** (v2.1): Build opens a Store of category tiles with "New"/ready badges; two original
   characters (Rosie the town planner, Grandpa Joe) hand out quick wins and daily challenges as cards with progress bars and
   **Go** buttons that jump straight to the right screen; a Profile (top-left) shows town level, stats, achievements and the sticker book.
+- **Landscape only on phones.** The installed app asks for landscape; on Android a "Play full screen" button locks it;
+  a phone held upright sees a "Turn your phone sideways" screen (browsers can't force rotation on their own, and iPhone Safari never allows a lock).
+  Every screen has a compact layout for short, wide phone screens. Tablets and computers can use either orientation.
 - Also: building stories (tap any building), move/rotate buildings, day/night, sound and haptics (silent until first tap,
   mute in the menu), sticker book for cosmetic surprises, offline play, install to home screen.
 
