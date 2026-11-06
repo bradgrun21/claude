@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newCity } from '../src/data/state.js';
+import { newCity, removedFeatures } from '../src/data/state.js';
 import * as LB from '../src/systems/logbook.js';
 import * as T from '../src/systems/tools.js';
 import { markUse, checkEarned, earnedProgress, earnedById, isEarned, noteStreak } from '../src/systems/earned.js';
@@ -44,15 +44,25 @@ describe('logbooks', () => {
     expect(LB.latestSizes(s).Pat.Shoe.val).toBe('10');
     expect(LB.logSubjects(s, 'gifts')).toEqual(['Pat']);
   });
-  it('records expire with a 60-day heads-up and can be edited and removed', () => {
+  it('has no medicine tracking and no records store', () => {
+    expect(LB.LOGS.records).toBe(undefined);
+    expect(LB.LOGS.vet.fields.find((f) => f.k === 'type').options).not.toContain('Medicine');
+  });
+  it('cleans up older towns that had Records Hall or medicine entries', () => {
     const s = city();
-    const r = LB.addLogEntry(s, 'records', { what: 'Passport', category: 'ID & passports', expires: addDays(D, 45), where: 'Fire safe' }, D);
-    expect(LB.logReminders(s, 'records', D).length).toBe(1);
-    LB.updateLogEntry(s, 'records', r.entry.id, { expires: '2036-01-01' });
-    expect(LB.logReminders(s, 'records', D).length).toBe(0);
-    expect(r.entry.where).toBe('Fire safe');
-    LB.removeLogEntry(s, 'records', r.entry.id);
-    expect(s.logs.records.length).toBe(0);
+    s.buildings.push({ id: 'rh', type: 'records', i: 0, j: 0, rot: 0, level: 1 });
+    s.earned = [{ id: 'capsule', on: D }, { id: 'lanterns', on: D }];
+    s.logs.records = [{ id: 'r1', what: 'Passport', photoId: 'p1' }];
+    s.logs.vet.push({ id: 'v1', subject: 'Rex', type: 'Medicine', what: 'Pills', next: D });
+    const c0 = s.coins;
+    removedFeatures(s);
+    expect(s.buildings.some((b) => b.type === 'records')).toBe(false);
+    expect(s.coins).toBe(c0 + 120);
+    expect(s.earned.map((e) => e.id)).toEqual(['lanterns']);
+    expect(s.logs.records).toBe(undefined);
+    expect(s.pendingPhotoDeletes).toEqual(['p1']);
+    expect(s.logs.vet[0]).toMatchObject({ type: 'Other' });
+    expect(s.logs.vet[0].next).toBe(undefined);
   });
 });
 

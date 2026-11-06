@@ -6,6 +6,8 @@ import { weekStart } from './lists.js';
  * Logbooks: buildings that simply keep track of things. One engine, each tracker is a description:
  * the fields an entry has, what it's "about" (a car, a pet, a person), and an optional reminder date.
  * Entries stay on this device. Each entry pays a small reward, up to 3 a week per logbook.
+ * On purpose, there is no medicine or dosing tracker and no important-documents store: a game shouldn't be
+ * anyone's only record of those. Phones and pharmacies handle medicine reminders far more reliably.
  */
 const DATE = { k: 'date', type: 'date', label: 'Date' };
 export const LOGS = {
@@ -15,15 +17,11 @@ export const LOGS = {
   },
   vet: {
     subjects: 'pets', subjectLabel: 'Pet', addLabel: 'Add a pet', reminder: 'next', reminderDays: 30,
-    fields: [DATE, { k: 'type', type: 'select', label: 'Kind', options: ['Checkup', 'Vaccine', 'Medicine', 'Grooming', 'Sick visit', 'Other'] }, { k: 'what', type: 'text', label: 'What', req: true, ph: 'Like “Rabies booster”' }, { k: 'vet', type: 'text', label: 'Vet' }, { k: 'cost', type: 'money', label: 'Cost' }, { k: 'next', type: 'date', label: 'Next one due (optional)' }, { k: 'notes', type: 'longtext', label: 'Notes' }, { k: 'photo', type: 'photo', label: 'Photo' }]
+    fields: [DATE, { k: 'type', type: 'select', label: 'Kind', options: ['Checkup', 'Vaccine', 'Grooming', 'Sick visit', 'Other'] }, { k: 'what', type: 'text', label: 'What', req: true, ph: 'Like “Rabies booster”' }, { k: 'vet', type: 'text', label: 'Vet' }, { k: 'cost', type: 'money', label: 'Cost' }, { k: 'next', type: 'date', label: 'Next checkup or vaccine (optional)' }, { k: 'notes', type: 'longtext', label: 'Notes' }, { k: 'photo', type: 'photo', label: 'Photo' }]
   },
   gifts: {
     subjects: 'people', subjectLabel: 'Person', addLabel: 'Add someone',
     fields: [{ k: 'kind', type: 'select', label: 'Kind', options: ['Idea', 'Given', 'Size'] }, { k: 'what', type: 'text', label: 'What', req: true, ph: 'Gift idea, gift given, or a size like “Shoe: 4Y”' }, { k: 'occasion', type: 'text', label: 'Occasion', ph: 'Birthday, Christmas…' }, DATE, { k: 'cost', type: 'money', label: 'Cost' }, { k: 'notes', type: 'longtext', label: 'Notes' }]
-  },
-  records: {
-    subjects: null, reminder: 'expires', reminderDays: 60,
-    fields: [{ k: 'what', type: 'text', label: 'Document', req: true, ph: 'Like “Passport” or “Life insurance policy”' }, { k: 'category', type: 'select', label: 'Category', options: ['ID & passports', 'Insurance', 'Legal & wills', 'Medical', 'Home & car', 'Taxes', 'School', 'Other'] }, { k: 'who', type: 'text', label: 'Whose', ph: 'Optional' }, { k: 'where', type: 'text', label: 'Where it’s kept', ph: 'Like “Fire safe, top drawer”' }, { k: 'expires', type: 'date', label: 'Expires (optional)' }, { k: 'notes', type: 'longtext', label: 'Notes' }, { k: 'photo', type: 'photo', label: 'Photo (stays on this device)' }]
   }
 };
 export const LOG_REWARD = { coins: 10, xp: 5 };
@@ -115,6 +113,16 @@ export function removeLogEntry(state, id, entryId) {
 export function logEntries(state, id, subject = null) {
   const sortKey = (e) => e.date || e.expires || e.created || '';
   return (state.logs?.[id] || []).filter((e) => !subject || e.subject === subject).slice().sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+}
+
+/* Older towns: drop the removed Records Hall data and any medicine entries' next-dose dates. */
+export function migrateLogs(state) {
+  ensureLogs(state);
+  if (state.logs.records) { const gone = state.logs.records; delete state.logs.records; if (state.tools) delete state.tools.records; return gone.map((e) => e.photoId).filter(Boolean); }
+  return [];
+}
+export function migrateVet(state) {
+  for (const e of state.logs?.vet || []) if (e.type === 'Medicine') { e.type = 'Other'; delete e.next; }
 }
 
 /* Reminders: entries whose reminder date is coming up (or recently passed) and not yet marked handled. */

@@ -20,8 +20,7 @@ export const EARNED = [
   { id: 'playground', name: 'Playground', tools: ['kids'], weeks: 4, text: 'Give kids stars in 4 different weeks' },
   { id: 'bandstand', name: 'Bandstand', tools: ['meeting'], weeks: 4, text: 'Hold 4 family meetings' },
   { id: 'dogpark', name: 'Dog Park', tools: ['vet'], weeks: 3, text: 'Log pet records in 3 different weeks' },
-  { id: 'giftbox', name: 'Giant Gift Box', tools: ['gifts'], weeks: 3, text: 'Log gifts or sizes in 3 different weeks' },
-  { id: 'capsule', name: 'Time Capsule', tools: ['records'], weeks: 2, text: 'Log important records in 2 different weeks' }
+  { id: 'giftbox', name: 'Giant Gift Box', tools: ['gifts'], weeks: 3, text: 'Log gifts or sizes in 3 different weeks' }
 ];
 export const earnedById = Object.fromEntries(EARNED.map((e) => [e.id, e]));
 

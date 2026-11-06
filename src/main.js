@@ -142,7 +142,7 @@ function boot(state, opts) {
       const tool = TL.toolForBuilding(b.type);
       if (tool && TL.toolAvailable(state, tool.id) && !TL.toolOpened(state, tool.id)) { want.set(b.id, { sig: 'new', html: bubbleHtml(`<span class="bub-emoji">${tool.emoji}</span>`, `New: ${tool.name}`, b.id, def.section || null) }); continue; }
       if (tool && TL.toolOpened(state, tool.id)) {
-        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, tool.id === 'records' ? 'Expiring soon' : 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
+        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
         if (tb && !(def.kind === 'section' && listFor(state, b.id) && dueCount(listFor(state, b.id), today))) { want.set(b.id, { sig: `t${tb[1]}`, html: bubbleHtml(`<span class="bub-emoji">${tb[0]}</span>`, tb[1], b.id, def.section || null) }); continue; }
       }
       if (def.kind === 'section') {
@@ -1320,6 +1320,7 @@ function boot(state, opts) {
   stage.resize();
   stage.resetView();
   noteStreak(state, today);
+  if (state.pendingPhotoDeletes?.length) { for (const id of state.pendingPhotoDeletes) deletePhoto(id); state.pendingPhotoDeletes = []; }
   hud();
   if (!REDUCED) {
     const end = camera.position.clone();

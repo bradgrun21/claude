@@ -3,6 +3,8 @@ import { emptyBudget } from '../systems/budget.js';
 import { occupancy } from '../systems/placement.js';
 import { migrateList } from '../systems/lists.js';
 import { ensureTools } from '../systems/tools.js';
+import { migrateLogs, migrateVet } from '../systems/logbook.js';
+import { byId } from './catalog.js';
 
 /*
  * One state object that every system reads, saved in this browser only (Phase 1: no real user data leaves the device).
@@ -67,6 +69,17 @@ export function addStation(s, today) {
   return true;
 }
 
+/* Records Hall and the Time Capsule were removed (Nov 2026). Refund the building, drop its data. */
+export function removedFeatures(s) {
+  const gone = s.buildings.filter((b) => !byId[b.type]);
+  for (const b of gone) if (b.type === 'records') s.coins += 120;
+  s.buildings = s.buildings.filter((b) => byId[b.type]);
+  s.earned = (s.earned || []).filter((e) => e.id !== 'capsule');
+  s.pendingPhotoDeletes = [...(s.pendingPhotoDeletes || []), ...migrateLogs(s)];
+  migrateVet(s);
+  return gone.length;
+}
+
 export function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -79,6 +92,7 @@ export function load() {
     s.budget = { ...base.budget, ...s.budget };
     s.lists.forEach(migrateList);
     ensureTools(s);
+    removedFeatures(s);
     addStation(s, s.stats?.lastDay || s.startDate);
     return s;
   } catch (e) {

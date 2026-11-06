@@ -9,10 +9,9 @@ const btn = (a, label, { id = '', cls = 'soft small' } = {}) => `<button type="b
 export const LOG_TABS = {
   repair: [['log', 'Repair log'], ['sum', 'Totals']],
   vet: [['log', 'Records'], ['due', 'Coming up']],
-  gifts: [['log', 'Ideas & gifts'], ['sizes', 'Sizes']],
-  records: [['log', 'Records'], ['due', 'Expiring']]
+  gifts: [['log', 'Ideas & gifts'], ['sizes', 'Sizes']]
 };
-const KIND_ICON = { Idea: '💡', Given: '🎁', Size: '📏', Checkup: '🩺', Vaccine: '💉', Medicine: '💊', Grooming: '✂️', 'Sick visit': '🤒', Other: '📝' };
+const KIND_ICON = { Idea: '💡', Given: '🎁', Size: '📏', Checkup: '🩺', Vaccine: '💉', Grooming: '✂️', 'Sick visit': '🤒', Other: '📝' };
 
 function field(f, ui, day, subjectQuick) {
   const k = `f_${f.k}`;
@@ -35,7 +34,7 @@ function entryCard(id, e, day) {
     bits.push(f.type === 'date' ? `${esc(f.label.replace(' (optional)', ''))} ${val}` : val);
   }
   const tag = e.kind || e.type || e.category;
-  return `<button type="button" class="lg-entry" data-ta="ledit" data-id="${e.id}">${e.photoId ? `<img data-photo="${e.photoId}" alt="">` : `<span class="lg-ic">${KIND_ICON[tag] || { repair: '🔧', records: '🗂️' }[id] || '📝'}</span>`}
+  return `<button type="button" class="lg-entry" data-ta="ledit" data-id="${e.id}">${e.photoId ? `<img data-photo="${e.photoId}" alt="">` : `<span class="lg-ic">${KIND_ICON[tag] || { repair: '🔧' }[id] || '📝'}</span>`}
     <span class="lg-t"><b>${esc(e.what || '')}</b><small>${[e.date ? shortDate(e.date) + (e.date.slice(0, 4) !== day.slice(0, 4) ? ` ${e.date.slice(0, 4)}` : '') : '', e.subject ? esc(e.subject) : '', tag && !e.kind ? esc(tag) : '', ...bits].filter(Boolean).join(' · ')}</small>${e.notes ? `<small class="lg-n">${esc(e.notes.slice(0, 90))}${e.notes.length > 90 ? '…' : ''}</small>` : ''}</span>${svgI('edit', 'currentColor', 15)}</button>`;
 }
 
@@ -51,7 +50,7 @@ export function renderLog(state, id, tab, ui, day) {
   }
   if (tab === 'due') {
     const r = logReminders(state, id, day, 120);
-    return `${r.map((e) => `<div class="tool-row static${e.days <= 14 ? ' review' : ''}"><span><b>${esc(e.what)}${e.subject ? ` · ${esc(e.subject)}` : e.who ? ` · ${esc(e.who)}` : ''}</b><small>${id === 'records' ? 'Expires' : 'Due'} ${weekday(e.on)}, ${shortDate(e.on)} · ${e.days > 1 ? `in ${e.days} days` : e.days === 1 ? 'tomorrow' : e.days === 0 ? 'today' : 'ready when you are'}</small></span>${btn('lhandled', id === 'records' ? 'Renewed' : 'Done', { id: e.id, cls: 'go-btn small' })}</div>`).join('') || `<p class="hint">Nothing coming up. ${id === 'records' ? 'Add an expiration date to a record and it shows here.' : 'Add a “next one due” date to a record and it shows here.'}</p>`}
+    return `${r.map((e) => `<div class="tool-row static${e.days <= 14 ? ' review' : ''}"><span><b>${esc(e.what)}${e.subject ? ` · ${esc(e.subject)}` : e.who ? ` · ${esc(e.who)}` : ''}</b><small>Due ${weekday(e.on)}, ${shortDate(e.on)} · ${e.days > 1 ? `in ${e.days} days` : e.days === 1 ? 'tomorrow' : e.days === 0 ? 'today' : 'ready when you are'}</small></span>${btn('lhandled', 'Done', { id: e.id, cls: 'go-btn small' })}</div>`).join('') || `<p class="hint">Nothing coming up. Add a “next checkup or vaccine” date to a record and it shows here.</p>`}
       <p class="foot">You’ll see a bubble on the building two weeks ahead.</p>`;
   }
   if (tab === 'sizes') {
