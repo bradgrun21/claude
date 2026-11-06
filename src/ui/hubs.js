@@ -70,7 +70,7 @@ export function renderMoneyHub(state, day) {
 export function renderTrackersHub(state, day) {
   const wk = weekStart(day);
   const home = [
-    buildingTile(state, 'grocery', '🥕', 'Meal Planner', () => `${TL.plannedCount(state, day)} of 7 dinners planned`, 'meals'),
+    buildingTile(state, 'grocery', '🥕', 'Meal Planner', () => `${TL.plannedCount(state, day)} meals planned this week`, 'meals'),
     buildingTile(state, 'gasstation', '🔧', 'Car & Home Care', () => { const n = TL.careDueCount(state, day); return n ? `${n} ready when you are` : `${(state.care?.items || []).length} things tracked`; }, 'care'),
     buildingTile(state, 'repairshop', '🧰', 'Repair Log', () => `${state.logs?.repair?.length || 0} repairs logged`, 'repair')
   ];

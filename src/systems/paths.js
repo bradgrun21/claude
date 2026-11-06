@@ -1,7 +1,7 @@
 import { grant } from './economy.js';
 import { MONEY_STEPS } from './budget.js';
 import { weekStart } from './lists.js';
-import { kidNames } from './tools.js';
+import { kidNames, mealsInWeek } from './tools.js';
 
 /*
  * Paths: features that have a natural order unlock one step at a time.
@@ -13,15 +13,15 @@ import { kidNames } from './tools.js';
  *   …and the same idea for every tracker.
  */
 const n = (v) => (typeof v === 'number' ? v : v ? 1 : 0);
-const weeksPlanned = (s, min) => Object.values(s.meals?.plan || {}).filter((w) => Object.keys(w).length >= min).length;
+const weeksPlanned = (s, min) => Object.values(s.meals?.plan || {}).filter((w) => mealsInWeek(w) >= min).length;
 
 export const PATHS = {
   money: MONEY_STEPS.map((st) => ({ id: st.id, title: st.title, desc: st.desc, need: st.need, have: (s) => st.progress(s.budget) })),
   meals: [
     { id: 'recipe', title: 'Add a meal', desc: 'Save one recipe your family loves.', tab: 'recipes', need: 1, have: (s) => s.meals.recipes.length },
-    { id: 'plan', title: 'Plan the week', desc: 'Pick dinners for 3 nights this week.', tab: 'week', need: 3, have: (s) => Math.max(0, ...Object.values(s.meals.plan).map((w) => Object.keys(w).length)) },
+    { id: 'plan', title: 'Plan the week', desc: 'Plan 3 meals this week: breakfast, lunch or dinner.', tab: 'week', need: 3, have: (s) => Math.max(0, ...Object.values(s.meals.plan).map(mealsInWeek)) },
     { id: 'list', title: 'Make the grocery list', desc: 'Turn the plan into a shopping list.', tab: 'list', need: 1, have: (s) => n(s.tools?.meals?.listMade || s.meals.list.length > 0) },
-    { id: 'habit', title: 'Make it a habit', desc: 'Plan 3 nights in 3 different weeks.', need: 3, have: (s) => weeksPlanned(s, 3) }
+    { id: 'habit', title: 'Make it a habit', desc: 'Plan 3 meals in 3 different weeks.', need: 3, have: (s) => weeksPlanned(s, 3) }
   ],
   care: [
     { id: 'thing', title: 'Add your car or home', desc: 'We’ll fill in the usual upkeep.', need: 1, have: (s) => s.care.things.length },

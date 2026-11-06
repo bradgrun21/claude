@@ -424,7 +424,8 @@ function boot(state, opts) {
   $('panelBody').addEventListener('change', (e) => {
     if (panel?.kind !== 'tool') return;
     if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
-    if (e.target.dataset.meal) { TL.setMeal(state, e.target.dataset.meal, e.target.value); markUse(state, 'meals', today); persist(); afterProgress(); renderPanel(); }
+    if (e.target.dataset.meal) { const [d, slot] = e.target.dataset.meal.split(':'); TL.setMeal(state, d, e.target.value, slot || 'd'); markUse(state, 'meals', today); persist(); afterProgress(); renderPanel(); }
+    if (e.target.dataset.side && e.target.value) { const [d, slot] = e.target.dataset.side.split(':'); TL.addSide(state, d, slot, e.target.value); markUse(state, 'meals', today); persist(); afterProgress(); renderPanel(); }
   });
   $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); });
   function readJournalForm() {
@@ -1281,6 +1282,7 @@ function boot(state, opts) {
       case 'rdel': TL.removeRecipe(state, id); toast('Recipe removed'); p.tab = 'recipes'; break;
       case 'rstarter': { const [n, ing, notes] = TL.STARTER_RECIPES[+id]; TL.addRecipe(state, { name: n, ingredients: ing, notes }); toolReward(el, null, `${n} added`, 'Edit it any time to match how your family makes it'); break; }
       case 'mweek': ui.week = id; break;
+      case 'sidedel': { const [d, slot, rid] = id.split('|'); TL.removeSide(state, d, slot, rid); break; }
       case 'gbuild': { const n = TL.buildGroceryList(state, ui.week || today); if (n || state.meals.list.length) (state.tools.meals = state.tools.meals || {}).listMade = true; p.tab = 'list'; toast(n ? `${n} items added to the list` : 'Nothing new to add', n ? 'Check them off at the store' : 'Plan some dinners with recipes first'); break; }
       case 'gadd': if (!need(ui.gitem, 'Type an item first')) return; TL.addGroceryItem(state, ui.gitem); clear('gitem'); sound.pop(); break;
       case 'gtoggle': TL.toggleGroceryItem(state, id); sound.pop(); break;

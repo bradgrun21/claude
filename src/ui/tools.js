@@ -82,15 +82,24 @@ function meals(state, tab, ui, day) {
       ${open.map((i) => `<div class="task"><button type="button" class="check" data-ta="gtoggle" data-id="${i.id}" aria-label="Got ${esc(i.text)}"></button><span class="tx"><b>${esc(i.text)}</b>${i.from ? `<small>${esc(i.from)}</small>` : ''}</span></div>`).join('') || '<p class="hint">The list is empty. Plan some dinners, then tap “From this week’s meals”.</p>'}
       ${done.length ? `<div class="h3">In the cart · ${done.length}</div>${done.map((i) => `<div class="task done"><button type="button" class="check" data-ta="gtoggle" data-id="${i.id}" aria-label="Put back ${esc(i.text)}">${svgI('check', '#fff', 18, 3)}</button><span class="tx"><b>${esc(i.text)}</b></span></div>`).join('')}<div class="actions">${btn('gclear', 'Clear the cart', { cls: 'soft' })}</div>` : ''}`;
   }
-  /* week */
+  /* week: days down the left, breakfast / lunch / dinner across, each with optional sides */
   const wk = ui.week || weekStart(day);
+  const name = (id) => (id === 'leftovers' ? 'Leftovers' : id === 'out' ? 'Eat out' : M.recipes.find((r) => r.id === id)?.name || '');
   const opts = (sel) => `<option value="skip">—</option>${M.recipes.map((r) => `<option value="${r.id}"${sel === r.id ? ' selected' : ''}>${esc(r.name)}</option>`).join('')}<option value="leftovers"${sel === 'leftovers' ? ' selected' : ''}>Leftovers</option><option value="out"${sel === 'out' ? ' selected' : ''}>Eat out</option>`;
-  const rows = [0, 1, 2, 3, 4, 5, 6].map((k) => { const d = addDays(wk, k); const sel = T.mealOn(state, d); return `<div class="meal-row${d === day ? ' today' : ''}"><span class="md"><b>${weekday(d).slice(0, 3)}</b><small>${shortDate(d)}</small></span><select class="freq meal" data-meal="${d}" aria-label="Dinner on ${weekday(d)}">${opts(sel)}</select></div>`; }).join('');
+  const cell = (d, slot) => {
+    const m = T.mealSlot(state, d, slot);
+    const sides = m?.sides || [];
+    return `<div class="mt-cell"><select class="freq meal" data-meal="${d}:${slot}" aria-label="${T.MEAL_NAMES[slot]} on ${weekday(d)}">${opts(m?.main)}</select>
+      ${sides.map((id) => `<button type="button" class="side-chip" data-ta="sidedel" data-id="${d}|${slot}|${id}" aria-label="Remove ${esc(name(id))}">+ ${esc(name(id))} ✕</button>`).join('')}
+      ${M.recipes.length && sides.length < T.MAX_SIDES ? `<select class="side-add" data-side="${d}:${slot}" aria-label="Add a side"><option value="">+ side</option>${M.recipes.filter((r) => r.id !== m?.main && !sides.includes(r.id)).map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}</select>` : ''}</div>`;
+  };
+  const rows = [0, 1, 2, 3, 4, 5, 6].map((k) => { const d = addDays(wk, k); return `<div class="mt-day${d === day ? ' today' : ''}"><b>${weekday(d).slice(0, 3)}</b><small>${shortDate(d)}</small></div>${T.MEAL_SLOTS.map((sl) => cell(d, sl)).join('')}`; }).join('');
   const n = T.plannedCount(state, wk);
-  return `<div class="brow">${btn('mweek', '‹', { id: addDays(wk, -7) })}<b class="h3">Dinners · week of ${shortDate(wk)}</b>${btn('mweek', '›', { id: addDays(wk, 7) })}</div>
-    ${M.recipes.length ? '' : `<p class="hint">Add a few recipes first, then pick one for each night. ${btn('tab', 'Go to recipes', { id: 'recipes', cls: 'link small' })}</p>`}
-    <div class="meal-grid">${rows}</div>
-    <div class="actions">${btn('gbuild', `🛒 Make the grocery list`, { cls: 'go-btn' })}${T.canClaimMealPlan(state, wk) && wk === weekStart(day) ? btn('mclaim', `Week planned! +${T.MEAL_PLAN_REWARD.coins} coins`, { cls: 'go-btn' }) : `<span class="hint">${n} of 7 nights planned${n < 4 ? ' · plan 4 for a weekly bonus' : ''}</span>`}</div>`;
+  return `<div class="brow">${btn('mweek', '‹', { id: addDays(wk, -7) })}<b class="h3">Meals · week of ${shortDate(wk)}</b>${btn('mweek', '›', { id: addDays(wk, 7) })}</div>
+    ${M.recipes.length ? '' : `<p class="hint">Add a few recipes first, then pick one for each meal. ${btn('tab', 'Go to recipes', { id: 'recipes', cls: 'link small' })}</p>`}
+    <div class="meal-table"><span></span>${T.MEAL_SLOTS.map((sl) => `<span class="mt-h">${T.MEAL_NAMES[sl]}</span>`).join('')}${rows}</div>
+    <div class="actions">${btn('gbuild', '🛒 Make the grocery list', { cls: 'go-btn' })}${T.canClaimMealPlan(state, wk) && wk === weekStart(day) ? btn('mclaim', `Week planned! +${T.MEAL_PLAN_REWARD.coins} coins`, { cls: 'go-btn' }) : `<span class="hint">${n} ${n === 1 ? 'meal' : 'meals'} planned${n < 4 ? ' · plan 4 for a weekly bonus' : ''}</span>`}</div>
+    <p class="foot">Sides (salad, garlic bread…) are recipes too. Their ingredients go on the grocery list with the meal.</p>`;
 }
 
 /* ================= Car & Home Care ================= */

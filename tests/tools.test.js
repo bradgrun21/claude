@@ -160,3 +160,33 @@ describe('family meeting', () => {
     expect(T.meetingAgenda(s, '2026-11-09').lastFocus).toBe('Early bedtimes');
   });
 });
+
+describe('meal planner grid: breakfast, lunch, dinner and sides', () => {
+  it('plans each meal, adds sides, and puts everything on the grocery list', () => {
+    const s = city();
+    const oats = T.addRecipe(s, { name: 'Oats', ingredients: 'Oats\nMilk' });
+    const tacos = T.addRecipe(s, { name: 'Tacos', ingredients: 'Shells\nCheese' });
+    const salad = T.addRecipe(s, { name: 'Salad', ingredients: 'Lettuce\nCheese' });
+    T.setMeal(s, D, oats.id, 'b');
+    T.setMeal(s, D, tacos.id, 'd');
+    expect(T.addSide(s, D, 'd', salad.id)).toBeTruthy();
+    expect(T.addSide(s, D, 'd', salad.id)).toBe(null);
+    expect(T.mealOn(s, D, 'b')).toBe(oats.id);
+    expect(T.mealSlot(s, D, 'd').sides).toEqual([salad.id]);
+    expect(T.plannedCount(s, D)).toBe(2);
+    expect(T.buildGroceryList(s, D)).toBe(5);
+    T.removeSide(s, D, 'd', salad.id);
+    expect(T.mealSlot(s, D, 'd').sides).toEqual([]);
+    T.removeRecipe(s, tacos.id);
+    expect(T.mealOn(s, D, 'd')).toBe(null);
+  });
+  it('reads older saves (one dinner per day) as dinner', () => {
+    const s = city();
+    const r = T.addRecipe(s, { name: 'Chili', ingredients: 'Beans' });
+    s.meals.plan['2026-11-02'] = { 3: r.id };
+    expect(T.mealOn(s, D, 'd')).toBe(r.id);
+    expect(T.plannedCount(s, D)).toBe(1);
+    T.setMeal(s, D, 'out', 'l');
+    expect([T.mealOn(s, D, 'l'), T.mealOn(s, D, 'd')]).toEqual(['out', r.id]);
+  });
+});

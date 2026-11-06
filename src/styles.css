@@ -864,3 +864,14 @@ select.freq.meal { flex: 1; min-width: 0; }
 
 /* Money level up: the level sits in a badge on the coin, not on top of the $ */
 .burst.mburst b { inset: auto -4px -4px auto; width: 40px; height: 40px; padding: 0; border-radius: 50%; background: var(--green-deep); border: 3px solid #fff; font-size: 20px; box-shadow: 0 3px 0 rgba(0,0,0,.15); }
+
+/* ---------- Meal planner grid: days × breakfast / lunch / dinner ---------- */
+.meal-table { display: grid; grid-template-columns: 54px repeat(3, minmax(0, 1fr)); gap: 5px; align-items: stretch; }
+.mt-h { text-align: center; font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--brown); }
+.mt-day { display: flex; flex-direction: column; justify-content: center; padding: 4px 6px; background: #fff; border: 2px solid var(--line); border-radius: 12px; }
+.mt-day b { font-size: 13.5px; } .mt-day small { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); }
+.mt-day.today { border-color: var(--green); }
+.mt-cell { display: flex; flex-direction: column; gap: 3px; padding: 4px; background: #fff; border: 2px solid var(--line); border-radius: 12px; min-width: 0; }
+.mt-cell select.meal { width: 100%; min-width: 0; padding: 6px 4px; font-size: 12.5px; }
+.side-chip { align-self: flex-start; max-width: 100%; border: 0; border-radius: 999px; padding: 2px 8px; background: #EEF6E6; color: var(--green-deep); font: inherit; font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.side-add { align-self: flex-start; max-width: 100%; border: 1.5px dashed var(--line); border-radius: 999px; background: transparent; font: inherit; font-size: 11px; font-weight: 800; color: var(--ink-soft); padding: 2px 6px; }

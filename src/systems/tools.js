@@ -108,7 +108,14 @@ export const STARTER_RECIPES = [
   ['Slow-cooker chili', 'Ground beef\nKidney beans\nBlack beans\nDiced tomatoes\nOnion\nChili powder\nShredded cheese', 'Brown beef and onion, add everything to the slow cooker, low 6–8 hours.'],
   ['Chicken stir-fry', 'Chicken breast\nFrozen stir-fry vegetables\nSoy sauce\nRice\nGarlic', 'Cook rice. Stir-fry chicken, add vegetables and sauce.'],
   ['Homemade pizza night', 'Pizza dough\nPizza sauce\nMozzarella\nPepperoni\nBell peppers', 'Everyone tops their own. 450°F for 12–15 minutes.'],
-  ['Baked potato bar', 'Russet potatoes\nButter\nShredded cheese\nBacon bits\nSour cream\nGreen onions', '400°F for an hour, or the microwave in a pinch.']
+  ['Baked potato bar', 'Russet potatoes\nButter\nShredded cheese\nBacon bits\nSour cream\nGreen onions', '400°F for an hour, or the microwave in a pinch.'],
+  ['Overnight oats', 'Rolled oats\nMilk\nYogurt\nBerries\nHoney', 'Mix the night before; grab and go in the morning.'],
+  ['Scrambled eggs and toast', 'Eggs\nBread\nButter\nShredded cheese', 'Low heat and a little patience.'],
+  ['Turkey sandwiches', 'Sliced turkey\nBread\nCheese slices\nLettuce\nMustard', 'Pack the night before for school lunches.'],
+  ['Garden salad (side)', 'Bagged salad\nCherry tomatoes\nCucumber\nRanch dressing', 'Toss right before serving.'],
+  ['Roasted veggies (side)', 'Broccoli\nCarrots\nOlive oil\nSalt and pepper', '425°F for 20–25 minutes.'],
+  ['Garlic bread (side)', 'French bread\nButter\nGarlic powder', '400°F for 8–10 minutes.'],
+  ['Fruit cup (side)', 'Apples\nGrapes\nOranges', 'Cut and mix. Kids can help.']
 ];
 export const MEAL_SPECIAL = { leftovers: 'Leftovers', out: 'Eat out', skip: 'No plan' };
 export function addRecipe(state, r) {
@@ -129,28 +136,78 @@ export function updateRecipe(state, id, r) {
 }
 export function removeRecipe(state, id) {
   state.meals.recipes = state.meals.recipes.filter((x) => x.id !== id);
-  for (const w of Object.values(state.meals.plan)) for (const k of Object.keys(w)) if (w[k] === id) delete w[k];
+  for (const w of Object.values(state.meals.plan)) for (const k of Object.keys(w)) {
+    const d = normDay(w[k]);
+    for (const slot of MEAL_SLOTS) { const m = d[slot]; if (!m) continue; m.sides = m.sides.filter((x) => x !== id); if (m.main === id) delete d[slot]; }
+    if (Object.keys(d).length) w[k] = d; else delete w[k];
+  }
 }
-/* plan[weekStart][0..6] = recipeId | 'leftovers' | 'out' */
-export function setMeal(state, day, value) {
+/*
+ * plan[weekStart][0..6] = { b, l, d } — breakfast, lunch, dinner — each { main, sides: [recipeId] }.
+ * main is a recipeId, 'leftovers' or 'out'. (Older saves stored just the dinner as a string; it's read as dinner.)
+ */
+export const MEAL_SLOTS = ['b', 'l', 'd'];
+export const MEAL_NAMES = { b: 'Breakfast', l: 'Lunch', d: 'Dinner' };
+export const MAX_SIDES = 3;
+function normDay(v) {
+  if (!v) return {};
+  if (typeof v === 'string') return { d: { main: v, sides: [] } };
+  for (const k of MEAL_SLOTS) if (v[k]) v[k].sides = v[k].sides || [];
+  return v;
+}
+function dayEntry(state, day, create) {
   ensureTools(state);
   const wk = weekStart(day), idx = daysBetween(wk, day);
-  const w = state.meals.plan[wk] || (state.meals.plan[wk] = {});
-  if (!value || value === 'skip') delete w[idx]; else w[idx] = value;
-  /* keep only recent weeks */
+  const w = state.meals.plan[wk] || (create ? (state.meals.plan[wk] = {}) : null);
+  if (!w) return { w: null, idx, d: {} };
+  const d = normDay(w[idx]);
+  if (create || w[idx]) w[idx] = d;
+  return { w, idx, d };
+}
+const tidy = (state, w, idx) => {
+  if (w && w[idx] && !Object.keys(w[idx]).length) delete w[idx];
   const keys = Object.keys(state.meals.plan).sort();
   while (keys.length > 12) delete state.meals.plan[keys.shift()];
+};
+export function setMeal(state, day, value, slot = 'd') {
+  const { w, idx, d } = dayEntry(state, day, true);
+  if (!value || value === 'skip') delete d[slot];
+  else d[slot] = { main: value, sides: d[slot]?.sides || [] };
+  tidy(state, w, idx);
   return w;
 }
-export const mealOn = (state, day) => state.meals?.plan?.[weekStart(day)]?.[daysBetween(weekStart(day), day)] || null;
-export const plannedCount = (state, day) => Object.keys(state.meals?.plan?.[weekStart(day)] || {}).length;
+export function addSide(state, day, slot, recipeId) {
+  if (!state.meals.recipes.some((r) => r.id === recipeId)) return null;
+  const { w, idx, d } = dayEntry(state, day, true);
+  const m = d[slot] || (d[slot] = { main: null, sides: [] });
+  if (m.sides.includes(recipeId) || m.sides.length >= MAX_SIDES) return null;
+  m.sides.push(recipeId);
+  tidy(state, w, idx);
+  return m;
+}
+export function removeSide(state, day, slot, recipeId) {
+  const { w, idx, d } = dayEntry(state, day, false);
+  const m = d[slot];
+  if (!m) return null;
+  m.sides = m.sides.filter((x) => x !== recipeId);
+  if (!m.main && !m.sides.length) delete d[slot];
+  tidy(state, w, idx);
+  return m;
+}
+export const mealSlot = (state, day, slot = 'd') => dayEntry(state, day, false).d[slot] || null;
+export const mealOn = (state, day, slot = 'd') => mealSlot(state, day, slot)?.main || null;
+/* Meals planned in a week (each breakfast, lunch or dinner with something chosen counts once). */
+export const mealsInWeek = (w) => Object.values(w || {}).reduce((n, v) => { const d = normDay(v); return n + MEAL_SLOTS.filter((k) => d[k] && (d[k].main || d[k].sides?.length)).length; }, 0);
+export const plannedCount = (state, day) => mealsInWeek(state.meals?.plan?.[weekStart(day)]);
 export function buildGroceryList(state, day) {
   ensureTools(state);
   const w = state.meals.plan[weekStart(day)] || {};
   const have = new Set(state.meals.list.filter((i) => !i.done).map((i) => i.text.toLowerCase()));
   let added = 0;
-  for (const v of Object.values(w)) {
-    const r = state.meals.recipes.find((x) => x.id === v);
+  const ids = [];
+  for (const v of Object.values(w)) { const d = normDay(v); for (const k of MEAL_SLOTS) if (d[k]) ids.push(d[k].main, ...d[k].sides); }
+  for (const id of ids) {
+    const r = state.meals.recipes.find((x) => x.id === id);
     if (!r) continue;
     for (const ing of r.ingredients) { const k = ing.toLowerCase(); if (have.has(k)) continue; have.add(k); state.meals.list.push({ id: uid('gi'), text: ing, done: false, from: r.name }); added++; }
   }
