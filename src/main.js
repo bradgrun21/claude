@@ -53,6 +53,7 @@ import { CATEGORIES, catById, setupBudget, addTransaction, addPoints, ensureEmer
 import { renderBudgetSetup, renderBank, renderPaydayIn, renderPaydayBreakdown, renderMoneyLevelUp } from './ui/money.js';
 import { createRailway } from './world/railway.js';
 import { createScenery } from './world/scenery.js';
+import { makeBackup, backupFileName, parseBackup, restoreBackup, backupDue, storageProtected, protectStorage, isInstalled, isIOS, canPromptInstall, promptInstall } from './data/backup.js';
 
 const $ = (id) => document.getElementById(id);
 /* Notebook art for the Trackers button. */
@@ -60,13 +61,29 @@ const TRACK_ART = '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="5"
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug') || params.has('fps');
 
+/* Opens a file picker for a backup file and parses it. */
+function pickBackupFile(onOk, onError) {
+  const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json' });
+  input.style.display = 'none'; document.body.appendChild(input);
+  input.onchange = async () => {
+    const f = input.files?.[0]; input.remove();
+    if (!f) return;
+    try { onOk(parseBackup(await f.text())); } catch (e) { onError(e.message || 'Couldn’t read that file.'); }
+  };
+  input.click();
+}
+
 function start() {
   const saved = load();
   if (saved) { boot(saved, {}); return; }
   $('boot').classList.add('done');
   runSetup($('setup'), {
     onDone: (input) => { const s = newCity(input, dateKey()); save(s, true); boot(s, { tour: true }); },
-    onDemo: () => { const s = demoState(dateKey()); save(s, true); boot(s, {}); }
+    onDemo: () => { const s = demoState(dateKey()); save(s, true); boot(s, {}); },
+    onRestore: () => pickBackupFile(async (parsed) => {
+      if (!confirm(`Restore “${parsed.cityName || 'your town'}”${parsed.exportedAt ? ` from ${new Date(parsed.exportedAt).toLocaleDateString()}` : ''}?`)) return;
+      await restoreBackup(parsed); location.reload();
+    }, (msg) => alert(msg))
   });
 }
 
@@ -309,6 +326,8 @@ function boot(state, opts) {
     else if (p.kind === 'money') { title = '💰 Money'; body = renderMoneyHub(state, today); }
     else if (p.kind === 'trackers') { title = '📓 Trackers'; body = renderTrackersHub(state, today); }
     else if (p.kind === 'how') { title = 'How Life City works'; body = renderHowItWorks(); }
+    else if (p.kind === 'restore') { const r = p.parsed; title = 'Restore a backup'; body = `<div class="gdone"><span class="gbig">📦</span><b class="ttl">${esc(r.cityName || 'Your town')}</b><p class="hint">${r.exportedAt ? `Backed up ${new Date(r.exportedAt).toLocaleString()}` : ''} · level ${r.state.level} · ${r.state.buildings.length} buildings · ${Object.keys(r.photos).length} ${Object.keys(r.photos).length === 1 ? 'photo' : 'photos'}</p></div><p class="hint">This replaces the town on this device with the one in the backup. ${state.cityName ? `“${esc(state.cityName)}” here will be replaced.` : ''} Want a copy of this one first? Back it up before restoring.</p><div class="actions"><button type="button" class="btn go-btn" data-restoreok="1">Yes, restore it</button><button type="button" class="btn soft" data-menu="backup">Back up this one first</button><button type="button" class="btn soft" data-close="1">Cancel</button></div>`; }
+    else if (p.kind === 'install') { title = 'Install Life City'; body = isIOS() ? `<div class="how"><span class="ag-n">1</span><span><b>Tap the Share button</b><small>The square with an arrow, at the bottom of Safari (or top on iPad).</small></span></div><div class="how"><span class="ag-n">2</span><span><b>Choose “Add to Home Screen”</b><small>Scroll down the list if you don’t see it.</small></span></div><div class="how"><span class="ag-n">3</span><span><b>Open Life City from the new icon</b><small>Installed apps aren’t cleared after a week away, the way websites can be.</small></span></div>` : `<div class="how"><span class="ag-n">1</span><span><b>Open the browser menu</b><small>The ⋮ or ⋯ button.</small></span></div><div class="how"><span class="ag-n">2</span><span><b>Choose “Install app” or “Add to Home screen”</b><small>It opens full screen, like a real app.</small></span></div>`; }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
     else if (p.kind === 'calendar') { title = 'Calendar'; tabs = `<button type="button" class="wtab on">Calendar</button><button type="button" class="wtab" data-openp="memories">Memories</button>`; body = renderCalendar(state, today, p.ym, p.sel); }
     else if (p.kind === 'event') { title = p.draft.id ? 'Edit outing' : 'Plan an outing'; body = renderEventForm(p.draft, state); }
@@ -1013,6 +1032,7 @@ function boot(state, opts) {
     if (d.idea) { addIdea(d.idea, b); return; }
     if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
     if (d.ribbon) { cutRibbon(d.ribbon, b); return; }
+    if (d.restoreok) { b.disabled = true; b.textContent = 'Restoring…'; restoreBackup(panel.parsed).then(() => location.reload()).catch(() => { toast('Couldn’t restore', 'Try the file again'); b.disabled = false; }); return; }
     if (d.tlock) { const p = pathStatus(state, panel.tool); const s = p?.steps.find((x) => x.tab === d.tlock); const idx = p ? p.steps.indexOf(s) : -1; toast('Not yet', idx > 0 ? `Finish “${p.steps[idx - 1].title}” first` : 'Finish the step before it first'); return; }
     if (d.open) { const prev = snapshot(); openBuilding(d.open); if (panel && prev) panel.hubPrev = prev; return; }
     if (d.distopen) { openBuilding(d.distopen); return; }
@@ -1109,6 +1129,36 @@ function boot(state, opts) {
     emit('task');
     afterProgress(); renderPanel();
   }
+  /* ---------- Backups ---------- */
+  let protectedNow = false;
+  storageProtected().then((v) => { protectedNow = v; });
+  addEventListener('pointerdown', () => { if (!protectedNow) protectStorage().then((v) => { protectedNow = v; }); }, { once: true });
+  async function doBackup() {
+    toast('Packing up your town…');
+    persist(); save(state, true);
+    let text;
+    try { text = await makeBackup(state); } catch (e) { toast('Couldn’t make the backup', 'Try again'); return; }
+    const name = backupFileName(state, today);
+    const file = new File([text], name, { type: 'application/json' });
+    let shared = false;
+    try { if (navigator.canShare?.({ files: [file] }) && matchMedia('(pointer: coarse)').matches) { await navigator.share({ files: [file], title: 'Life City backup' }); shared = true; } } catch (e) { if (e?.name === 'AbortError') { toast('Backup not saved', 'Tap Back up now to try again'); return; } }
+    if (!shared) { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+    const month = today.slice(0, 7);
+    const reward = state.settings.backupRewardMonth !== month;
+    state.settings.lastBackup = today; state.settings.backupRewardMonth = month;
+    if (reward) { state.coins += 20; flyRewards({ x: innerWidth / 2, y: innerHeight / 2 }, { coins: 20 }); }
+    sound.chime(); toast('Backup saved', `Keep “${name}” somewhere safe: Files, Drive, or email it to yourself`);
+    persist(); hud(); renderPanel();
+  }
+  function backupNudge() {
+    $('menuBtn').classList.toggle('dot', backupDue(state, today));
+    if (!backupDue(state, today) || !state.tour.done || panel || mode) return;
+    const last = state.settings.backupNudged;
+    if (last && (new Date(today) - new Date(last)) / 86400000 < 3) return;
+    state.settings.backupNudged = today; persist();
+    toast('Keep your town safe', 'Menu → Back up your town. It takes a few seconds.');
+  }
+
   /* ---------- Main Street, Nest Egg, Monument ---------- */
   function collectShop(rec, el) {
     const n = BZ.collectBiz(state, rec);
@@ -1330,6 +1380,12 @@ function boot(state, opts) {
     const q = state.settings.quality;
     const seg = (v, l) => `<button type="button" data-menu="q:${v}" aria-pressed="${q === v}">${l}</button>`;
     return `<p class="hint"><b>${esc(state.cityName)}</b> · started ${shortDate(state.startDate)} · ${streak(state, today)}-day streak</p>
+      <div class="set-h">Keep your town safe</div>
+      <div class="set-row"><span>Back up your town<br><small>${state.settings.lastBackup ? `Last backup: ${shortDate(state.settings.lastBackup)}` : 'No backup yet'} · one file with everything, photos too</small></span><button type="button" class="btn ${backupDue(state, today) ? 'go-btn' : 'soft'} small" data-menu="backup">Back up now</button></div>
+      <div class="set-row"><span>Restore from a backup<br><small>Replaces the town on this device</small></span><button type="button" class="btn soft small" data-menu="restore">Choose file</button></div>
+      <div class="set-row"><span>Storage protection<br><small>${protectedNow ? 'This browser has agreed to keep your town' : 'Ask this browser not to clear your town'}</small></span>${protectedNow ? '<span class="cost done">On ✓</span>' : '<button type="button" class="btn soft small" data-menu="persist">Turn on</button>'}</div>
+      ${isInstalled() ? '' : `<div class="set-row"><span>Install as an app<br><small>${isIOS() ? 'On iPhone this keeps your town from being cleared' : 'Opens full screen, like a real app'}</small></span><button type="button" class="btn soft small" data-menu="install">How</button></div>`}
+      <div class="set-h">Settings</div>
       <div class="set-row"><span>How Life City works</span><button type="button" class="btn go-btn small" data-menu="how">Show me</button></div>
       <div class="set-row"><span>Town paper</span><button type="button" class="btn soft small" data-menu="paper">Read it</button></div>
       <div class="set-row"><span>Sound and haptics</span><button type="button" class="btn soft small" data-menu="sound">${state.settings.sound ? 'On' : 'Off'}</button></div>
@@ -1342,6 +1398,10 @@ function boot(state, opts) {
   function menuAction(a) {
     if (a === 'paper') { openPanel('paper'); return; }
     if (a === 'how') { openPanel('how'); return; }
+    if (a === 'backup') { doBackup(); return; }
+    if (a === 'restore') { pickBackupFile((parsed) => openPanel('restore', { parsed }), (msg) => toast('Couldn’t restore', msg)); return; }
+    if (a === 'persist') { protectStorage().then((ok) => { protectedNow = ok; toast(ok ? 'Storage protection is on' : 'This browser said not yet', ok ? 'Your town won’t be cleared to save space' : isIOS() ? 'On iPhone, installing to the Home Screen does the same job' : 'Backups keep you covered either way'); renderPanel(); }); return; }
+    if (a === 'install') { if (canPromptInstall()) promptInstall().then((ok) => { if (ok) toast('Installed!', 'Open Life City from your Home Screen'); renderPanel(); }); else openPanel('install'); return; }
     if (a === 'sound') { sound.setEnabled(!state.settings.sound); if (state.settings.sound) sound.pop(); }
     if (a.startsWith('sky:')) { state.settings.sky = a.slice(4); state.settings.night = state.settings.sky === 'night'; easeSky(); }
     if (a.startsWith('q:')) { const v = a.slice(2); state.settings.quality = v; stage.setQuality(v === 'auto' ? detectQuality() : v); autoChecked = true; }
@@ -1491,6 +1551,9 @@ function boot(state, opts) {
   if (state.invest) BZ.accrue(state, today);
   later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
   later(4200, () => { if (state.tour.done) checkDistrict(); });
+  later(9000, backupNudge);
+  addEventListener('pagehide', () => save(state, true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(state, true); });
   if (state.pendingPhotoDeletes?.length) { for (const id of state.pendingPhotoDeletes) deletePhoto(id); state.pendingPhotoDeletes = []; }
   hud();
   if (!REDUCED) {

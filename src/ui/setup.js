@@ -4,7 +4,7 @@ import { ART } from './art.js';
 /* First open: a welcome screen and one short form (town name + who lives there). Then the guided tour takes over. */
 const COLORS = ['#D9774A', '#4E7FA0', '#F28CA0', '#F2B54A', '#4CAF6A', '#9A72D6', '#C98F5E', '#2F2A28'];
 
-export function runSetup(el, { onDone, onDemo }) {
+export function runSetup(el, { onDone, onDemo, onRestore }) {
   const draft = { cityName: '', family: [{ name: '', color: COLORS[0], kind: 'adult' }] };
   let step = 0;
   el.hidden = false;
@@ -13,7 +13,8 @@ export function runSetup(el, { onDone, onDemo }) {
       el.innerHTML = `<div class="su su-hero"><div class="su-guide">${ART.guide}</div><h1 id="setupTitle">Welcome to Life City</h1>
         <p class="lead">Build a little town that grows every time your family moves forward on what matters: faith, health, money, relationships and the everyday to-dos.</p>
         <button type="button" class="btn go-btn" data-a="next">Start my town</button>
-        <button type="button" class="btn link" data-a="demo">Look around a sample town first</button></div>`;
+        <button type="button" class="btn link" data-a="demo">Look around a sample town first</button>
+        ${onRestore ? '<button type="button" class="btn link small" data-a="restore">New phone? Restore from a backup</button>' : ''}</div>`;
     } else {
       el.innerHTML = `<div class="su"><h1 id="setupTitle">Who lives in your town?</h1><p class="lead">Your family walks around town. Names stay on this device.</p>
         <label class="q" for="suName">Town name <small>(optional)</small></label><input class="field" id="suName" maxlength="32" value="${esc(draft.cityName)}" placeholder="Our Life City" autocomplete="off">
@@ -36,6 +37,7 @@ export function runSetup(el, { onDone, onDemo }) {
     read();
     const d = b.dataset;
     if (d.a === 'demo') { el.hidden = true; onDemo(); return; }
+    if (d.a === 'restore') { onRestore(); return; }
     if (d.a === 'next') { step = 1; render(true); return; }
     if (d.a === 'back') { step = 0; render(); return; }
     if (d.a === 'done') { el.hidden = true; onDone({ cityName: draft.cityName, family: draft.family }); return; }

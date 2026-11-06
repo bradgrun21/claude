@@ -100,12 +100,16 @@ export function load() {
   }
 }
 
-let timer = 0;
+let timer = 0, locked = false;
+/* After a restore starts, nothing may overwrite the restored town before the page reloads. */
+export function lockSaves() { locked = true; clearTimeout(timer); }
 export function save(state, now = false) {
+  if (locked) return;
   const write = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { /* storage blocked or full: keep playing */ } };
   clearTimeout(timer);
   if (now) write(); else timer = setTimeout(write, 250);
 }
 export function clearSave() {
+  lockSaves();
   try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem('life-city:v1'); } catch (e) { /* ignore */ }
 }

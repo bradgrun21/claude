@@ -85,3 +85,16 @@ export async function hydratePhotos(root) {
     if (u) el.src = u; else el.closest('.has-photo')?.classList.add('photo-missing');
   }
 }
+/* Every stored photo, for backups: [{ id, blob }]. */
+export async function listPhotos() {
+  const db = await open();
+  if (!db) return [...mem.entries()].map(([id, blob]) => ({ id, blob }));
+  return new Promise((resolve) => {
+    try {
+      const out = [];
+      const req = db.transaction(STORE).objectStore(STORE).openCursor();
+      req.onsuccess = () => { const c = req.result; if (c) { out.push({ id: c.key, blob: c.value }); c.continue(); } else resolve(out); };
+      req.onerror = () => resolve(out);
+    } catch (e) { resolve([]); }
+  });
+}

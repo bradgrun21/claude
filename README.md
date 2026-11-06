@@ -5,6 +5,20 @@ Find Me the Money: its own repo and its own Netlify site, sharing no Supabase ta
 
 Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is uploaded.
 
+## Keeping a town safe (Menu → Keep your town safe)
+
+Everything still lives on the device, so:
+- **Back up your town** saves one file with the whole town and its photos (shared to Files/Drive/email on phones,
+  downloaded on computers). A gentle reminder (menu dot + one toast every few days) appears after 3 days of play and
+  then about monthly; the first backup each month pays 20 coins.
+- **Restore from a backup** replaces the town on this device after a confirmation. On a new phone, the welcome
+  screen has "New phone? Restore from a backup".
+- **Storage protection** asks the browser not to clear the town (requested automatically on first tap, too).
+- **Install as an app**: the install prompt where the browser offers one, or Share → Add to Home Screen steps on
+  iPhone (installed apps aren't cleared after a week away the way websites can be).
+- The game saves immediately when the page is hidden or closed. Restoring or starting over locks saving so the
+  old town can't be written back during the reload.
+
 ## Menus (one home for each kind of thing)
 
 | Button | What's inside |
@@ -192,6 +206,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Logbooks (repair, vet, gifts) | `src/systems/logbook.js`, `src/ui/logbook.js` |
 | Earned decorations (steady use) | `src/systems/earned.js` |
 | Step-by-step paths (money, meals, every tracker) | `src/systems/paths.js`, `src/ui/paths.js` |
+| Backups, restore, storage protection, install | `src/data/backup.js` |
 | Businesses, Nest Egg, Debt Freedom Monument | `src/systems/business.js`, `src/ui/business.js` |
 | Budget District (a building per budget category) | `src/systems/district.js`, `src/ui/district.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
