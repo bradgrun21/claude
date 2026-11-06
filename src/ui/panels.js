@@ -35,11 +35,16 @@ export function renderBuild(state, tab) {
     }
     for (const d of rest) {
       const built = has(d.id);
-      const locked = !built && (state.level < d.level || !open);
-      cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : `Level ${d.level}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
+      const moneyLocked = d.money && (state.budget?.level || 1) < d.money;
+      const locked = !built && (state.level < d.level || !open || moneyLocked);
+      cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : moneyLocked ? `Money level ${d.money}` : `Level ${d.level}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
     }
     return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(tab)}<span>${esc(sec.blurb)}</span></div><div class="grid">${cards.join('')}</div>
       <p class="foot">${open ? 'Each new building here adds another list, and higher buildings pay more for every task.' : 'Set your first goal in this area to open it. The first building is free.'}</p>`;
+  }
+  if (tab === 'shops') {
+    const bank = has('bank');
+    return `<p class="hint">On payday, money trucks drive from the station to these shops: groceries to the Grocery Store, gas to the Gas Station, subscriptions to the News Station.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'shop').map((d) => has(d.id) ? card(d, state, { disabled: true, action: 'built', note: 'Built', price: '<span class="cost done">Built</span>' }) : card(d, state, { locked: !bank, lockText: 'Build the Bank first', disabled: state.coins < d.cost })).join('')}</div>`;
   }
   if (tab === 'homes') {
     return `<p class="hint">Homes bring people to town. You need population to level up and to grow the Town Hall.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'home').map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost, note: `+${d.pop} people` })).join('')}</div>`;
@@ -161,6 +166,7 @@ export const STORE = [
   { id: 'relational', label: 'Relational', rep: () => 'park' },
   { id: 'todo', label: 'To-Do', rep: () => 'jobboard' },
   { id: 'homes', label: 'Housing', rep: () => 'house' },
+  { id: 'shops', label: 'Shops', rep: () => 'grocery' },
   { id: 'roads', label: 'Decor & Roads', rep: () => 'fountain' },
   { id: 'townhall', label: 'Town Hall', rep: () => 'townhall' }
 ];
@@ -170,8 +176,9 @@ export function readyCount(state, cat) {
   if (SECTIONS[cat]) {
     const open = state.lists.some((l) => l.section === cat);
     if (!open) return 1;
-    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && state.level >= b.level && state.coins >= b.cost).length;
+    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && state.level >= b.level && (!b.money || (state.budget?.level || 1) >= b.money) && state.coins >= b.cost).length;
   }
+  if (cat === 'shops') return built('bank') ? BUILDINGS.filter((b) => b.kind === 'shop' && !built(b.id) && state.coins >= b.cost).length : 0;
   if (cat === 'homes') return BUILDINGS.filter((b) => b.kind === 'home' && state.level >= b.level && state.coins >= b.cost).length ? 1 : 0;
   if (cat === 'townhall') return canUpgradeTownHall(state).ok ? 1 : 0;
   return 0;

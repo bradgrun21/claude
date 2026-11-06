@@ -23,6 +23,7 @@ describe('catalog', () => {
     for (const s of SECTION_KEYS) {
       const list = BUILDINGS.filter((b) => b.section === s && !b.alt).sort((a, b) => a.tier - b.tier);
       expect(list.map((b) => b.tier)).toEqual([1, 2, 3, 4]);
+      if (s === 'financial') { expect(list.map((b) => b.money || 0)).toEqual([0, 2, 3, 0]); continue; }
       for (let i = 1; i < 4; i++) expect(list[i].level).toBeGreaterThan(list[i - 1].level);
     }
   });
@@ -108,9 +109,17 @@ describe('placement', () => {
     expect(canPlace(s, 'gym', p.i, p.j).ok).toBe(true);
     expect(footprint('gym', p.i, p.j).length).toBe(4);
   });
+  it('the train station sits by the railway and connects to Main Street', () => {
+    const s = city();
+    const st = s.buildings.find((b) => b.type === 'station');
+    expect(st).toBeTruthy();
+    expect(connectedRoads(s).has(key(5, 18))).toBe(true);
+    expect(canPlace(s, 'cottage', 2, 20).ok).toBe(false);
+    expect(canPlaceRoad(s, 2, 5).ok).toBe(false);
+  });
   it('every building in the sample town is placed legally', () => {
     const s = demoState(T);
-    for (const b of s.buildings) if (b.type !== 'townhall') expect([b.type, b.i, b.j, canPlace(s, b.type, b.i, b.j, b.rot, b.id).ok]).toEqual([b.type, b.i, b.j, true]);
+    for (const b of s.buildings) if (b.type !== 'townhall' && b.type !== 'station') expect([b.type, b.i, b.j, canPlace(s, b.type, b.i, b.j, b.rot, b.id).ok]).toEqual([b.type, b.i, b.j, true]);
   });
 });
 

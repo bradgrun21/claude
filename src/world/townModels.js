@@ -167,6 +167,47 @@ function postoffice() {
 }
 function library() { const g = new THREE.Group(); g.add(pad(0.96)); const l = m.library(); l.position.y = 0.05; g.add(l); g.add(tree(0.38, 0.36, 0.5)); return g; }
 
+/* ---------- Shops (payday truck destinations) + station + debt payoff ---------- */
+function groceryStore() { const g = new THREE.Group(); g.add(pad(0.96)); const s = m.grocery(); s.position.y = 0.05; g.add(s); const cart = box(0.12, 0.06, 0.08, C.white, 0.34, 0.05, 0.4); g.add(cart); return g; }
+function gasstation() {
+  const g = new THREE.Group(); g.add(pad(0.98, '#C9CED6'));
+  for (const [x, z] of [[-0.3, -0.05], [0.3, -0.05], [-0.3, 0.3], [0.3, 0.3]]) g.add(box(0.04, 0.42, 0.04, C.white, x, 0.05, z));
+  g.add(box(0.78, 0.06, 0.5, C.red, 0, 0.47, 0.12));
+  g.add(box(0.8, 0.03, 0.52, C.white, 0, 0.53, 0.12));
+  for (const x of [-0.12, 0.12]) { g.add(box(0.08, 0.2, 0.08, C.blue, x, 0.05, 0.12)); g.add(box(0.06, 0.04, 0.02, mat.win, x, 0.18, 0.165, false)); }
+  g.add(box(0.5, 0.3, 0.26, C.cream, 0, 0.05, -0.34)); g.add(box(0.3, 0.12, 0.02, mat.win, 0, 0.12, -0.21, false));
+  const sign = box(0.04, 0.5, 0.04, C.navy, 0.42, 0.05, 0.42); g.add(sign); g.add(box(0.16, 0.12, 0.03, C.yellow, 0.42, 0.55, 0.42));
+  return g;
+}
+function newsstation() {
+  const g = new THREE.Group();
+  g.add(box(0.62, 0.44, 0.56, C.cream, 0, 0, -0.04)); g.add(box(0.66, 0.05, 0.6, C.purple, 0, 0.44, -0.04));
+  g.add(box(0.36, 0.1, 0.03, C.purple, 0, 0.3, 0.25)); g.add(box(0.28, 0.04, 0.032, C.white, 0, 0.31, 0.255));
+  g.add(box(0.12, 0.2, 0.02, C.dark, -0.14, 0, 0.25)); win(g, 0.16, 0.16, 0.25);
+  g.add(box(0.03, 0.34, 0.03, mat.metal, 0.18, 0.49, -0.1));
+  const dish = mesh(new THREE.SphereGeometry(0.12, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2.4), C.white); dish.rotation.x = -Math.PI / 2.2; dish.position.set(0.18, 0.86, -0.06); g.add(dish);
+  return g;
+}
+function station() {
+  const g = new THREE.Group(); g.add(pad(0.98, '#D9D2C3'));
+  g.add(box(0.98, 0.08, 0.98, mat.stone, 0, 0.05, 0, false));
+  g.add(box(0.36, 0.34, 0.7, C.brick, 0.18, 0.13, 0)); const r = roofPrism(0.46, 0.18, 0.8, C.green); r.rotation.y = Math.PI / 2; r.position.set(0.18, 0.47, 0); g.add(r);
+  g.add(box(0.2, 0.025, 0.94, C.cream, -0.24, 0.48, 0));
+  for (const z of [-0.4, 0, 0.4]) g.add(box(0.025, 0.36, 0.025, C.navy, -0.32, 0.13, z));
+  win(g, -0.01, 0.3, 0.12, Math.PI / 2); win(g, -0.01, 0.3, -0.12, Math.PI / 2);
+  const clock = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.02, 16), C.white); clock.rotation.z = Math.PI / 2; clock.position.set(-0.01, 0.52, 0); g.add(clock);
+  return g;
+}
+function payoff() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#E6EEF5'));
+  g.add(box(0.72, 0.42, 0.56, M('#DDE8F2'), 0, 0.05, -0.06)); g.add(box(0.76, 0.05, 0.6, C.blue, 0, 0.47, -0.06));
+  g.add(box(0.5, 0.18, 0.02, mat.win, 0, 0.18, 0.23, false)); g.add(box(0.12, 0.2, 0.02, C.dark, 0.26, 0.05, 0.23));
+  const ball = mesh(new THREE.IcosahedronGeometry(0.18, 1), M('#FFFFFF', { roughness: 0.6 })); ball.position.set(0, 0.7, -0.06); g.add(ball);
+  const ball2 = mesh(new THREE.IcosahedronGeometry(0.1, 1), M('#F4FAFF')); ball2.position.set(-0.24, 0.6, 0.06); g.add(ball2);
+  for (const x of [-0.36, 0.36]) g.add(tree(x, 0.38, 0.45, 'pine'));
+  return g;
+}
+
 /* ---------- Homes (1×1 unless noted). Level = floors. ---------- */
 const ROOFS = [C.red, C.blue, C.green, M('#D9774A'), M('#6B7A8A')];
 function cottage(level = 1, v = 0) { const g = new THREE.Group(); const h = m.house({ roof: ROOFS[v % 5], wall: mat.walls[v % 5], floors: Math.min(3, level), w: 0.58, d: 0.56 }); g.add(h); const f = m.flowers(4, 0.08); f.position.set(-0.3, 0, 0.36); g.add(f); return g; }
@@ -210,7 +251,7 @@ const decor = {
 };
 
 const BUILDERS = {
-  townhall, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, office, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
+  townhall, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
   cottage, house: familyHouse, townhouse, apartments, ...decor
 };
 

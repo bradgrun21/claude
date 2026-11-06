@@ -31,8 +31,8 @@ export const BUILDINGS = [
   { id: 'clinic', name: 'Wellness Clinic', section: 'physical', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 11, desc: 'A fourth Physical list.' },
 
   { id: 'bank', name: 'Bank', section: 'financial', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Financial list.' },
-  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 2, desc: 'A second Financial list.' },
-  { id: 'market', name: 'Market', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 7, desc: 'A third Financial list.' },
+  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 1, money: 2, desc: 'Emergency fund and sinking funds live here.' },
+  { id: 'payoff', name: 'Debt Payoff Center', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 1, money: 3, desc: 'Home of your debt snowball.' },
   { id: 'office', name: 'Office Tower', section: 'financial', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 10, desc: 'A fourth Financial list.' },
 
   { id: 'park', name: 'Park', section: 'relational', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Relational list.' },
@@ -44,6 +44,11 @@ export const BUILDINGS = [
   { id: 'workshop', name: 'Workshop', section: 'todo', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 6, desc: 'A second To-Do list.' },
   { id: 'postoffice', name: 'Post Office', section: 'todo', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 9, desc: 'A third To-Do list.' },
   { id: 'library', name: 'Library', section: 'todo', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 12, desc: 'A fourth To-Do list.' },
+
+  { id: 'grocery', name: 'Grocery Store', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Grocery money gets delivered here on payday.' },
+  { id: 'gasstation', name: 'Gas Station', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Gas and car money goes here on payday.' },
+  { id: 'newsstation', name: 'News Station', kind: 'shop', size: [1, 1], cost: 40, level: 1, needsBank: true, desc: 'Subscriptions and phone bills go here on payday.' },
+  { id: 'station', name: 'Train Station', kind: 'civic', size: [2, 2], cost: 0, level: 0, unique: true, desc: 'The payday train stops here.' },
 
   { id: 'cottage', name: 'Cottage', kind: 'home', size: [1, 1], cost: 50, level: 1, pop: 5, desc: '+5 population' },
   { id: 'house', name: 'Family House', kind: 'home', size: [1, 1], cost: 120, level: 3, pop: 8, desc: '+8 population' },

@@ -1,5 +1,5 @@
 import { byId } from '../data/catalog.js';
-import { MAP, inBounds, isWater, key } from '../data/map.js';
+import { MAP, inBounds, isWater, isRail, key } from '../data/map.js';
 
 /*
  * Placement rules:
@@ -68,16 +68,18 @@ export function canPlace(state, type, i, j, rot = 0, ignoreId = null) {
   for (const [a, b] of footprint(type, i, j, rot)) {
     if (!inBounds(a, b)) return { ok: false, reason: 'Too close to the edge of the map' };
     if (isWater(a, b)) return { ok: false, reason: 'That spot is water' };
+    if (isRail(a, b)) return { ok: false, reason: 'The railway runs here' };
     if (roads.has(key(a, b))) return { ok: false, reason: 'A road is in the way' };
     if (occ.has(key(a, b))) return { ok: false, reason: 'Something is already here' };
   }
-  if (needsRoad(type) && type !== 'townhall' && !isConnected(state, type, i, j, rot)) return { ok: false, reason: 'Needs a road next to it that leads to the Town Hall' };
+  if (needsRoad(type) && type !== 'townhall' && type !== 'station' && !isConnected(state, type, i, j, rot)) return { ok: false, reason: 'Needs a road next to it that leads to the Town Hall' };
   return { ok: true };
 }
 
 export function canPlaceRoad(state, i, j) {
   if (!inBounds(i, j)) return { ok: false, reason: 'Edge of the map' };
   if (isWater(i, j)) return { ok: false, reason: 'That spot is water' };
+  if (isRail(i, j)) return { ok: false, reason: 'The railway runs here' };
   if (state.roads.includes(key(i, j))) return { ok: false, reason: 'Already a road' };
   if (occupancy(state).has(key(i, j))) return { ok: false, reason: 'Something is already here' };
   return { ok: true };

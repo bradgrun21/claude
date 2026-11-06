@@ -36,6 +36,21 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
 - **Store, Available tasks, Profile** (v2.1): Build opens a Store of category tiles with "New"/ready badges; two original
   characters (Rosie the town planner, Grandpa Joe) hand out quick wins and daily challenges as cards with progress bars and
   **Go** buttons that jump straight to the right screen; a Profile (top-left) shows town level, stats, achievements and the sticker book.
+- **Money path (opens with the Bank):** placing the Bank starts a budget walkthrough (paychecks in, monthly expenses out,
+  "give every dollar a job"). The Financial area has its own **money level**, earned only by money habits (logging
+  transactions, updating balances, showing up on payday), never by amounts:
+  1. **Budget**: log transactions; planned vs. spent per category (overspending is shown neutrally).
+  2. **Savings** (10 money points): the $1,000 starter emergency fund + sinking funds, explained in plain words; update balances. Unlocks the Savings Tower.
+  3. **Debt snowball** (25 points): list every debt, pay smallest balance first and roll payments forward; record payments,
+     update balances, debt-free estimate. Unlocks the Debt Payoff Center.
+- **Payday train:** on each payday (or when you tap "I got paid today") a train rolls into the station by the railway.
+  You confirm what came in, see a pie chart of where money went since the last payday (or the plan, if nothing was logged),
+  then the trucks roll out: one full truck per 10%, a half truck for about 5%. Each truck drives the roads to its building:
+  left over/saved → Savings Tower or Bank, housing and utilities → a home, groceries → Grocery Store, gas → Gas Station,
+  subscriptions → News Station, giving → Church/Garden, debt → Debt Payoff Center, fun → Café/Diner/Park, everything else → Town Hall.
+  The Grocery Store, Gas Station and News Station are in the new **Shops** tab.
+- **Building controls:** in road mode or while placing, the ✥ **Move** button lets you look around (drag pans) and the 🔨 **Build** button switches back.
+  The tour card is small, sits in the top-left, and can be minimized to a little Rosie bubble.
 - **Memories:** after checking off a task, tap **Recap** to add a photo and/or a few words (or add one any time from
   **Memories**). It's a scrapbook by month and area. Photos are shrunk to about 1024px and stored **on this device only** (IndexedDB).
   +5 XP each, up to 3 a day.

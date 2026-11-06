@@ -15,8 +15,11 @@ export function isWater(i, j) {
   for (const p of PONDS) if (Math.hypot(cx - p.i, cz - p.j) < p.r) return true;
   return false;
 }
-/* A little bridge spot so the river doesn't wall anything off later. */
-export const BRIDGE_ROWS = [18];
+/* The railway runs north–south along the west edge. The station sits beside it, joined to Main Street by road. */
+export const RAIL_I = 2;
+export const isRail = (i, j) => i === RAIL_I;
+export const STATION_AT = { i: 3, j: 17 };
+export const stationRoad = () => { const r = []; for (let i = 5; i <= 10; i++) r.push([i, 18]); return r; };
 
 export const TOWNHALL_AT = { i: 16, j: 15 };
 /* Starter roads: one street in front of the Town Hall and one up its east side. */

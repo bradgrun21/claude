@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { load, save, clearSave, newCity } from './data/state.js';
 import { demoState } from './data/demo.js';
 import { byId, SECTIONS, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from './data/catalog.js';
-import { HALF, tileOf } from './data/map.js';
+import { HALF, tileOf, tileCenter, key as tkey } from './data/map.js';
 import { createStage } from './scene/stage.js';
 import { detectQuality, fpsMeter } from './scene/quality.js';
 import { waterUniforms } from './scene/water.js';
@@ -24,10 +24,10 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderBuild, renderLists, renderBuilding, renderGoalForm, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderGoalForm, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
-import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint } from './systems/placement.js';
+import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
 import { createList, completeTask, achieveGoal, listFor, dueCount, totalDue, makeTask, MAX_TASKS, streak } from './systems/lists.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
@@ -36,6 +36,9 @@ import { addEvent, updateEvent, removeEvent, completeEvent, toIcs, eventsOn } fr
 import { addMemory, removeMemory } from './systems/memories.js';
 import { putPhoto, deletePhoto, clearPhotos, compressImage, hydratePhotos } from './data/photos.js';
 import { renderCalendar, renderEventForm, renderMemoryForm, renderMemories, renderMemoryView } from './ui/journal.js';
+import { CATEGORIES, catById, setupBudget, addTransaction, ensureEmergencyFund, addFund, updateBalance, addDebt, payDebt, paydayDue, paydayBreakdown, recordPayday, paycheckDueAmount, money as toMoney } from './systems/budget.js';
+import { renderBudgetSetup, renderBank, renderPaydayIn, renderPaydayBreakdown, renderMoneyLevelUp } from './ui/money.js';
+import { createRailway } from './world/railway.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -69,6 +72,7 @@ function boot(state, opts) {
   const walkers = createWalkers(scene);
   const sur = createSurprises(scene);
   const tags = createTags($('tags'));
+  const rail = createRailway(scene, fx);
   const sound = createSound(state.settings);
   const meter = fpsMeter();
   const persist = () => save(state);
@@ -129,13 +133,15 @@ function boot(state, opts) {
         const list = listFor(state, b.id);
         if (!list) want.set(b.id, { sig: 'add', html: bubbleHtml(svgI('plus', SECTIONS[def.section].color, 20, 3), 'Add a list', b.id, def.section) });
         else { const n = dueCount(list, today); if (n) want.set(b.id, { sig: `due${n}`, html: bubbleHtml(svgI(SECTIONS[def.section].icon, SECTIONS[def.section].color, 20, 2.4), `${n} to do`, b.id, def.section) }); }
-      } else if (def.kind === 'civic' && canUpgradeTownHall(state).ok) want.set(b.id, { sig: 'up', html: bubbleHtml(svgI('up', '#C98E25', 20, 3), 'Upgrade ready', b.id, null) });
+      } else if (b.type === 'station') { if (paydayDue(state.budget, today)) want.set(b.id, { sig: 'pay', html: bubbleHtml(svgI('coin', '#3E8E57', 20, 2.6), 'Payday!', b.id, null) }); }
+      else if (b.type === 'bank' && !state.budget.setup) want.set(b.id, { sig: 'setup', html: bubbleHtml(svgI('coin', '#E0A23A', 20, 2.6), 'Set up budget', b.id, 'financial') });
+      else if (def.kind === 'civic' && canUpgradeTownHall(state).ok) want.set(b.id, { sig: 'up', html: bubbleHtml(svgI('up', '#C98E25', 20, 3), 'Upgrade ready', b.id, null) });
     }
     for (const [id, t] of bubbles) if (!want.has(id) || want.get(id).sig !== t.sig) { tags.remove(t.tag, false); bubbles.delete(id); }
     for (const [id, w] of want) if (!bubbles.has(id)) { const v = bld.views.get(id); if (v) bubbles.set(id, { sig: w.sig, tag: tags.add(w.html, v.top, 'bubble', { bubble: true }) }); }
   }
   const bubbleHtml = (icon, label, id, section) => `<button type="button" class="bub" data-bub="${id}" style="--c:${section ? SECTIONS[section].color : '#F2B54A'}" aria-label="${esc(label)}">${icon}</button><span class="bl">${esc(label)}</span>`;
-  $('tags').addEventListener('click', (e) => { const b = e.target.closest('[data-bub]'); if (b) { sound.tap(); openPanel('building', { id: b.dataset.bub }); } });
+  $('tags').addEventListener('click', (e) => { const b = e.target.closest('[data-bub]'); if (b) { sound.tap(); openBuilding(b.dataset.bub); } });
 
   /* ---------- Toast + flying rewards ---------- */
   let toastTimer = 0;
@@ -231,6 +237,10 @@ function boot(state, opts) {
     else if (p.kind === 'event') { title = p.draft.id ? 'Edit outing' : 'Plan an outing'; body = renderEventForm(p.draft, state); }
     else if (p.kind === 'memories') { title = 'Memories'; body = renderMemories(state, p.filter); }
     else if (p.kind === 'memory') { title = p.draft.eventId ? 'How did it go?' : 'Add a memory'; body = renderMemoryForm(p.draft); }
+    else if (p.kind === 'bank') { title = 'Bank'; body = renderBank(state, today, p.tab, p.ui) + (p.tab === 'list' ? (() => { const bk = state.buildings.find((x) => x.type === 'bank'); const l = bk && listFor(state, bk.id); return l ? renderListCard(state, l, today) : '<p class="hint">No list yet.</p>'; })() + `<div class="actions"><button type="button" class="btn soft" data-move="${state.buildings.find((x) => x.type === 'bank')?.id}">Move the Bank</button></div>` : ''); }
+    else if (p.kind === 'budgetSetup') { title = 'Your budget'; body = renderBudgetSetup(p.draft); }
+    else if (p.kind === 'payday') { title = 'Payday!'; body = p.step === 'bd' ? renderPaydayBreakdown(p.bd) : renderPaydayIn(p.amount); }
+    else if (p.kind === 'moneyup') { title = 'Money level up!'; body = renderMoneyLevelUp(p.level); }
     else if (p.kind === 'memview') { const m = state.memories.find((x) => x.id === p.id); if (!m) { closePanel(); return; } title = 'Memory'; body = renderMemoryView(state, m); }
     else if (p.kind === 'level') { title = 'Your level'; body = renderLevelInfo(state); }
     else if (p.kind === 'levelup') { title = 'Level up!'; body = renderLevelUp(p.level); }
@@ -272,7 +282,9 @@ function boot(state, opts) {
     const g = $('gfGoal'); if (g) d.goal = g.value;
     $('panelBody').querySelectorAll('[data-tt]').forEach((i) => { d.tasks[+i.dataset.tt].title = i.value; });
   }
-  $('panelBody').addEventListener('input', () => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory') readJournalForm(); });
+  $('panelBody').addEventListener('input', () => {
+    if (panel?.kind === 'budgetSetup') readBudgetSetup();
+    if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory') readJournalForm(); });
   function readJournalForm() {
     const d = panel?.draft; if (!d) return;
     const v = (id) => $(id)?.value;
@@ -307,6 +319,142 @@ function boot(state, opts) {
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     toast('Calendar file ready', 'Open it to add to Apple, Google or Outlook Calendar');
   }
+  /* ---------- Money: Bank hub, budget walkthrough, payday train ---------- */
+  function openBuilding(id) {
+    const b = state.buildings.find((x) => x.id === id);
+    if (!b) return;
+    if (b.type === 'bank') return openPanel('bank', { tab: 'budget', ui: {} });
+    if (b.type === 'savings') return openPanel('bank', { tab: 'savings', ui: {} });
+    if (b.type === 'payoff') return openPanel('bank', { tab: 'debts', ui: {} });
+    if (b.type === 'station' && (payday || paydayDue(state.budget, today))) return startPayday();
+    openPanel('building', { id });
+  }
+  const nextFridayKey = () => { let k = today; for (let i = 0; i < 7; i++) { const d = addDays(today, i); if (new Date(d + 'T12:00').getDay() === 5) { k = d; break; } } return k; };
+  function openBudgetSetup() {
+    const bdg = state.budget;
+    const draft = { step: bdg.setup ? 1 : 0, incomes: bdg.incomes.length ? bdg.incomes.map((i) => ({ ...i })) : [{ name: state.family[0]?.name ? `${state.family[0].name}'s paycheck` : 'Paycheck', amount: '', freq: 'biweekly', next: nextFridayKey() }], expenses: { ...bdg.expenses } };
+    openPanel('budgetSetup', { draft });
+  }
+  function readBudgetSetup() {
+    const d = panel?.draft; if (!d) return;
+    $('panelBody').querySelectorAll('[data-inc]').forEach((el) => { const [n, f] = el.dataset.inc.split(':'); d.incomes[+n][f] = el.value; });
+    $('panelBody').querySelectorAll('[data-exp]').forEach((el) => { d.expenses[el.dataset.exp] = el.value; });
+  }
+  function moneyUp(lv) {
+    if (!lv) return;
+    if (lv >= 2) ensureEmergencyFund(state);
+    later(500, () => { sound.chime(); fx.fireworks(controls.target, 4, () => sound.firework()); openPanel('moneyup', { level: lv }); });
+  }
+  function readTx() {
+    const t = panel.ui.tx || (panel.ui.tx = { type: 'expense', cat: 'groceries', amount: '', note: '', date: today });
+    if ($('txAmt')) { t.amount = $('txAmt').value; t.note = $('txNote').value; t.date = $('txDate').value || today; }
+    return t;
+  }
+  function bankAction(a, el) {
+    if (a === 'setup') return openBudgetSetup();
+    if (a === 'logtx') { panel.tab = 'tx'; renderPanel(); $('txAmt')?.focus(); return; }
+    if (a === 'payday') return startPayday();
+    if (a === 'opensavings' || a === 'opendebts') return openPanel('bank', { tab: a === 'opensavings' ? 'savings' : 'debts', ui: {} });
+    if (a === 'savetx') {
+      const t = readTx();
+      const r = addTransaction(state, t, today);
+      if (!r) { toast('Enter an amount first'); $('txAmt')?.focus(); return; }
+      if (r.reward) flyRewards(centerOf(el), r.reward);
+      sound.coin();
+      toast('Logged', r.tx.type === 'income' ? 'Money in' : `${catById(r.tx.cat).short} · keep it up, every log levels up your money skills`);
+      panel.ui.tx = { ...t, amount: '', note: '' };
+      moneyUp(r.levelUp);
+    }
+    if (a === 'addfund') {
+      const name = $('fName').value.trim();
+      if (!name) { toast('Name the sinking fund', 'Like Christmas or car repairs'); return; }
+      moneyUp(addFund(state, { name, target: $('fTarget').value, monthly: $('fMonthly').value }).levelUp);
+      toast('Sinking fund added', 'Set a little aside each month');
+    }
+    if (a === 'adddebt') {
+      const name = $('dName').value.trim();
+      if (!name || !(toMoney($('dBal').value) > 0)) { toast('Add a name and balance'); return; }
+      moneyUp(addDebt(state, { name, balance: $('dBal').value, min: $('dMin').value }).levelUp);
+    }
+    if (a === 'calc') panel.ui.extra = $('dExtra').value;
+    afterProgress(); renderPanel();
+  }
+
+  let payday = null;
+  function startPayday() {
+    if (!state.budget.setup) { openBudgetSetup(); return; }
+    if (payday) { openPanel('payday', { step: payday.step, amount: payday.amount, bd: payday.bd }); return; }
+    if (mode) endMode();
+    closePanel();
+    payday = { step: 'in', amount: paycheckDueAmount(state.budget, today) };
+    stage.flyTo(rail.stationPos, tween, easeInOut, 20);
+    sound.whistle();
+    rail.arrive(() => { sound.whistle(); openPanel('payday', { step: 'in', amount: payday.amount }); });
+  }
+  function destBuilding(cat) {
+    const find = (...types) => { for (const t of types) { const b = state.buildings.find((x) => x.type === t); if (b) return b; } return null; };
+    const th = state.buildings.find((x) => x.type === 'townhall');
+    const d = catById(cat).dest;
+    return ({ home: () => find('house', 'cottage', 'townhouse', 'apartments'), grocery: () => find('grocery'), gasstation: () => find('gasstation'), newsstation: () => find('newsstation'), giving: () => find('church', 'garden', 'studyhall', 'pavilion'), debt: () => find('payoff', 'bank'), fun: () => find('cafe', 'diner', 'park', 'hall'), saved: () => find('savings', 'bank') }[d]?.() || th);
+  }
+  function roadPath(target) {
+    const roads = new Set(state.roads);
+    const st = state.buildings.find((b) => b.type === 'station');
+    if (!st) return [];
+    const starts = perimeter(footprint('station', st.i, st.j, st.rot)).map(([i, j]) => tkey(i, j)).filter((k) => roads.has(k));
+    const goals = new Set(perimeter(footprint(target.type, target.i, target.j, target.rot)).map(([i, j]) => tkey(i, j)).filter((k) => roads.has(k)));
+    const prev = new Map(starts.map((k) => [k, null]));
+    const q = [...starts];
+    while (q.length) {
+      const k = q.shift();
+      if (goals.has(k)) { const out = []; let c = k; while (c) { out.unshift(c); c = prev.get(c); } return out; }
+      const [i, j] = k.split(',').map(Number);
+      for (const n of [tkey(i + 1, j), tkey(i - 1, j), tkey(i, j + 1), tkey(i, j - 1)]) if (roads.has(n) && !prev.has(n)) { prev.set(n, k); q.push(n); }
+    }
+    return [];
+  }
+  function truckPoints(target) {
+    const pts = [rail.stationPos.clone()];
+    for (const k of roadPath(target)) { const [i, j] = k.split(',').map(Number); const [x, z] = tileCenter(i, j); pts.push(new THREE.Vector3(x, 0, z)); }
+    const c = footprintCenter(target.type, target.i, target.j, target.rot);
+    pts.push(new THREE.Vector3(c.x, 0, c.z).lerp(pts.at(-1), 0.4));
+    return pts;
+  }
+  function paydayShow() {
+    const amount = toMoney($('payAmt2')?.value) || payday.amount;
+    payday.amount = amount;
+    payday.bd = paydayBreakdown(state, amount, today);
+    payday.step = 'bd';
+    const list = [];
+    for (const sl of payday.bd.slices) {
+      const target = destBuilding(sl.cat);
+      for (let k = 0; k < sl.full + sl.half; k++) list.push({ color: sl.color, half: k >= sl.full, cat: sl.cat, target: target.id, points: truckPoints(target) });
+    }
+    rail.park(list.slice(0, 14));
+    payday.trucks = Math.min(14, list.length);
+    panel.step = 'bd'; panel.bd = payday.bd; panel.amount = amount;
+    renderPanel();
+  }
+  function paydaySend(el) {
+    const r = recordPayday(state, payday.amount, today);
+    const payday_trucks = payday.trucks || 0;
+    if (!payday_trucks) later(600, () => rail.depart());
+    flyRewards(centerOf(el), r.reward);
+    closePanel();
+    payday = null;
+    let left = payday_trucks;
+    rail.dispatch((t) => {
+      const v = bld.views.get(t.target);
+      if (v) { fx.coinBurst(v.top.clone().add(new THREE.Vector3(0, -0.3, 0))); bld.bounce(t.target); }
+      sound.coin();
+      if (--left <= 0) { rail.depart(); toast('Every dollar delivered', 'See you next payday'); }
+    });
+    toast('The trucks are rolling!', 'Watch them deliver to each building');
+    note(state, today, 'payday', {});
+    moneyUp(r.levelUp);
+    afterProgress();
+  }
+
   async function saveMemory(el, justDone = false) {
     readJournalForm();
     const d = panel.draft;
@@ -351,6 +499,7 @@ function boot(state, opts) {
           createList(state, rec, pending.goal, pending.tasks, today);
           note(state, today, 'opened', { section: byId[d.type].section });
           win('place', screenOf(bld.views.get(rec.id).top));
+          if (d.type === 'bank') { later(900, () => openBudgetSetup()); return; }
           toast(`${SECTIONS[byId[d.type].section].name} is open!`, 'Tap the bubble to check off a task');
         }
       });
@@ -376,6 +525,8 @@ function boot(state, opts) {
     if (def.kind === 'section' && def.tier === 1) { openGoalForm({ mode: 'unlock', type: id }); return; }
     const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
     if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
+    if (def.money && state.budget.level < def.money) { toast(`${def.name} unlocks at money level ${def.money}`, 'Log transactions and update balances at the Bank'); return; }
+    if (def.needsBank && !state.buildings.some((b) => b.type === 'bank')) { toast('Build the Bank first', 'Set a Financial goal to open it'); return; }
     if (!open) { toast(`Open ${SECTIONS[def.section].name} first`, `Set a goal at the ${mainBuildingFor(def.section, state.spiritualStyle || 'church').name}`); return; }
     if (state.coins < def.cost) { toast(`${def.cost - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
     startPlacement({
@@ -431,7 +582,8 @@ function boot(state, opts) {
     ghost.show(o.type, spot.i, spot.j, mode.rot, () => bakeGroup(buildModel(o.type, def.size[0], o.level || 1, 1)));
     if (o.ignoreId) bld.views.get(o.ignoreId).obj.visible = false;
     setModeUI(true);
-    modebar.innerHTML = `<span class="mhint" id="mhint"></span><div class="mbtns"><button type="button" class="btn soft" data-m="cancel">Cancel</button><button type="button" class="btn soft icon" data-m="rotate" aria-label="Rotate">${svgI('rotate', 'currentColor', 20, 2.6)}</button><button type="button" class="btn go-btn" data-m="place" id="placeBtn">Place</button></div>`;
+    mode.draw = () => { modebar.innerHTML = `<span class="mhint" id="mhint"></span><div class="mbtns">${panToggle()}<button type="button" class="btn soft" data-m="cancel">Cancel</button><button type="button" class="btn soft icon" data-m="rotate" aria-label="Rotate">${svgI('rotate', 'currentColor', 20, 2.6)}</button><button type="button" class="btn go-btn" data-m="place" id="placeBtn">Place</button></div>`; validate(); };
+    mode.draw();
     validate();
     stage.flyTo(footprintCenter(o.type, spot.i, spot.j, mode.rot), tween, easeInOut);
     emit('placing');
@@ -440,7 +592,7 @@ function boot(state, opts) {
     if (mode?.kind !== 'place') return;
     const r = canPlace(state, mode.type, ghost.i, ghost.j, ghost.rot, mode.ignoreId);
     ghost.setValid(r.ok); mode.ok = r.ok;
-    $('mhint').textContent = r.ok ? `Drag to move it, then tap Place.` : r.reason;
+    $('mhint').textContent = mode.pan ? 'Looking around. Tap the hammer to go back to placing.' : r.ok ? `Drag it where you like, then tap Place.` : r.reason;
     $('mhint').classList.toggle('warn', !r.ok);
   }
   function confirmPlace() {
@@ -474,9 +626,15 @@ function boot(state, opts) {
     mode = { kind: 'road', erase: false, added: 0 };
     setModeUI(true);
     const draw = () => {
-      modebar.innerHTML = `<span class="mhint" id="mhint">${mode.erase ? 'Tap or drag along a road to remove it.' : `Tap or drag across the grass to lay road · ${ROAD_COST} coins a tile`}</span><div class="mbtns"><div class="seg"><button type="button" data-m="lay" aria-pressed="${!mode.erase}">Lay road</button><button type="button" data-m="erase" aria-pressed="${mode.erase}">Remove</button></div><button type="button" class="btn go-btn" data-m="done">Done</button></div>`;
+      modebar.innerHTML = `<span class="mhint" id="mhint">${mode.pan ? 'Looking around: drag to move, pinch to zoom. Tap the hammer to build again.' : mode.erase ? 'Tap or drag along a road to remove it.' : `Tap or drag across the grass to lay road · ${ROAD_COST} coins a tile`}</span><div class="mbtns">${panToggle()}<div class="seg"><button type="button" data-m="lay" aria-pressed="${!mode.erase}">Lay road</button><button type="button" data-m="erase" aria-pressed="${mode.erase}">Remove</button></div><button type="button" class="btn go-btn" data-m="done">Done</button></div>`;
     };
     mode.draw = draw; draw();
+  }
+  /* Move/Build switch: ✥ = look around (drag pans the map), 🔨 = build (drag lays road / moves the building). */
+  function panToggle() {
+    return mode.pan
+      ? `<button type="button" class="btn soft icon tool-toggle on" data-m="pan" aria-label="Build mode">${svgI('hammer', 'currentColor', 22, 2.4)}<span>Build</span></button>`
+      : `<button type="button" class="btn soft icon tool-toggle" data-m="pan" aria-label="Move around">${svgI('move', 'currentColor', 22, 2.2)}<span>Move</span></button>`;
   }
   function paintRoad(i, j) {
     const k = `${i},${j}`;
@@ -494,6 +652,7 @@ function boot(state, opts) {
   }
   modebar.addEventListener('click', (e) => {
     const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return;
+    if (m === 'pan') { mode.pan = !mode.pan; mode.draw(); return; }
     if (m === 'cancel') endMode();
     if (m === 'rotate') { ghost.move(ghost.i, ghost.j, (ghost.rot + 1) % 4); validate(); }
     if (m === 'place') confirmPlace();
@@ -517,6 +676,7 @@ function boot(state, opts) {
     down = { x: e.clientX, y: e.clientY, t: performance.now() };
     if (pointers.size > 1) { drag = null; return; }
     const p = groundAt(e);
+    if (mode?.pan) return;
     if (mode?.kind === 'place' && p) {
       const [w, d] = byId[mode.type].size; const [fw, fd] = ghost.rot % 2 ? [d, w] : [w, d];
       const c = footprintCenter(mode.type, ghost.i, ghost.j, ghost.rot);
@@ -545,7 +705,7 @@ function boot(state, opts) {
   canvas.addEventListener('pointercancel', endPointer);
   function onTap(e) {
     const p = groundAt(e);
-    if (mode?.kind === 'place') { if (p) { const [w, d] = byId[mode.type].size; const t = tileUnder(p, ghost.rot % 2 ? d : w, ghost.rot % 2 ? w : d); ghost.move(t.i, t.j); validate(); } return; }
+    if (mode?.kind === 'place') { if (p && !mode.pan) { const [w, d] = byId[mode.type].size; const t = tileUnder(p, ghost.rot % 2 ? d : w, ghost.rot % 2 ? w : d); ghost.move(t.i, t.j); validate(); } return; }
     if (mode) return;
     ray.setFromCamera(ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
     const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
@@ -558,7 +718,7 @@ function boot(state, opts) {
       return;
     }
     const hit = ray.intersectObjects(bld.hits.children, false)[0];
-    if (hit) { sound.tap(); bld.bounce(hit.object.userData.id); openPanel('building', { id: hit.object.userData.id }); }
+    if (hit) { sound.tap(); bld.bounce(hit.object.userData.id); openBuilding(hit.object.userData.id); }
   }
   addEventListener('pointerdown', () => sound.unlock(), { once: true, capture: true });
 
@@ -588,6 +748,17 @@ function boot(state, opts) {
     if (d.per) { readGoalForm(); const [i, n] = d.per.split(':').map(Number); const t = panel.draft.tasks[i]; t.per = Math.max(1, Math.min(7, t.per + n)); renderPanel(); return; }
     if (d.addtask) { readGoalForm(); panel.draft.tasks.push({ title: '', kind: 'daily', per: 3 }); renderPanel(); $('panelBody').querySelector(`[data-tt="${panel.draft.tasks.length - 1}"]`)?.focus(); return; }
     if (d.savegoal) { saveGoalForm(); return; }
+    if (d.btab) { panel.tab = d.btab; renderPanel(); $('panelBody').scrollTop = 0; return; }
+    if (d.bank) { bankAction(d.bank, b); return; }
+    if (d.txtype) { readTx().type = d.txtype; renderPanel(); return; }
+    if (d.txcat) { readTx().cat = d.txcat; renderPanel(); return; }
+    if (d.bal) { const [kind, id] = d.bal.split(':'); const v = $('panelBody').querySelector(`[data-balin="${d.bal}"]`).value; const r = updateBalance(state, kind, id, v); if (r) { flyRewards(centerOf(b), r.reward); sound.coin(); toast('Balance updated', 'Keeping it current is a money skill too'); moneyUp(r.levelUp); afterProgress(); renderPanel(); } return; }
+    if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
+    if (d.bs) { readBudgetSetup(); const dr = panel.draft; if (d.bs === 'back') { dr.step = Math.max(0, dr.step - 1); renderPanel(); return; } if (dr.step === 1 && !dr.incomes.some((i) => toMoney(i.amount) > 0)) { toast('Add at least one paycheck amount'); return; } if (dr.step < 3) { dr.step++; renderPanel(); $('panelBody').scrollTop = 0; return; } const r = setupBudget(state, { incomes: dr.incomes, expenses: dr.expenses }, today); if (r.first) { flyRewards(centerOf(b), { coins: 40, xp: 25 }); sound.chime(); toast('Your budget is set!', 'Log transactions at the Bank to level up your money skills'); } else toast('Budget updated'); moneyUp(r.levelUp); afterProgress(); openPanel('bank', { tab: 'budget', ui: {} }); return; }
+    if (d.incadd) { readBudgetSetup(); panel.draft.incomes.push({ name: '', amount: '', freq: 'biweekly', next: nextFridayKey() }); renderPanel(); return; }
+    if (d.incdel) { readBudgetSetup(); panel.draft.incomes.splice(+d.incdel, 1); renderPanel(); return; }
+    if (d.pay2 === 'show') { paydayShow(); return; }
+    if (d.pay2 === 'send') { paydaySend(b); return; }
     if (d.cal === 'prev' || d.cal === 'next') { panel.ym = shiftMonth(panel.ym, d.cal === 'prev' ? -1 : 1); panel.sel = panel.ym === ymOf(today) ? today : `${panel.ym}-01`; renderPanel(); return; }
     if (d.cal === 'budget') { const v = parseFloat(String($('outBudget').value).replace(/[^0-9.]/g, '')) || 0; state.settings.outingBudget = Math.round(v); persist(); renderPanel(); toast('Outing budget saved', v ? `$${Math.round(v)} a month for outings` : 'No monthly limit'); return; }
     if (d.cal === 'new') { openEventForm({ date: d.date }); return; }
@@ -770,6 +941,7 @@ function boot(state, opts) {
     swayUniforms.uTime.value = REDUCED ? 0 : t; swayUniforms.uSway.value = REDUCED ? 0 : 0.05;
     stage.applyMood(stage.night);
     walkers.tick(dt, t);
+    rail.tick(dt, t);
     sur.tick(dt, t);
     fx.tick(dt);
     ghost.tick(t);
@@ -799,8 +971,9 @@ function boot(state, opts) {
   setInterval(() => { if (!document.hidden && !REDUCED) { const k = pick(['balloon', 'birds']); if (sur.launch(k) && k === 'birds') sound.birds(); } }, 20000);
   later(8000, () => sur.launch('balloon'));
   if (opts.tour || (!state.tour.done && state.tour.step > 0)) later(2200, runTour);
+  later(3500, () => { if (state.tour.done && !panel && !mode && paydayDue(state.budget, today)) startPayday(); });
   persist();
-  if (DEBUG) window.__lc = { state, stage, bld, meter, actions: { openPanel, pickBuilding, startPlacement, confirmPlace, doTask, startRoads, paintRoad, endMode, upgradeTownHall } };
+  if (DEBUG) window.__lc = { state, stage, bld, meter, actions: { openBuilding, openPanel, pickBuilding, startPlacement, confirmPlace, doTask, startRoads, paintRoad, endMode, upgradeTownHall } };
 }
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

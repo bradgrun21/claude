@@ -13,7 +13,8 @@ export function createTour(el, { onSkip }) {
     step = s;
     el.hidden = false;
     card.innerHTML = `<div class="tg">${ART.guide}</div><div class="tt"><b>${esc(s.title)}</b><p>${esc(s.text)}</p>
-      <div class="tb">${s.button ? `<button type="button" class="btn go-btn small" data-t="next">${esc(s.button)}</button>` : ''}<button type="button" class="btn link" data-t="skip">Skip tour</button></div></div>`;
+      <div class="tb">${s.button ? `<button type="button" class="btn go-btn small" data-t="next">${esc(s.button)}</button>` : ''}<button type="button" class="btn link" data-t="skip">Skip tour</button></div></div><button type="button" class="tmin" data-t="min" aria-label="Hide the tour card">–</button>`;
+    card.classList.remove('mini');
     document.body.classList.add('touring');
     track();
   }
@@ -25,7 +26,7 @@ export function createTour(el, { onSkip }) {
       const panelOpen = !document.getElementById('panel').hidden;
       const ty = r ? (r.top !== undefined ? r.top : r.y) : null;
       const dock = step.cardAt === 'mid' && !panelOpen ? 'mid' : panelOpen ? 'bottom' : ty != null && ty < innerHeight * 0.45 ? 'bottom' : 'top';
-      if (card.dataset.dock !== dock) { card.dataset.dock = dock; card.className = 'tour-card ' + dock; }
+      if (card.dataset.dock !== dock) { card.dataset.dock = dock; const mini = card.classList.contains('mini'); card.className = 'tour-card ' + dock + (mini ? ' mini' : ''); }
       document.body.classList.toggle('touring-panel', panelOpen);
       if (r && r.width !== undefined) {
         arrow.hidden = false;
@@ -43,6 +44,8 @@ export function createTour(el, { onSkip }) {
     const t = e.target.closest('[data-t]')?.dataset.t;
     if (t === 'next' && step?.onButton) step.onButton();
     if (t === 'skip') { hide(); onSkip(); }
+    if (t === 'min') { e.stopPropagation(); card.classList.add('mini'); return; }
+    if (card.classList.contains('mini')) card.classList.remove('mini');
   });
   return { show, hide, get current() { return step; } };
 }

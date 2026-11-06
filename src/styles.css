@@ -506,3 +506,84 @@ textarea.field { resize: vertical; font-size: 15px; font-weight: 700; line-heigh
   .memview { grid-template-columns: 220px 1fr; }
   .big-photo img { max-height: 54vh; }
 }
+
+/* ======== v2.4: compact tour, move/build toggle, money ======== */
+.tour-card { left: max(10px, env(safe-area-inset-left, 0px)) !important; transform: none !important; translate: none !important; width: min(330px, calc(100% - 20px)) !important; padding: 8px 30px 8px 8px !important; gap: 8px; border-width: 2px; border-radius: 16px; box-shadow: 0 3px 0 var(--gold-deep), 0 8px 18px rgba(20,40,70,.25); }
+.tour-card.top, .tour-card.mid { top: calc(env(safe-area-inset-top, 0px) + 58px) !important; bottom: auto !important; }
+.tour-card.bottom { top: auto !important; bottom: calc(env(safe-area-inset-bottom, 0px) + 96px) !important; }
+body.touring-panel .tour-card.bottom { bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important; }
+.tg { width: 36px !important; height: 36px !important; }
+.tt b { font-size: 14.5px !important; } .tt p { font-size: 12.5px !important; margin: 2px 0 4px !important; line-height: 1.35 !important; }
+.tb .btn.link { font-size: 12px; padding: 2px 4px; }
+.tb .go-btn.small { padding: 5px 10px; font-size: 13px; }
+.tmin { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 8px; border: 0; background: #F1E4C8; color: var(--brown); font-weight: 800; font-size: 16px; line-height: 1; padding: 0; }
+.tour-card.mini { width: 54px !important; height: 54px; padding: 4px !important; border-radius: 50%; cursor: pointer; }
+.tour-card.mini .tt, .tour-card.mini .tmin { display: none; }
+.tour-card.mini .tg { width: 42px !important; height: 42px !important; }
+body.touring-panel .modal { padding-left: max(12px, env(safe-area-inset-left, 0px)) !important; }
+@media (min-width: 900px) { body.touring-panel .modal { padding-left: 350px !important; } }
+@media (max-height: 500px) and (orientation: landscape) { body.touring-panel .modal { padding-left: 350px !important; } .tour-card { width: 320px !important; } }
+.tool-toggle { flex-direction: column; gap: 0; padding: 4px 10px !important; min-width: 58px; }
+.tool-toggle span { font-size: 11px; line-height: 1; }
+.tool-toggle.on { background: #FFF1C9; border-color: var(--gold-deep); }
+.two > div { min-width: 0; }
+input[type="date"].field, input[type="time"].field { min-width: 0; max-width: 100%; display: block; -webkit-appearance: none; appearance: none; min-height: 44px; }
+.store { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 640px) { .store { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-height: 500px) and (orientation: landscape) { .store { grid-template-columns: repeat(5, minmax(0, 1fr)); } .sart { height: 17vh; } }
+
+/* Money */
+.win[data-kind="bank"], .win[data-kind="budgetSetup"], .win[data-kind="payday"] { width: min(820px, 100%); }
+.mguide { display: flex; gap: 10px; align-items: flex-start; background: var(--parch2); border-radius: 16px; padding: 10px 12px; margin-bottom: 8px; border: 2px solid #F1E2C8; }
+.mg-av { width: 46px; height: 46px; flex-shrink: 0; } .mg-av svg { width: 100%; height: 100%; }
+.mguide b { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--brown); }
+.mguide p { margin: 3px 0 0; font-size: 13.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.45; }
+.mdots { display: flex; gap: 6px; margin-bottom: 8px; } .mdots i { flex: 1; height: 5px; border-radius: 3px; background: #E2C79C; } .mdots i.on { background: var(--gold); }
+.mrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; background: var(--parch2); border-radius: 14px; padding: 8px; margin-top: 6px; }
+.mrow > .field, .mrow > .dollar, .mrow > select { flex: 1 1 140px; min-width: 0; }
+.mrow .mini { display: flex; flex-direction: column; font-size: 11.5px; font-weight: 800; color: var(--ink-soft); flex: 1 1 140px; }
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; }
+.catrow { display: flex; align-items: center; gap: 8px; background: var(--parch2); border-radius: 12px; padding: 6px 8px; font-weight: 800; font-size: 13.5px; }
+.catrow i { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.catrow span:nth-of-type(1) { flex: 1; }
+.catrow .dollar { width: 110px; flex: none; }
+.mreview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mreview div { background: var(--parch2); border-radius: 14px; padding: 10px; text-align: center; }
+.mreview small { display: block; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+.mreview b { font-family: var(--font-display); font-size: 22px; color: var(--brown); }
+.mhead { display: flex; gap: 10px; align-items: center; background: var(--parch2); border-radius: 16px; padding: 8px 10px; margin-bottom: 8px; }
+.mlv { position: relative; width: 52px; height: 52px; flex-shrink: 0; } .mlv svg { width: 100%; height: 100%; }
+.mlv b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); color: #6B4A00; font-size: 20px; }
+.mhd { flex: 1; min-width: 0; } .mhd b { font-family: var(--font-display); font-weight: 600; color: var(--brown); }
+.mhd .pbar { height: 16px; margin: 4px 0; } .mhd small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.mbtns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.bud { display: flex; flex-direction: column; gap: 6px; }
+.budrow { display: grid; grid-template-columns: 130px 1fr auto; gap: 8px; align-items: center; background: var(--parch2); border-radius: 12px; padding: 6px 10px; }
+.budrow .pbar { margin: 0; height: 12px; }
+.bl1 { display: flex; gap: 6px; align-items: center; font-weight: 800; font-size: 13.5px; } .bl1 i { width: 10px; height: 10px; border-radius: 50%; }
+.bl2 { font-size: 12.5px; font-weight: 800; color: var(--ink-soft); white-space: nowrap; }
+.txform .seg { margin-bottom: 4px; }
+.txrow { display: flex; align-items: center; gap: 10px; background: var(--parch2); border-radius: 12px; padding: 7px 10px; margin-top: 5px; }
+.txrow > i { width: 10px; height: 34px; border-radius: 5px; flex-shrink: 0; }
+.txrow span { flex: 1; display: flex; flex-direction: column; min-width: 0; } .txrow span b { font-size: 14px; } .txrow small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.txrow > b { font-family: var(--font-display); font-size: 16px; } .txrow .inc { color: var(--green-deep); }
+.lockc { display: flex; gap: 10px; align-items: center; }
+.lockc .lk { width: 44px; height: 44px; border-radius: 50%; background: #8A7A62; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.fund.ef { border-color: var(--green); }
+.debt.focus { border-color: #2F86D8; box-shadow: inset 0 0 0 2px #2F86D8; }
+.debt.paid { opacity: .7; }
+.debt .money-row, .fund .money-row { flex-wrap: wrap; }
+.payin { max-width: 320px; }
+.dollar.big .field { font-size: 26px; font-family: var(--font-display); padding: 10px 12px 10px 28px; }
+.dollar.big::before { font-size: 22px; }
+.payb { display: grid; grid-template-columns: 220px 1fr; gap: 14px; align-items: center; }
+.pie svg { width: 100%; max-width: 220px; display: block; margin: 0 auto; filter: drop-shadow(0 4px 4px rgba(80,50,20,.2)); }
+.pt1 { font-family: var(--font-display); font-weight: 700; font-size: 15px; fill: var(--brown); }
+.pt2 { font-size: 9px; font-weight: 800; fill: var(--ink-soft); }
+.lg { display: grid; grid-template-columns: 12px 1fr 44px auto; gap: 8px; align-items: center; background: var(--parch2); border-radius: 12px; padding: 5px 10px; margin-top: 5px; }
+.lg i { width: 12px; height: 12px; border-radius: 50%; } .lg b { font-size: 14px; } .lg > span:nth-of-type(1) { font-family: var(--font-display); font-weight: 700; color: var(--brown); text-align: right; }
+.trucks { display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-end; max-width: 210px; }
+.tk { width: 30px; height: 18px; } .tk.half { opacity: .85; }
+@media (max-width: 640px) { .payb { grid-template-columns: 1fr; } .budrow { grid-template-columns: 1fr; } .mreview { grid-template-columns: 1fr; } }
+@media (max-height: 500px) and (orientation: landscape) { .payb { grid-template-columns: 170px 1fr; } .pie svg { max-width: 170px; } .mguide p { font-size: 12.5px; } }
+.debt .field.small, .fund .field.small { width: 120px; }

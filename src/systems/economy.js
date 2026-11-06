@@ -90,5 +90,5 @@ export function canUpgradeTownHall(state) {
 }
 
 export function unlockedAt(level) {
-  return Object.values(byId).filter((b) => b.level === level && !b.alt);
+  return Object.values(byId).filter((b) => b.level === level && !b.alt && !b.money);
 }
