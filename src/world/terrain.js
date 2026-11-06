@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { MAP, HALF, PONDS, riverX, isWater, inBounds, key, TOWNHALL_AT, tileCenter } from '../data/map.js';
-import { paintLakes, inScenery } from './scenery.js';
+import { paintLakes, inScenery, RAIL_X } from './scenery.js';
 import { M, mat, mesh, seeded } from './palette.js';
 import { bakeParts, InstancedSet, swayMaterial } from './bake.js';
 import * as models from './models.js';
@@ -41,7 +41,7 @@ function paintGround() {
     for (const [rr, col] of [[p.r + 0.6, '#E2C98A'], [p.r + 0.3, '#EBD7A0'], [p.r, '#3E9FD6'], [p.r * 0.7, '#58B4E6'], [p.r * 0.35, '#7CC9F0']]) { g.fillStyle = col; g.beginPath(); g.arc(toPx(x), toPx(z), rr * S, 0, Math.PI * 2); g.fill(); }
     for (let k = 0; k < 4; k++) { const a = r() * 6.28, d = p.r * (0.3 + r() * 0.5); g.fillStyle = '#5FA145'; g.beginPath(); g.arc(toPx(x + Math.cos(a) * d), toPx(z + Math.sin(a) * d), 0.22 * S, 0, Math.PI * 2); g.fill(); g.fillStyle = '#F7A9C4'; g.beginPath(); g.arc(toPx(x + Math.cos(a) * d) + 3, toPx(z + Math.sin(a) * d) - 2, 0.07 * S, 0, Math.PI * 2); g.fill(); }
   }
-  paintLakes(g, toPx, S);
+  paintLakes(g, toPx);
   /* tiny flowers in the grass */
   const fc = ['#FFFFFF', '#FFD45E', '#F28CA0', '#C9A0F0'];
   for (let k = 0; k < 1600; k++) { const x = r() * PX, y = r() * PX; const wx = x / S - LAND / 2, wz = y / S - LAND / 2; const [ti, tj] = [Math.floor(wx + HALF), Math.floor(wz + HALF)]; if (inBounds(ti, tj) && isWater(ti, tj)) continue; g.fillStyle = fc[k % 4]; g.beginPath(); g.arc(x, y, 1.6, 0, Math.PI * 2); g.fill(); }
@@ -96,7 +96,7 @@ export function createTerrain(scene, renderer) {
     if (Math.abs(x) < HALF + 0.6 && Math.abs(z) < HALF + 0.6) continue;
     const j = z + HALF;
     if (Math.abs(x + HALF - riverX(j)) < 2.2) continue;
-    if (inScenery(x, z)) continue;
+    if (inScenery(x, z) || Math.abs(x - RAIL_X) < 1.3) continue;
     add(r() < 0.35 ? 'pine' : kinds[Math.floor(r() * 4)], x, z, 0.9 + r() * 0.7, null);
   }
   /* scattered nature across the open land (clusters), away from the town center */
@@ -106,7 +106,7 @@ export function createTerrain(scene, renderer) {
     const n = 4 + Math.floor(r() * 7);
     for (let k = 0; k < n; k++) {
       const i = Math.floor(ci + (r() - 0.5) * 4), j = Math.floor(cj + (r() - 0.5) * 4);
-      if (!inBounds(i, j) || isWater(i, j)) continue;
+      if (!inBounds(i, j) || isWater(i, j) || Math.abs(i - 2) <= 1) continue;
       const [x, z] = tileCenter(i, j);
       const roll = r();
       add(roll < 0.62 ? (r() < 0.3 ? 'pine' : kinds[Math.floor(r() * 4)]) : roll < 0.88 ? 'bush' : 'rock', x + (r() - 0.5) * 0.5, z + (r() - 0.5) * 0.5, roll < 0.62 ? 0.85 + r() * 0.5 : 0.9 + r() * 0.6, key(i, j));

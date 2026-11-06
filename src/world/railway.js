@@ -16,12 +16,14 @@ export function createRailway(scene, fx) {
   const X = tileCenter(RAIL_I, 0)[0];
   const stopZ = tileCenter(0, STATION_AT.j)[1] + 0.5;
   /* Track: ballast, two rails, instanced sleepers */
-  const ballast = mesh(new THREE.BoxGeometry(0.9, 0.04, 80), M('#B8AD9C'), false, true); ballast.position.set(X, 0.02, 0); root.add(ballast);
-  for (const dx of [-0.2, 0.2]) { const r = mesh(new THREE.BoxGeometry(0.05, 0.05, 80), mat.metal, false, true); r.position.set(X + dx, 0.07, 0); root.add(r); }
+  /* From the tunnel in the northern mountain to the tunnel in the southern one. */
+  const Z0 = -31, Z1 = 31, LEN = Z1 - Z0;
+  const ballast = mesh(new THREE.BoxGeometry(0.9, 0.04, LEN), M('#B8AD9C'), false, true); ballast.position.set(X, 0.02, 0); root.add(ballast);
+  for (const dx of [-0.2, 0.2]) { const r = mesh(new THREE.BoxGeometry(0.05, 0.05, LEN), mat.metal, false, true); r.position.set(X + dx, 0.07, 0); root.add(r); }
   const set = new InstancedSet(root);
   const sleeper = new THREE.Group(); sleeper.add(mesh(new THREE.BoxGeometry(0.7, 0.03, 0.12), M('#7A5A3C'), false, true));
   set.define('s', bakeParts(sleeper));
-  for (let z = -40; z <= 40; z += 0.45) set.add('s', new THREE.Matrix4().makeTranslation(X, 0.045, z));
+  for (let z = Z0; z <= Z1; z += 0.45) set.add('s', new THREE.Matrix4().makeTranslation(X, 0.045, z));
 
   /* Train: engine + 3 cars of money bags */
   const train = new THREE.Group(); root.add(train);
@@ -35,7 +37,8 @@ export function createRailway(scene, fx) {
     baked.position.z = -(k + 1) * 0.85 - 0.1;
     car.add(baked); train.add(car);
   }
-  train.position.set(X, 0.08, -44);
+  const START = -33.5, END = 36;
+  train.position.set(X, 0.08, START);
   train.visible = false;
   let rolling = false;
 
@@ -62,13 +65,13 @@ export function createRailway(scene, fx) {
     arrive(done) {
       train.visible = true; rolling = true;
       if (REDUCED) { train.position.z = stopZ; rolling = false; done && done(); return; }
-      const z0 = -44;
+      const z0 = START;
       tween(5200, (k) => { train.position.z = z0 + (stopZ + 1.2 - z0) * easeInOut(k); }, () => { rolling = false; done && done(); });
     },
     depart() {
       const z0 = train.position.z;
       rolling = true;
-      tween(4500, (k) => { train.position.z = z0 + 48 * k * k; }, () => { train.visible = false; rolling = false; train.position.z = -44; });
+      tween(4500, (k) => { train.position.z = z0 + (END - z0) * k * k; }, () => { train.visible = false; rolling = false; train.position.z = START; });
     },
     /* Park the trucks beside the station while the family looks at the breakdown. */
     park(list) {

@@ -1,5 +1,5 @@
 import { byId } from '../data/catalog.js';
-import { MAP, inBounds, isWater, isRail, key } from '../data/map.js';
+import { MAP, inBounds, isWater, isRail, key, INNER, natureTiles, natureAt } from '../data/map.js';
 
 /*
  * Placement rules:
@@ -62,6 +62,15 @@ export function isConnected(state, type, i, j, rot, connected = connectedRoads(s
   return perimeter(footprint(type, i, j, rot)).some(([a, b]) => connected.has(key(a, b)));
 }
 
+/* Decide once per town which inner nature features exist: any that would sit on a building or road are left out. */
+export function ensureNature(state) {
+  if (Array.isArray(state.nature)) return state.nature;
+  const occ = occupancy(state), roads = roadSet(state);
+  state.nature = INNER.filter((f) => natureTiles(f).every(([i, j]) => !occ.has(key(i, j)) && !roads.has(key(i, j)))).map((f) => f.id);
+  return state.nature;
+}
+const natureReason = (f) => (f.kind === 'lake' ? `That’s ${f.label}` : `${f.label} is in the way`);
+
 export function canPlace(state, type, i, j, rot = 0, ignoreId = null) {
   const occ = occupancy(state, ignoreId);
   const roads = roadSet(state);
@@ -69,6 +78,7 @@ export function canPlace(state, type, i, j, rot = 0, ignoreId = null) {
     if (!inBounds(a, b)) return { ok: false, reason: 'Too close to the edge of the map' };
     if (isWater(a, b)) return { ok: false, reason: 'That spot is water' };
     if (isRail(a, b)) return { ok: false, reason: 'The railway runs here' };
+    { const f = natureAt(state, a, b); if (f) return { ok: false, reason: natureReason(f) }; }
     if (roads.has(key(a, b))) return { ok: false, reason: 'A road is in the way' };
     if (occ.has(key(a, b))) return { ok: false, reason: 'Something is already here' };
   }
@@ -80,6 +90,7 @@ export function canPlaceRoad(state, i, j) {
   if (!inBounds(i, j)) return { ok: false, reason: 'Edge of the map' };
   if (isWater(i, j)) return { ok: false, reason: 'That spot is water' };
   if (isRail(i, j)) return { ok: false, reason: 'The railway runs here' };
+  { const f = natureAt(state, i, j); if (f) return { ok: false, reason: natureReason(f) }; }
   if (state.roads.includes(key(i, j))) return { ok: false, reason: 'Already a road' };
   if (occupancy(state).has(key(i, j))) return { ok: false, reason: 'Something is already here' };
   return { ok: true };

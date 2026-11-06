@@ -15,6 +15,22 @@ export function isWater(i, j) {
   for (const p of PONDS) if (Math.hypot(cx - p.i, cz - p.j) < p.r) return true;
   return false;
 }
+/*
+ * Nature inside the buildable map, so the land has shape and you build around it:
+ * a small peak in the north-east, a lake in the south, rocky hills in the north-west.
+ * A town keeps the features that were clear when it first loaded (state.nature), so nothing lands on a building.
+ */
+export const INNER = [
+  { id: 'peak', kind: 'mountain', label: 'Pine Peak', i: 26.5, j: 4.5, r: 2.7, h: 4.6 },
+  { id: 'lake', kind: 'lake', label: 'Lake Glimmer', i: 16.5, j: 30, r: 2.5 },
+  { id: 'rocks', kind: 'hill', label: 'Rocky Knoll', i: 12.5, j: 4.5, r: 1.9, h: 1.5 }
+];
+export const natureTiles = (f) => { const out = []; for (let i = Math.floor(f.i - f.r); i <= Math.ceil(f.i + f.r); i++) for (let j = Math.floor(f.j - f.r); j <= Math.ceil(f.j + f.r); j++) if (Math.hypot(i + 0.5 - f.i, j + 0.5 - f.j) < f.r && inBounds(i, j)) out.push([i, j]); return out; };
+export const activeNature = (state) => INNER.filter((f) => (state?.nature || []).includes(f.id));
+export function natureAt(state, i, j) {
+  for (const f of activeNature(state)) if (Math.hypot(i + 0.5 - f.i, j + 0.5 - f.j) < f.r) return f;
+  return null;
+}
 /* The railway runs north–south along the west edge. The station sits beside it, joined to Main Street by road. */
 export const RAIL_I = 2;
 export const isRail = (i, j) => i === RAIL_I;
