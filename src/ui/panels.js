@@ -6,6 +6,8 @@ import { IDEAS } from '../data/ideas.js';
 import { toolForBuilding } from '../systems/tools.js';
 import { EARNED, earnedProgress, isEarned } from '../systems/earned.js';
 import { bizCost, bizSlots, bizCount, RESIDENTS_PER_SHOP, canBuildMonument } from '../systems/business.js';
+import { renderDistrictStore } from './district.js';
+import { DISTRICT, catActive, districtForBuilding } from '../systems/district.js';
 import { dailyChallenges, challengeProgress, milestoneState, QUICK_WINS } from '../systems/challenges.js';
 import { STICKER_NAMES } from '../systems/surprises.js';
 import { shortDate } from '../systems/time.js';
@@ -13,6 +15,7 @@ import { svgI, esc } from './icons.js';
 import { ART } from './art.js';
 import { thumb } from '../world/thumbs.js';
 
+const shopCard = (state, d, bank) => { const dd = districtForBuilding(d.id); const free = !!(dd && bank && catActive(state, dd.cat)); return card(d, state, { locked: (d.needsBank && !bank) || (!free && state.level < d.level), lockText: d.needsBank && !bank ? 'Build the Bank first' : `Level ${d.level}`, disabled: !free && state.coins < d.cost, note: toolNote(d), price: free ? '<span class="cost free">Free with your budget</span>' : undefined }); };
 const toolNote = (d) => { const t = toolForBuilding(d.id); return t ? `${t.emoji} Opens the ${t.name}` : ''; };
 const coin = (n) => `<span class="cost"><i class="ci">${ART.coin}</i>${n}</span>`;
 const xpTag = (n) => `<span class="cost xp"><i class="ci">${ART.xp}</i>${n}</span>`;
@@ -54,6 +57,7 @@ export function renderBuild(state, tab) {
     return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(tab)}<span>${esc(sec.blurb)}</span></div><div class="grid">${cards.join('')}</div>
       <p class="foot">${open ? 'Each new building here adds another list, and higher buildings pay more for every task.' : sectionUnlocked(state, tab) ? 'Add your first task or goal to open this area. The first building is free.' : `${unlockHint(state, tab)}. Areas open one at a time so it never feels like too much.`}</p>`;
   }
+  if (tab === 'district') return renderDistrictStore(state);
   if (tab === 'biz') {
     const n = bizCount(state), slots = bizSlots(state), full = n >= slots;
     return `<div class="sec-head"><span>Shops earn coins on their own, every day. ${n} of ${slots} shops · every ${RESIDENTS_PER_SHOP} residents support one more. ${full ? `<b>Build homes to open another shop.</b>` : ''}</span></div>
@@ -62,7 +66,7 @@ export function renderBuild(state, tab) {
   }
   if (tab === 'shops') {
     const bank = has('bank');
-    return `<p class="hint">Shops and services open handy tools: a meal planner, car and home care, subscriptions, and a Kids’ Corner. On payday, money trucks deliver to the shops too.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'shop').map((d) => has(d.id) ? card(d, state, { disabled: true, action: 'built', note: 'Built', price: '<span class="cost done">Built</span>' }) : card(d, state, { locked: (d.needsBank && !bank) || state.level < d.level, lockText: d.needsBank && !bank ? 'Build the Bank first' : `Level ${d.level}`, disabled: state.coins < d.cost, note: toolNote(d) })).join('')}</div>`;
+    return `<p class="hint">Shops and services open handy tools: a meal planner, car and home care, subscriptions, and a Kids’ Corner. On payday, money trucks deliver to the shops too.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'shop').map((d) => has(d.id) ? card(d, state, { disabled: true, action: 'built', note: 'Built', price: '<span class="cost done">Built</span>' }) : shopCard(state, d, bank)).join('')}</div>`;
   }
   if (tab === 'homes') {
     return `<p class="hint">Homes bring people to town. You need population to level up and to grow the Town Hall.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'home').map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost, note: `+${d.pop} people` })).join('')}</div>`;
@@ -239,6 +243,7 @@ export const STORE = [
   { id: 'todo', label: 'To-Do', rep: () => 'jobboard' },
   { id: 'homes', label: 'Housing', rep: () => 'house' },
   { id: 'biz', label: 'Main Street', rep: () => 'bakery' },
+  { id: 'district', label: 'Budget District', rep: () => 'fair' },
   { id: 'shops', label: 'Shops & services', rep: () => 'grocery' },
   { id: 'roads', label: 'Decor & Roads', rep: () => 'fountain' },
   { id: 'townhall', label: 'Town Hall', rep: () => 'townhall' }
@@ -252,6 +257,7 @@ export function readyCount(state, cat) {
     if (!open) return 1;
     return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && state.level >= b.level && (!b.money || (state.budget?.level || 1) >= b.money) && state.coins >= b.cost).length;
   }
+  if (cat === 'district') return built('bank') ? DISTRICT.filter((d) => !built(d.building) && catActive(state, d.cat)).length : 0;
   if (cat === 'biz') return bizCount(state) < bizSlots(state) ? BUILDINGS.filter((b) => b.kind === 'biz' && state.level >= b.level && state.coins >= bizCost(state, b.id)).length ? 1 : 0 : 0;
   if (cat === 'shops') return BUILDINGS.filter((b) => b.kind === 'shop' && !built(b.id) && state.coins >= b.cost && state.level >= b.level && (!b.needsBank || built('bank'))).length;
   if (cat === 'homes') return BUILDINGS.filter((b) => b.kind === 'home' && state.level >= b.level && state.coins >= b.cost).length ? 1 : 0;

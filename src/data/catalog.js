@@ -61,6 +61,13 @@ export const BUILDINGS = [
   { id: 'pizzeria', name: 'Pizza Place', kind: 'biz', size: [1, 1], cost: 220, level: 5, income: 20, desc: 'Friday night favorite.' },
   { id: 'toystore', name: 'Toy Store', kind: 'biz', size: [1, 1], cost: 280, level: 6, income: 25, desc: 'Every kid’s first stop.' },
   { id: 'cinema', name: 'Movie Theater', kind: 'biz', size: [2, 2], cost: 500, level: 8, income: 42, desc: 'Popcorn and a big screen.' },
+  /* Budget District: unlocked free by budgeting or spending in the category (see systems/district.js). */
+  { id: 'housingoffice', name: 'Housing Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Rent or mortgage money lives here.' },
+  { id: 'utility', name: 'Power & Water Works', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Lights, water and heat.' },
+  { id: 'insurance', name: 'Insurance Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Covered for a rainy day.' },
+  { id: 'pantry', name: 'Giving Pantry', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Where your generosity goes.' },
+  { id: 'fair', name: 'Fun Fair', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Eating out and fun money.' },
+  { id: 'general', name: 'General Store', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Everything else.' },
   /* Money lessons */
   { id: 'nestegg', name: 'Nest Egg Tower', kind: 'finance', size: [1, 1], cost: 0, level: 4, unique: true, needsBank: true, desc: 'Invest coins and watch compound growth do the work.' },
   { id: 'monument', name: 'Debt Freedom Monument', kind: 'finance', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'A new tier for every debt you pay off.' },

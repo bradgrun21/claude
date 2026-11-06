@@ -301,6 +301,16 @@ const BIZ = {
   cinema: () => { const g = new THREE.Group(); g.add(pad(0.96, '#CFC8BA')); g.add(box(0.84, 0.5, 0.6, M('#7A3B5A'), 0, 0.05, -0.12)); g.add(box(0.9, 0.06, 0.66, M('#4A2338'), 0, 0.55, -0.12)); const mq = box(0.7, 0.14, 0.12, C.yellow, 0, 0.36, 0.22); g.add(mq); for (let k = 0; k < 8; k++) { const b = mesh(new THREE.SphereGeometry(0.014, 6, 4), mat.lamp, false, false); b.position.set(-0.32 + k * 0.09, 0.51, 0.285); g.add(b); } g.add(box(0.5, 0.18, 0.02, mat.win, 0, 0.06, 0.18)); return g; }
 };
 
+/* ---------- Budget District ---------- */
+const DISTRICT_MODELS = {
+  housingoffice: () => { const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8')); const h = m.house({ roof: C.blue, wall: C.cream, floors: 2, w: 0.62, d: 0.5 }); h.position.set(0, 0.05, -0.12); g.add(h); const key = new THREE.Group(); const ring = mesh(new THREE.TorusGeometry(0.07, 0.025, 6, 14), mat.gold); key.add(ring); const shaft = box(0.2, 0.035, 0.03, mat.gold, 0.16, -0.017, 0); key.add(shaft); key.add(box(0.03, 0.06, 0.03, mat.gold, 0.22, -0.07, 0)); key.position.set(-0.08, 0.3, 0.2); g.add(key); g.add(box(0.03, 0.3, 0.03, C.white, 0.34, 0.05, 0.36)); g.add(box(0.2, 0.12, 0.02, C.red, 0.34, 0.3, 0.37)); return g; },
+  utility: () => { const g = new THREE.Group(); g.add(pad(0.96, '#CFC8BA')); g.add(box(0.46, 0.3, 0.36, M('#8A949E'), -0.18, 0.05, 0.12)); g.add(box(0.5, 0.04, 0.4, C.dark, -0.18, 0.35, 0.12)); const bolt = mesh(new THREE.ConeGeometry(0.06, 0.16, 3), C.yellow); bolt.position.set(-0.18, 0.22, 0.31); bolt.rotation.z = Math.PI; g.add(bolt); for (const [x, z] of [[0.2, -0.24], [0.36, -0.08], [0.2, -0.08], [0.36, -0.24]]) g.add(box(0.025, 0.42, 0.025, C.dark, x, 0.05, z)); g.add(cyl(0.17, 0.2, M('#4FA7A0'), 0.28, 0.47, -0.16, 14)); const roof = mesh(new THREE.ConeGeometry(0.19, 0.12, 14), C.dark); roof.position.set(0.28, 0.73, -0.16); g.add(roof); for (const x of [-0.42, 0.42]) { g.add(box(0.025, 0.5, 0.025, C.wood, x, 0.05, 0.42)); g.add(box(0.14, 0.02, 0.02, C.wood, x, 0.5, 0.42)); } g.add(box(0.84, 0.006, 0.006, C.dark, 0, 0.53, 0.42, false)); return g; },
+  insurance: () => { const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8')); g.add(box(0.66, 0.42, 0.5, C.cream, 0, 0.05, -0.12)); g.add(box(0.7, 0.05, 0.54, C.blue, 0, 0.47, -0.12)); for (const x of [-0.18, 0.18]) g.add(box(0.14, 0.14, 0.02, mat.win, x, 0.25, 0.135)); g.add(box(0.12, 0.2, 0.02, C.dark, 0, 0.05, 0.135)); const um = mesh(new THREE.ConeGeometry(0.26, 0.12, 8), C.red); um.position.set(0, 0.74, -0.12); g.add(um); g.add(cyl(0.012, 0.22, C.dark, 0, 0.52, -0.12, 6)); return g; },
+  pantry: () => { const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0')); const s = m.shop(C.green); s.scale.setScalar(0.92); s.position.set(0, 0.05, -0.08); g.add(s); const hs = new THREE.Shape(); hs.moveTo(0, -0.08); hs.bezierCurveTo(-0.16, 0.04, -0.08, 0.14, 0, 0.06); hs.bezierCurveTo(0.08, 0.14, 0.16, 0.04, 0, -0.08); const heart = mesh(new THREE.ExtrudeGeometry(hs, { depth: 0.03, bevelEnabled: false }), C.pink); heart.position.set(0, 0.62, 0.05); g.add(heart); for (const [x, c] of [[-0.3, C.red], [-0.16, C.yellow], [0.3, mat.carrot]]) { g.add(box(0.12, 0.08, 0.1, C.wood, x, 0.05, 0.4)); for (let k = 0; k < 3; k++) { const f = mesh(new THREE.SphereGeometry(0.025, 6, 5), c); f.position.set(x - 0.03 + k * 0.03, 0.15, 0.4); g.add(f); } } return g; },
+  fair: () => { const g = new THREE.Group(); g.add(pad(0.96, '#A9D88A')); const wheel = new THREE.Group(); const rim = mesh(new THREE.TorusGeometry(0.3, 0.015, 6, 28), C.white); wheel.add(rim); for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; const sp = box(0.008, 0.3, 0.008, C.white, 0, 0, 0); sp.position.set(Math.cos(a) * 0.15, Math.sin(a) * 0.15 - 0.15, 0); sp.rotation.z = a - Math.PI / 2; wheel.add(sp); const cab = box(0.06, 0.06, 0.06, [C.red, C.yellow, C.sky, C.pink][k % 4], Math.cos(a) * 0.3, Math.sin(a) * 0.3 - 0.06, 0); wheel.add(cab); } wheel.position.set(-0.12, 0.42, -0.1); g.add(wheel); for (const x of [-0.24, 0]) { const leg = box(0.02, 0.44, 0.02, C.dark, x, 0.03, -0.1); leg.rotation.z = x ? -0.25 : 0.25; g.add(leg); } const tent = mesh(new THREE.ConeGeometry(0.2, 0.26, 8), C.red); tent.position.set(0.28, 0.28, 0.24); g.add(tent); g.add(cyl(0.2, 0.16, C.white, 0.28, 0.03, 0.24, 8)); const flag = mesh(new THREE.ConeGeometry(0.03, 0.08, 3), C.yellow); flag.rotation.z = -Math.PI / 2; flag.position.set(0.33, 0.45, 0.24); g.add(flag); return g; },
+  general: () => { const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8')); g.add(box(0.66, 0.4, 0.46, M('#B07A45'), 0, 0.05, -0.14)); g.add(box(0.6, 0.14, 0.03, M('#8A5A30'), 0, 0.45, 0.08)); g.add(box(0.7, 0.03, 0.24, C.wood, 0, 0.05, 0.2)); for (const x of [-0.3, 0.3]) g.add(box(0.025, 0.28, 0.025, C.wood, x, 0.05, 0.3)); g.add(box(0.72, 0.025, 0.26, C.dark, 0, 0.33, 0.2)); for (const x of [-0.2, 0.2]) g.add(cyl(0.05, 0.1, M('#7A5A3C'), x, 0.08, 0.36, 10)); g.add(box(0.14, 0.18, 0.02, mat.win, 0.16, 0.12, 0.095)); return g; }
+};
+
 /* ---------- Money lessons ---------- */
 function nestegg(level = 1) {
   const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0'));
@@ -354,7 +364,7 @@ const earnedDecor = {
 
 const BUILDERS = {
   townhall, school, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
-  repairshop, vet, giftshop, nestegg, monument, bungalow, farmhouse, ...BIZ, ...FILLER,
+  repairshop, vet, giftshop, ...DISTRICT_MODELS, nestegg, monument, bungalow, farmhouse, ...BIZ, ...FILLER,
   cottage, house: familyHouse, townhouse, apartments, ...decor, ...earnedDecor
 };
 
@@ -380,7 +390,7 @@ function grown(g, level) {
 export function buildModel(type, w = 1, level = 1, variant = 0) {
   const fn = BUILDERS[type] || cottage;
   const inner = fn(level, variant);
-  if (byId[type]?.kind === 'section' && level >= 2) grown(inner, level);
+  if ((byId[type]?.kind === 'section' || byId[type]?.kind === 'district') && level >= 2) grown(inner, level);
   if (byId[type]?.kind === 'home' && byId[type].size[0] === 1) inner.scale.multiplyScalar(1.15);
   const g = new THREE.Group();
   inner.scale.multiplyScalar(w * 0.98);

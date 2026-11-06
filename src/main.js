@@ -38,6 +38,8 @@ import * as LB from './systems/logbook.js';
 import { markUse, checkEarned, noteStreak, isEarned, earnedById } from './systems/earned.js';
 import * as BZ from './systems/business.js';
 import { renderBiz, renderNest, renderMonument } from './ui/business.js';
+import * as DI from './systems/district.js';
+import { renderCatHub, renderDistrictWin } from './ui/district.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
@@ -249,7 +251,7 @@ function boot(state, opts) {
     $('panelBody').scrollTop = 0; $('panelBody').scrollLeft = 0;
     emit('panel:' + kind);
   }
-  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); }
+  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); else if (k && k !== 'districtNew' && state.district?.pending?.length) later(350, () => { if (!panel && !mode) showDistrict(); }); }
   /* Earned decorations get their celebration the next time nothing else is on screen. */
   const unseenEarned = () => (state.earned || []).find((e) => !e.seen);
   function showEarned() { const e = unseenEarned(); if (!e) return; e.seen = true; persist(); openPanel('earned', { id: e.id }); }
@@ -269,15 +271,18 @@ function boot(state, opts) {
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
     else if (p.kind === 'biz') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBiz(state, b) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
     else if (p.kind === 'nest') { title = '🥚 Nest Egg Tower'; body = renderNest(state, p.ui, today); }
+    else if (p.kind === 'district') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } const dd = DI.districtForBuilding(b.type); title = `${dd.emoji} ${byId[b.type].name}`; body = renderCatHub(state, dd.cat, p.ui, today) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
+    else if (p.kind === 'districtNew') { title = 'New in town!'; body = renderDistrictWin(p.entries.map((c) => DI.districtForCat(c))); }
     else if (p.kind === 'monument') { title = 'Debt Freedom Monument'; body = renderMonument(state); }
     else if (p.kind === 'earned') { const e = earnedById[p.id]; title = 'Earned!'; body = renderEarnedWin(e); }
     else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : ''); }
     else if (p.kind === 'tool') {
       const t = TL.toolById[p.tool]; const b = state.buildings.find((x) => x.id === p.buildingId);
-      const tl = [...(b && byId[b.type].kind === 'section' ? [['list', 'List']] : []), ...TOOL_TABS[p.tool], ...(p.tool === 'meeting' ? [['upgrade', 'Upgrade']] : [])];
+      const dd = b && DI.districtForBuilding(b.type);
+      const tl = [...(b && byId[b.type].kind === 'section' ? [['list', 'List']] : []), ...TOOL_TABS[p.tool], ...(dd && state.budget.setup ? [['budget', 'Budget']] : []), ...(p.tool === 'meeting' ? [['upgrade', 'Upgrade']] : [])];
       title = `${t.emoji} ${t.name}`;
       tabs = tl.map(([k, l]) => `<button type="button" class="wtab${p.tab === k || (p.tab === 'recipe' && k === 'recipes') ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
-      body = p.tab === 'list' && b && byId[b.type].kind === 'section' ? renderBuilding(state, b, today) : p.tab === 'upgrade' ? renderTownHall(state) : renderTool(state, p, today);
+      body = p.tab === 'list' && b && byId[b.type].kind === 'section' ? renderBuilding(state, b, today) : p.tab === 'upgrade' ? renderTownHall(state) : p.tab === 'budget' && dd ? renderCatHub(state, dd.cat, p.ui, today) : renderTool(state, p, today);
     }
     else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
@@ -357,7 +362,7 @@ function boot(state, opts) {
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
     if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
-  $('panelBody').addEventListener('input', (e) => { if ((panel?.kind === 'tool' || panel?.kind === 'nest') && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
+  $('panelBody').addEventListener('input', (e) => { if ((panel?.kind === 'tool' || panel?.kind === 'nest' || panel?.kind === 'district') && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
   $('panelBody').addEventListener('change', (e) => {
     if (panel?.kind !== 'tool') return;
     if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
@@ -413,6 +418,7 @@ function boot(state, opts) {
     if (byId[b.type].kind === 'biz') { if (BZ.bizReady(b) >= 1 && panel?.kind !== 'biz') { collectShop(b); return; } return openPanel('biz', { id }); }
     if (b.type === 'nestegg') { BZ.accrue(state, today); syncNest(); return openPanel('nest', { ui: {} }); }
     if (b.type === 'monument') return openPanel('monument');
+    if (byId[b.type].kind === 'district') { districtGrow(b.type); return openPanel('district', { id, ui: {} }); }
     const tool = TL.toolForBuilding(b.type);
     if (tool && TL.toolAvailable(state, tool.id)) {
       if (!TL.toolOpened(state, tool.id)) return openPanel('ribbon', { tool: tool.id, buildingId: id });
@@ -457,6 +463,7 @@ function boot(state, opts) {
       toast('Logged', r.tx.type === 'income' ? 'Money in' : `${catById(r.tx.cat).short} · keep it up, every log levels up your money skills`);
       panel.ui.tx = { ...t, amount: '', note: '' };
       moneyUp(r.levelUp);
+      checkDistrict();
     }
     if (a === 'addfund') {
       const name = $('fName').value.trim();
@@ -489,6 +496,7 @@ function boot(state, opts) {
   function destBuilding(cat) {
     const find = (...types) => { for (const t of types) { const b = state.buildings.find((x) => x.type === t); if (b) return b; } return null; };
     const th = state.buildings.find((x) => x.type === 'townhall');
+    const dist = DI.districtForCat(cat); const own = dist && find(dist.building); if (own) return own;
     const d = catById(cat).dest;
     return ({ home: () => find('house', 'cottage', 'townhouse', 'apartments'), grocery: () => find('grocery'), gasstation: () => find('gasstation'), newsstation: () => find('newsstation'), giving: () => find('church', 'garden', 'studyhall', 'pavilion'), debt: () => find('payoff', 'bank'), fun: () => find('cafe', 'diner', 'park', 'hall'), saved: () => find('savings', 'bank') }[d]?.() || th);
   }
@@ -712,7 +720,9 @@ function boot(state, opts) {
     if (def.kind === 'biz') { const c = BZ.canAddBiz(state); if (!c.ok) { toast('Main Street needs more customers', `Grow to ${c.need} people (you have ${c.have}) to open another shop`); return; } }
     if (def.unique && state.buildings.some((b) => b.type === id)) { toast(`${def.name} is already in town`); return; }
     if (id === 'monument' && !BZ.canBuildMonument(state)) { toast('Add your debts at the Bank first', 'Then every one you pay off adds a tier'); return; }
-    const price = def.kind === 'biz' ? BZ.bizCost(state, id) : def.cost;
+    const dist = DI.districtForBuilding(id);
+    if (def.kind === 'district' && !DI.catActive(state, dist.cat)) { toast(`${def.name} opens with your budget`, `Budget or log spending in ${catById(dist.cat).short} at the Bank`); return; }
+    const price = def.kind === 'biz' ? BZ.bizCost(state, id) : dist && DI.catActive(state, dist.cat) ? 0 : def.cost;
     if (state.coins < price) { toast(`${price - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
     startPlacement({
       type: id,
@@ -720,6 +730,7 @@ function boot(state, opts) {
         spend(state, price);
         if (def.kind === 'biz') { rec.bizAt = Date.now(); later(3400, () => toast(`${def.name} is open for business!`, `It earns ${def.income} coins a day. Tap it to collect.`)); }
         if (id === 'nestegg') { BZ.accrue(state, today); rec.level = BZ.nestLevel(state); later(3400, () => openBuilding(rec.id)); }
+        if (def.kind === 'district') { rec.level = DI.districtLevel(state, dist.cat, today); rec.story = `home of the ${catById(dist.cat).short.toLowerCase()} budget`; later(3400, () => toast(`${def.name} is open`, `Tap it to see your ${catById(dist.cat).short.toLowerCase()} budget. Payday trucks deliver here.`)); }
         if (id === 'monument') { rec.level = BZ.monumentLevel(state); rec.story = 'built for the road to debt freedom'; later(3400, () => openPanel('monument')); }
         if (def.kind === 'section') rec.story = 'a new list for your family';
         flyRewards(screenOf(bld.views.get(rec.id).top), { pop: def.pop || 0 });
@@ -958,6 +969,7 @@ function boot(state, opts) {
     if (d.biz) { const r = state.buildings.find((x) => x.id === d.biz); if (r) collectShop(r, b); renderPanel(); return; }
     if (d.bizall) { const n = BZ.collectAll(state); if (n) { flyRewards(centerOf(b), { coins: n }); sound.coin(); toast(`+${n} coins from Main Street`); for (const x of state.buildings) if (byId[x.type]?.kind === 'biz') bld.bounce(x.id); } persist(); hud(); renderPanel(); return; }
     if (d.nest) { nestAction(d.nest, b); return; }
+    if (d.dist) { distAction(d.dist, b); return; }
     if (d.bankgo) { openPanel('bank', { tab: d.bankgo, ui: {} }); return; }
     if (d.ta) { toolAction(d.ta, d.id, b); return; }
     if (d.reviewopen) { openPanel('review', { prev: snapshot() }); return; }
@@ -973,7 +985,7 @@ function boot(state, opts) {
     if (d.txcat) { readTx().cat = d.txcat; renderPanel(); return; }
     if (d.bal) { const [kind, id] = d.bal.split(':'); const v = $('panelBody').querySelector(`[data-balin="${d.bal}"]`).value; const r = updateBalance(state, kind, id, v); if (r) { flyRewards(centerOf(b), r.reward); sound.coin(); toast('Balance updated', 'Keeping it current is a money skill too'); moneyUp(r.levelUp); afterProgress(); renderPanel(); } return; }
     if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); monumentUpdate(true); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
-    if (d.bs) { readBudgetSetup(); const dr = panel.draft; if (d.bs === 'back') { dr.step = Math.max(0, dr.step - 1); renderPanel(); return; } if (dr.step === 1 && !dr.incomes.some((i) => toMoney(i.amount) > 0)) { toast('Add at least one paycheck amount'); return; } if (dr.step < 3) { dr.step++; renderPanel(); $('panelBody').scrollTop = 0; return; } const r = setupBudget(state, { incomes: dr.incomes, expenses: dr.expenses }, today); if (r.first) { flyRewards(centerOf(b), { coins: 40, xp: 25 }); sound.chime(); toast('Your budget is set!', 'Log transactions at the Bank to level up your money skills'); } else toast('Budget updated'); moneyUp(r.levelUp); afterProgress(); openPanel('bank', { tab: 'budget', ui: {} }); return; }
+    if (d.bs) { readBudgetSetup(); const dr = panel.draft; if (d.bs === 'back') { dr.step = Math.max(0, dr.step - 1); renderPanel(); return; } if (dr.step === 1 && !dr.incomes.some((i) => toMoney(i.amount) > 0)) { toast('Add at least one paycheck amount'); return; } if (dr.step < 3) { dr.step++; renderPanel(); $('panelBody').scrollTop = 0; return; } const r = setupBudget(state, { incomes: dr.incomes, expenses: dr.expenses }, today); later(1200, checkDistrict); if (r.first) { flyRewards(centerOf(b), { coins: 40, xp: 25 }); sound.chime(); toast('Your budget is set!', 'Log transactions at the Bank to level up your money skills'); } else toast('Budget updated'); moneyUp(r.levelUp); afterProgress(); openPanel('bank', { tab: 'budget', ui: {} }); return; }
     if (d.incadd) { readBudgetSetup(); panel.draft.incomes.push({ name: '', amount: '', freq: 'biweekly', next: nextFridayKey() }); renderPanel(); return; }
     if (d.incdel) { readBudgetSetup(); panel.draft.incomes.splice(+d.incdel, 1); renderPanel(); return; }
     if (d.pay2 === 'show') { paydayShow(); return; }
@@ -1089,6 +1101,33 @@ function boot(state, opts) {
       later(900, () => toast(s.free ? 'DEBT FREE! The crown is on the monument' : 'A new tier on the Debt Freedom Monument', s.free ? 'What a day. Go celebrate together.' : `${s.paid} of ${s.total} debts paid off`));
       if (s.free) { const v = bld.views.get(state.buildings.find((x) => x.type === 'monument').id); later(3600, () => { fx.fireworks(v?.top || controls.target, 8, () => sound.firework()); fx.confetti(v?.top || controls.target); }); }
     } else if (paidOff && !state.buildings.some((x) => x.type === 'monument')) later(900, () => toast('Build the Debt Freedom Monument', 'Build → Financial. Every debt you pay off adds a tier.'));
+  }
+
+  /* ---------- Budget District ---------- */
+  function districtGrow(type) { const dd = DI.districtForBuilding(type); if (dd && byId[type].kind === 'district') grow(type, DI.districtLevel(state, dd.cat, today)); }
+  /* Called after anything that can make a category active (budget setup, logging spending). */
+  function checkDistrict() {
+    if (!state.buildings.some((x) => x.type === 'bank')) return;
+    const fresh = DI.newlyActive(state).filter((d) => !state.buildings.some((x) => x.type === d.building));
+    if (!fresh.length) return;
+    (state.district.pending = state.district.pending || []).push(...fresh.map((d) => d.cat));
+    persist();
+    later(900, () => { if (!panel && !mode) showDistrict(); else toast(fresh.length === 1 ? `New: ${byId[fresh[0].building].name}` : `${fresh.length} new budget buildings`, 'Close this to place it, free'); });
+  }
+  function showDistrict() { const pend = state.district?.pending || []; if (!pend.length) return false; state.district.pending = []; persist(); sound.chime(); openPanel('districtNew', { entries: pend }); return true; }
+  function distAction(code, el) {
+    const [a, cat] = code.split(':');
+    const ui = panel.ui || (panel.ui = {});
+    if (a === 'log') {
+      const r = addTransaction(state, { type: 'expense', cat, amount: ui.camt, note: ui.cnote, date: today }, today);
+      if (!r) { toast('Enter an amount first'); return; }
+      if (r.reward) flyRewards(centerOf(el), r.reward);
+      sound.coin(); toast('Logged', `${catById(cat).short} · every log builds the money habit`);
+      ui.camt = ''; ui.cnote = '';
+      moneyUp(r.levelUp);
+    }
+    if (a === 'plan') { const v = DI.setCatBudget(state, cat, ui.cplan); toast(v ? 'Plan saved' : 'Plan cleared', v ? `${catById(cat).short}: $${v} a month` : ''); ui.cplan = undefined; checkDistrict(); }
+    persist(); hud(); afterProgress(); renderPanel();
   }
 
   /* ---------- Building tools ---------- */
@@ -1390,7 +1429,8 @@ function boot(state, opts) {
   stage.resetView();
   noteStreak(state, today);
   if (state.invest) BZ.accrue(state, today);
-  later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); });
+  later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
+  later(4200, () => { if (state.tour.done) checkDistrict(); });
   if (state.pendingPhotoDeletes?.length) { for (const id of state.pendingPhotoDeletes) deletePhoto(id); state.pendingPhotoDeletes = []; }
   hud();
   if (!REDUCED) {

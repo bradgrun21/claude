@@ -59,6 +59,12 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   Theater) earn coins on their own every day; the register holds 3 days and a tap collects it. Every 15 residents
   support one more shop, so homes and shops grow together. A second copy of a shop costs 50% more. Shops pay coins
   only, never XP.
+- **Budget District.** Every budget category has a building (Housing Office, Power & Water Works, Grocery Store, Gas
+  Station, Insurance Office, News Station, Giving Pantry, Fun Fair, General Store). It unlocks free the first time the
+  family budgets in that category or logs spending there, with a "New in town!" celebration. That category's payday
+  truck delivers to it, and tapping it shows planned vs spent this month, a quick "log a purchase", recent spending
+  and the monthly plan. It grows (pennants, then a gold star) after 1 and 3 months on plan (3+ purchases logged,
+  spending within the plan). Grocery, Gas and News stations become free once their category is in the budget.
 - **Nest Egg Tower** (Financial, level 4) teaches compound growth with coins: invest coins, they grow 2% a week, growth
   earns growth, and coins invested in the last 4 weeks cost a 10% fee to take out early. The tower grows with the
   balance, with a projection table and a rotating lesson (Rule of 72, time beats timing…).
@@ -149,6 +155,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Logbooks (repair, vet, gifts) | `src/systems/logbook.js`, `src/ui/logbook.js` |
 | Earned decorations (steady use) | `src/systems/earned.js` |
 | Businesses, Nest Egg, Debt Freedom Monument | `src/systems/business.js`, `src/ui/business.js` |
+| Budget District (a building per budget category) | `src/systems/district.js`, `src/ui/district.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
 | Daily challenges, milestones, quick wins | `src/systems/challenges.js` |
 | Saved state (one object, localStorage) | `src/data/state.js` |
