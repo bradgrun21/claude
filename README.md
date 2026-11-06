@@ -55,6 +55,17 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   Market Stall, Classic Car, Big Red Mailbox, Playground, Bandstand, Dog Park…), keep a 7- or 30-day best streak
   (Lantern Row, Golden Fountain), or check things off on 30 or 100 different days (Rose Arch, Town Clock Tower).
   Progress shows in Profile → Earned and in Build → Decor & roads.
+- **Main Street businesses** (Bakery, Flower Shop, Ice Cream Parlor, Barber, Bookstore, Pizza Place, Toy Store, Movie
+  Theater) earn coins on their own every day; the register holds 3 days and a tap collects it. Every 15 residents
+  support one more shop, so homes and shops grow together. A second copy of a shop costs 50% more. Shops pay coins
+  only, never XP.
+- **Nest Egg Tower** (Financial, level 4) teaches compound growth with coins: invest coins, they grow 2% a week, growth
+  earns growth, and coins invested in the last 4 weeks cost a 10% fee to take out early. The tower grows with the
+  balance, with a projection table and a rotating lesson (Rule of 72, time beats timing…).
+- **Debt Freedom Monument** (Financial, once a debt is listed): a new tier for every debt paid off, a crown and
+  fireworks when the last one is gone, and a plaque of debts paid (names and dates, never amounts).
+- **More filler:** Bungalow and Farmhouse homes (all 1-tile homes are drawn a bit larger), plus Flower Planter, Hedge
+  Row, Street Lamp, Bunting, Picnic Table, Birdbath and Windmill decorations.
 - **A living town.** Ducks on the ponds, boats on the river, flowers along the roads that spread with the streak,
   windows that glow brighter with it, real-clock day and night (or pick Day/Night in the menu), and neighbors you can
   tap who notice the family's real week.
@@ -137,6 +148,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Building tools (meals, care, subscriptions, cards, dates, kids, meeting) | `src/systems/tools.js`, `src/ui/tools.js` |
 | Logbooks (repair, vet, gifts) | `src/systems/logbook.js`, `src/ui/logbook.js` |
 | Earned decorations (steady use) | `src/systems/earned.js` |
+| Businesses, Nest Egg, Debt Freedom Monument | `src/systems/business.js`, `src/ui/business.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
 | Daily challenges, milestones, quick wins | `src/systems/challenges.js` |
 | Saved state (one object, localStorage) | `src/data/state.js` |

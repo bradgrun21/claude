@@ -762,3 +762,13 @@ select.freq.meal { flex: 1; min-width: 0; }
 .earn-big { display: block; width: 140px; height: 120px; }
 .earn-big img { width: 100%; height: 100%; object-fit: contain; }
 .lvlup > * { max-width: 100%; } .lvlup p { overflow-wrap: anywhere; }
+
+/* ---------- Main Street, Nest Egg, Monument ---------- */
+#panelBody { overflow-x: hidden; }
+.lesson { display: flex; flex-direction: column; gap: 2px; margin: 8px 0; padding: 8px 12px; border-radius: 14px; background: #FFF8E6; border: 2px solid #F2D58A; font-size: 13px; font-weight: 700; color: #6E4520; }
+.lesson b { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--ink); }
+.proj { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.proj span { display: flex; flex-direction: column; padding: 6px 8px; background: #fff; border: 2px solid var(--line); border-radius: 12px; }
+.proj small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); }
+.proj b { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: var(--green-deep); }
+.sub-sum > span { min-width: 0; }

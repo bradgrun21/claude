@@ -36,6 +36,8 @@ import * as TL from './systems/tools.js';
 import { renderTool, renderRibbon, TOOL_TABS } from './ui/tools.js';
 import * as LB from './systems/logbook.js';
 import { markUse, checkEarned, noteStreak, isEarned, earnedById } from './systems/earned.js';
+import * as BZ from './systems/business.js';
+import { renderBiz, renderNest, renderMonument } from './ui/business.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
@@ -145,6 +147,7 @@ function boot(state, opts) {
         const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
         if (tb && !(def.kind === 'section' && listFor(state, b.id) && dueCount(listFor(state, b.id), today))) { want.set(b.id, { sig: `t${tb[1]}`, html: bubbleHtml(`<span class="bub-emoji">${tb[0]}</span>`, tb[1], b.id, def.section || null) }); continue; }
       }
+      if (def.kind === 'biz') { const n = BZ.bizReady(b); if (n >= Math.max(1, def.income / 2)) want.set(b.id, { sig: BZ.bizFull(b) ? 'bizfull' : 'biz', html: bubbleHtml(svgI('coin', '#C98E25', 20, 2.6), BZ.bizFull(b) ? 'Register full' : `+${n}`, b.id, null) }); continue; }
       if (def.kind === 'section') {
         const list = listFor(state, b.id);
         if (!list) want.set(b.id, { sig: 'add', html: bubbleHtml(svgI('plus', SECTIONS[def.section].color, 20, 3), 'Add a list', b.id, def.section) });
@@ -243,7 +246,7 @@ function boot(state, opts) {
     if (kind === 'profile' && !panel.tab) panel.tab = 'info';
     renderPanel();
     $('panel').hidden = false;
-    $('panelBody').scrollTop = 0;
+    $('panelBody').scrollTop = 0; $('panelBody').scrollLeft = 0;
     emit('panel:' + kind);
   }
   function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); }
@@ -264,6 +267,9 @@ function boot(state, opts) {
     else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
     else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
+    else if (p.kind === 'biz') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBiz(state, b) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
+    else if (p.kind === 'nest') { title = '🥚 Nest Egg Tower'; body = renderNest(state, p.ui, today); }
+    else if (p.kind === 'monument') { title = 'Debt Freedom Monument'; body = renderMonument(state); }
     else if (p.kind === 'earned') { const e = earnedById[p.id]; title = 'Earned!'; body = renderEarnedWin(e); }
     else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : ''); }
     else if (p.kind === 'tool') {
@@ -351,7 +357,7 @@ function boot(state, opts) {
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
     if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
-  $('panelBody').addEventListener('input', (e) => { if (panel?.kind === 'tool' && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
+  $('panelBody').addEventListener('input', (e) => { if ((panel?.kind === 'tool' || panel?.kind === 'nest') && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
   $('panelBody').addEventListener('change', (e) => {
     if (panel?.kind !== 'tool') return;
     if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
@@ -404,6 +410,9 @@ function boot(state, opts) {
     if (b.type === 'savings') return openPanel('bank', { tab: 'savings', ui: {} });
     if (b.type === 'payoff') return openPanel('bank', { tab: 'debts', ui: {} });
     if (b.type === 'station' && (payday || paydayDue(state.budget, today))) return startPayday();
+    if (byId[b.type].kind === 'biz') { if (BZ.bizReady(b) >= 1 && panel?.kind !== 'biz') { collectShop(b); return; } return openPanel('biz', { id }); }
+    if (b.type === 'nestegg') { BZ.accrue(state, today); syncNest(); return openPanel('nest', { ui: {} }); }
+    if (b.type === 'monument') return openPanel('monument');
     const tool = TL.toolForBuilding(b.type);
     if (tool && TL.toolAvailable(state, tool.id)) {
       if (!TL.toolOpened(state, tool.id)) return openPanel('ribbon', { tool: tool.id, buildingId: id });
@@ -459,6 +468,8 @@ function boot(state, opts) {
       const name = $('dName').value.trim();
       if (!name || !(toMoney($('dBal').value) > 0)) { toast('Add a name and balance'); return; }
       moneyUp(addDebt(state, { name, balance: $('dBal').value, min: $('dMin').value }).levelUp);
+      if (state.budget.debts.length === 1 && !state.buildings.some((x) => x.type === 'monument')) later(1200, () => toast('New: Debt Freedom Monument', 'Build → Financial. It grows a tier with every debt you pay off.'));
+      monumentUpdate(false);
     }
     if (a === 'calc') panel.ui.extra = $('dExtra').value;
     afterProgress(); renderPanel();
@@ -698,11 +709,18 @@ function boot(state, opts) {
     if (def.money && state.budget.level < def.money) { toast(`${def.name} unlocks at money level ${def.money}`, 'Log transactions and update balances at the Bank'); return; }
     if (def.needsBank && !state.buildings.some((b) => b.type === 'bank')) { toast('Build the Bank first', 'Set a Financial goal to open it'); return; }
     if (!open) { toast(`Open ${SECTIONS[def.section].name} first`, `Set a goal at the ${mainBuildingFor(def.section, state.spiritualStyle || 'church').name}`); return; }
-    if (state.coins < def.cost) { toast(`${def.cost - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
+    if (def.kind === 'biz') { const c = BZ.canAddBiz(state); if (!c.ok) { toast('Main Street needs more customers', `Grow to ${c.need} people (you have ${c.have}) to open another shop`); return; } }
+    if (def.unique && state.buildings.some((b) => b.type === id)) { toast(`${def.name} is already in town`); return; }
+    if (id === 'monument' && !BZ.canBuildMonument(state)) { toast('Add your debts at the Bank first', 'Then every one you pay off adds a tier'); return; }
+    const price = def.kind === 'biz' ? BZ.bizCost(state, id) : def.cost;
+    if (state.coins < price) { toast(`${price - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
     startPlacement({
       type: id,
       onPlace: (rec) => {
-        spend(state, def.cost);
+        spend(state, price);
+        if (def.kind === 'biz') { rec.bizAt = Date.now(); later(3400, () => toast(`${def.name} is open for business!`, `It earns ${def.income} coins a day. Tap it to collect.`)); }
+        if (id === 'nestegg') { BZ.accrue(state, today); rec.level = BZ.nestLevel(state); later(3400, () => openBuilding(rec.id)); }
+        if (id === 'monument') { rec.level = BZ.monumentLevel(state); rec.story = 'built for the road to debt freedom'; later(3400, () => openPanel('monument')); }
         if (def.kind === 'section') rec.story = 'a new list for your family';
         flyRewards(screenOf(bld.views.get(rec.id).top), { pop: def.pop || 0 });
         if (def.kind === 'home') { win('home'); toast(`${def.name} built`, `+${def.pop} people moved in`); emit('home'); }
@@ -937,6 +955,10 @@ function boot(state, opts) {
     if (d.idea) { addIdea(d.idea, b); return; }
     if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
     if (d.ribbon) { cutRibbon(d.ribbon, b); return; }
+    if (d.biz) { const r = state.buildings.find((x) => x.id === d.biz); if (r) collectShop(r, b); renderPanel(); return; }
+    if (d.bizall) { const n = BZ.collectAll(state); if (n) { flyRewards(centerOf(b), { coins: n }); sound.coin(); toast(`+${n} coins from Main Street`); for (const x of state.buildings) if (byId[x.type]?.kind === 'biz') bld.bounce(x.id); } persist(); hud(); renderPanel(); return; }
+    if (d.nest) { nestAction(d.nest, b); return; }
+    if (d.bankgo) { openPanel('bank', { tab: d.bankgo, ui: {} }); return; }
     if (d.ta) { toolAction(d.ta, d.id, b); return; }
     if (d.reviewopen) { openPanel('review', { prev: snapshot() }); return; }
     if (d.review) { const r = reviewWeek(state, today); if (r) { flyRewards(centerOf(b), r.reward); sound.chime(); toast('Week reviewed', 'See you next week'); afterProgress(); renderPanel(); } return; }
@@ -950,7 +972,7 @@ function boot(state, opts) {
     if (d.txtype) { readTx().type = d.txtype; renderPanel(); return; }
     if (d.txcat) { readTx().cat = d.txcat; renderPanel(); return; }
     if (d.bal) { const [kind, id] = d.bal.split(':'); const v = $('panelBody').querySelector(`[data-balin="${d.bal}"]`).value; const r = updateBalance(state, kind, id, v); if (r) { flyRewards(centerOf(b), r.reward); sound.coin(); toast('Balance updated', 'Keeping it current is a money skill too'); moneyUp(r.levelUp); afterProgress(); renderPanel(); } return; }
-    if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
+    if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); monumentUpdate(true); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
     if (d.bs) { readBudgetSetup(); const dr = panel.draft; if (d.bs === 'back') { dr.step = Math.max(0, dr.step - 1); renderPanel(); return; } if (dr.step === 1 && !dr.incomes.some((i) => toMoney(i.amount) > 0)) { toast('Add at least one paycheck amount'); return; } if (dr.step < 3) { dr.step++; renderPanel(); $('panelBody').scrollTop = 0; return; } const r = setupBudget(state, { incomes: dr.incomes, expenses: dr.expenses }, today); if (r.first) { flyRewards(centerOf(b), { coins: 40, xp: 25 }); sound.chime(); toast('Your budget is set!', 'Log transactions at the Bank to level up your money skills'); } else toast('Budget updated'); moneyUp(r.levelUp); afterProgress(); openPanel('bank', { tab: 'budget', ui: {} }); return; }
     if (d.incadd) { readBudgetSetup(); panel.draft.incomes.push({ name: '', amount: '', freq: 'biweekly', next: nextFridayKey() }); renderPanel(); return; }
     if (d.incdel) { readBudgetSetup(); panel.draft.incomes.splice(+d.incdel, 1); renderPanel(); return; }
@@ -1022,6 +1044,53 @@ function boot(state, opts) {
     emit('task');
     afterProgress(); renderPanel();
   }
+  /* ---------- Main Street, Nest Egg, Monument ---------- */
+  function collectShop(rec, el) {
+    const n = BZ.collectBiz(state, rec);
+    if (!n) return;
+    const v = bld.views.get(rec.id);
+    flyRewards(el ? centerOf(el) : v ? screenOf(v.top) : { x: innerWidth / 2, y: innerHeight / 2 }, { coins: n });
+    if (v) fx.coinBurst(v.top.clone().add(new THREE.Vector3(0, -0.2, 0)));
+    bld.bounce(rec.id); sound.coin();
+    toast(`+${n} coins from the ${byId[rec.type].name}`, `${BZ.bizCount(state)} ${BZ.bizCount(state) === 1 ? 'shop earns' : 'shops earn'} ${BZ.dailyBizIncome(state)} a day`);
+    persist(); hud();
+  }
+  /* The tower and the monument grow (with the construction animation) when their level changes. */
+  function grow(type, level) {
+    const rec = state.buildings.find((x) => x.type === type);
+    if (!rec || rec.level === level) return false;
+    rec.level = level;
+    living.construct(rec, () => { syncWorld(); persist(); });
+    return true;
+  }
+  const syncNest = () => grow('nestegg', BZ.nestLevel(state));
+  function nestAction(a, el) {
+    const ui = panel.ui;
+    if (a.startsWith('fill:')) { ui.iamt = a.slice(5); renderPanel(); return; }
+    if (a === 'invest') {
+      const r = BZ.invest(state, ui.iamt, today);
+      if (!r) { toast(+ui.iamt > state.coins ? 'Not enough coins' : 'Enter how many coins'); return; }
+      sound.coin(); toast(`${r.amount} coins invested`, 'They grow 2% every week, even when you’re not playing');
+      ui.iamt = ''; if (syncNest()) toast('The Nest Egg Tower is growing!', 'Your investment reached a new level');
+    }
+    if (a === 'quote') { renderPanel(); return; }
+    if (a === 'withdraw') {
+      const r = BZ.withdraw(state, ui.wamt, today);
+      if (!r) { toast('Enter how many coins'); return; }
+      flyRewards(centerOf(el), { coins: r.get }); sound.coin();
+      toast(`Took out ${r.amount} coins`, r.fee ? `${r.fee} coin early-withdrawal fee. Patience pays!` : 'No fee: those coins were in long enough');
+      ui.wamt = ''; syncNest();
+    }
+    persist(); hud(); renderPanel();
+  }
+  function monumentUpdate(paidOff) {
+    const s = BZ.debtStatus(state);
+    if (grow('monument', BZ.monumentLevel(state))) {
+      later(900, () => toast(s.free ? 'DEBT FREE! The crown is on the monument' : 'A new tier on the Debt Freedom Monument', s.free ? 'What a day. Go celebrate together.' : `${s.paid} of ${s.total} debts paid off`));
+      if (s.free) { const v = bld.views.get(state.buildings.find((x) => x.type === 'monument').id); later(3600, () => { fx.fireworks(v?.top || controls.target, 8, () => sound.firework()); fx.confetti(v?.top || controls.target); }); }
+    } else if (paidOff && !state.buildings.some((x) => x.type === 'monument')) later(900, () => toast('Build the Debt Freedom Monument', 'Build → Financial. Every debt you pay off adds a tier.'));
+  }
+
   /* ---------- Building tools ---------- */
   function cutRibbon(id, el) {
     if (!TL.openTool(state, id, today)) return;
@@ -1266,7 +1335,7 @@ function boot(state, opts) {
 
   /* ---------- Layout + daily refresh ---------- */
   addEventListener('resize', () => stage.resize());
-  setInterval(() => { if (dateKey() !== today) { today = dateKey(); state.stats.lastDay = today; hud(); renderPanel(); persist(); } }, 60000);
+  setInterval(() => { if (dateKey() !== today) { today = dateKey(); state.stats.lastDay = today; if (state.invest) { BZ.accrue(state, today); syncNest(); } hud(); renderPanel(); persist(); } refreshBubbles(); }, 60000);
 
   /* ---------- Loop ---------- */
   const clock = new THREE.Clock();
@@ -1320,6 +1389,8 @@ function boot(state, opts) {
   stage.resize();
   stage.resetView();
   noteStreak(state, today);
+  if (state.invest) BZ.accrue(state, today);
+  later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); });
   if (state.pendingPhotoDeletes?.length) { for (const id of state.pendingPhotoDeletes) deletePhoto(id); state.pendingPhotoDeletes = []; }
   hud();
   if (!REDUCED) {

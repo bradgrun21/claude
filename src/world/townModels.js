@@ -288,6 +288,53 @@ function giftshop() {
   for (const [x, z, c, sz] of [[-0.3, 0.36, C.purple, 0.12], [-0.17, 0.38, C.yellow, 0.09], [0.32, 0.36, C.sky, 0.1]]) { g.add(box(sz, sz, sz, c, x, 0.05, z)); g.add(box(sz + 0.01, 0.015, 0.025, C.red, x, 0.05 + sz, z)); }
   return g;
 }
+/* ---------- Main Street businesses ---------- */
+const storefront = (awn, prop) => { const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8')); const s = m.shop(awn); s.scale.setScalar(0.92); s.position.set(0, 0.05, -0.08); g.add(s); if (prop) prop(g); return g; };
+const BIZ = {
+  bakery: () => storefront(C.yellow, (g) => { const loaf = mesh(new THREE.CapsuleGeometry(0.06, 0.14, 4, 8), M('#C98A4A')); loaf.rotation.z = Math.PI / 2; loaf.position.set(0, 0.62, 0.2); g.add(loaf); for (const x of [-0.3, 0.3]) g.add(box(0.12, 0.08, 0.08, C.wood, x, 0.05, 0.4)); }),
+  florist: () => storefront(C.pink, (g) => { for (const x of [-0.28, 0, 0.28]) { g.add(box(0.2, 0.06, 0.1, C.wood, x, 0.05, 0.4)); const f = m.flowers(4, 0.07); f.position.set(x, 0.11, 0.4); g.add(f); } }),
+  icecream: () => storefront(C.sky, (g) => { const cone = mesh(new THREE.ConeGeometry(0.08, 0.22, 10), M('#D9A866')); cone.rotation.x = Math.PI; cone.position.set(0, 0.66, 0.05); g.add(cone); const sc = mesh(new THREE.SphereGeometry(0.09, 12, 10), C.pink); sc.position.set(0, 0.8, 0.05); g.add(sc); const sc2 = mesh(new THREE.SphereGeometry(0.07, 12, 10), M('#FFF4DE')); sc2.position.set(0, 0.9, 0.05); g.add(sc2); }),
+  barber: () => storefront(C.blue, (g) => { for (let k = 0; k < 5; k++) g.add(cyl(0.035, 0.06, [C.red, C.white, C.blue, C.white, C.red][k], 0.38, 0.06 + k * 0.06, 0.32, 10)); const cap = mesh(new THREE.SphereGeometry(0.04, 10, 8), C.white); cap.position.set(0.38, 0.38, 0.32); g.add(cap); }),
+  bookstore: () => storefront(C.green, (g) => { [C.red, C.blue, C.yellow, C.purple].forEach((c, k) => { const b = box(0.2, 0.04, 0.14, c, 0.02 * (k % 2), 0.52 + k * 0.04, 0.02); b.rotation.y = k * 0.2; g.add(b); }); }),
+  pizzeria: () => storefront(C.red, (g) => { const p = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.025, 16), M('#E8B04A')); p.rotation.x = Math.PI / 2; p.position.set(0, 0.68, 0.18); g.add(p); for (let k = 0; k < 5; k++) { const pep = mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.01, 8), C.red); pep.rotation.x = Math.PI / 2; const a = k * 1.3; pep.position.set(Math.cos(a) * 0.07, 0.68 + Math.sin(a) * 0.07, 0.195); g.add(pep); } }),
+  toystore: () => storefront(C.purple, (g) => { const ball = mesh(new THREE.SphereGeometry(0.08, 12, 10), C.red); ball.position.set(-0.2, 0.62, 0); g.add(ball); g.add(box(0.12, 0.12, 0.12, C.yellow, 0.1, 0.52, 0)); g.add(box(0.09, 0.09, 0.09, C.blue, 0.1, 0.64, 0)); }),
+  cinema: () => { const g = new THREE.Group(); g.add(pad(0.96, '#CFC8BA')); g.add(box(0.84, 0.5, 0.6, M('#7A3B5A'), 0, 0.05, -0.12)); g.add(box(0.9, 0.06, 0.66, M('#4A2338'), 0, 0.55, -0.12)); const mq = box(0.7, 0.14, 0.12, C.yellow, 0, 0.36, 0.22); g.add(mq); for (let k = 0; k < 8; k++) { const b = mesh(new THREE.SphereGeometry(0.014, 6, 4), mat.lamp, false, false); b.position.set(-0.32 + k * 0.09, 0.51, 0.285); g.add(b); } g.add(box(0.5, 0.18, 0.02, mat.win, 0, 0.06, 0.18)); return g; }
+};
+
+/* ---------- Money lessons ---------- */
+function nestegg(level = 1) {
+  const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0'));
+  const n = Math.max(1, Math.min(5, level));
+  for (let k = 0; k <= n; k++) { const r = 0.26 - k * 0.025; g.add(cyl(r, 0.14, k % 2 ? C.cream : M('#4FA7A0'), 0, 0.05 + k * 0.14, 0, 14)); g.add(cyl(r + 0.01, 0.015, mat.gold, 0, 0.05 + k * 0.14 + 0.13, 0, 14)); }
+  const egg = mesh(new THREE.SphereGeometry(0.12, 16, 12), mat.gold); egg.scale.y = 1.3; egg.position.y = 0.05 + (n + 1) * 0.14 + 0.13; g.add(egg);
+  const nest = mesh(new THREE.TorusGeometry(0.12, 0.035, 6, 14), C.wood); nest.rotation.x = Math.PI / 2; nest.position.y = 0.05 + (n + 1) * 0.14 + 0.03; g.add(nest);
+  return g;
+}
+function monument(level = 1) {
+  const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8'));
+  const tiers = Math.max(0, ((level || 1) % 100) - 1), crown = level >= 100;
+  g.add(box(0.8, 0.06, 0.8, mat.stone, 0, 0.05, 0)); g.add(box(0.66, 0.06, 0.66, mat.stone, 0, 0.11, 0));
+  let y = 0.17;
+  for (let k = 0; k < tiers; k++) { const w = 0.5 - k * 0.045; g.add(box(w, 0.12, w, k % 2 ? M('#F2EBDD') : mat.white, 0, y, 0)); g.add(box(w + 0.02, 0.02, w + 0.02, mat.gold, 0, y + 0.1, 0)); y += 0.12; }
+  if (!tiers) { for (const [x, z] of [[-0.25, -0.25], [0.25, 0.25], [-0.25, 0.25], [0.25, -0.25]]) g.add(box(0.03, 0.3, 0.03, C.wood, x, 0.17, z)); }
+  if (crown) { const ob = mesh(new THREE.ConeGeometry(0.1, 0.36, 4), mat.gold); ob.rotation.y = Math.PI / 4; ob.position.y = y + 0.18; g.add(ob); for (const x of [-0.36, 0.36]) { g.add(box(0.015, 0.5, 0.015, C.white, x, 0.17, 0.36)); const f = mesh(new THREE.ConeGeometry(0.05, 0.14, 3), C.green); f.rotation.z = -Math.PI / 2; f.scale.set(1, 1, 0.3); f.position.set(x + 0.07, 0.6, 0.36); g.add(f); } }
+  g.add(box(0.24, 0.1, 0.02, mat.gold, 0, 0.12, 0.34));
+  return g;
+}
+
+/* ---------- More homes and filler ---------- */
+function bungalow(level = 1, v = 0) { const g = new THREE.Group(); const h = m.house({ roof: ROOFS[(v + 1) % 5], wall: mat.walls[(v + 3) % 5], floors: Math.min(2, level), w: 0.68, d: 0.52 }); g.add(h); g.add(box(0.68, 0.03, 0.16, C.wood, 0, 0, 0.34)); for (const x of [-0.3, 0.3]) g.add(box(0.025, 0.24, 0.025, C.white, x, 0.03, 0.4)); const f = m.flowers(3, 0.06); f.position.set(0.28, 0, 0.46); g.add(f); return g; }
+function farmhouse(level = 1, v = 0) { const g = new THREE.Group(); const h = m.house({ roof: C.dark, wall: M('#F6EEDF'), floors: Math.min(3, level + 1), w: 0.6, d: 0.54, big: true }); h.position.x = -0.08; g.add(h); const silo = cyl(0.09, 0.5, C.red, 0.36, 0, -0.18, 12); g.add(silo); const dome = mesh(new THREE.SphereGeometry(0.09, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat.metal); dome.position.set(0.36, 0.5, -0.18); g.add(dome); g.add(m.fence(0.9, 0.9)); return g; }
+const FILLER = {
+  planter: () => { const g = m.DECO_MODEL.planter(); g.scale.setScalar(1.4); return g; },
+  bunting: () => { const g = m.DECO_MODEL.bunting(); g.scale.setScalar(1.3); return g; },
+  birdbath: () => { const g = m.DECO_MODEL.birdbath(); g.scale.setScalar(1.6); return g; },
+  hedge: () => { const g = new THREE.Group(); const hd = mesh(new RoundedBoxGeometry(0.86, 0.22, 0.26, 2, 0.08), mat.leaf[1]); hd.position.y = 0.11; g.add(hd); return g; },
+  lamppost: () => { const g = m.lamp(); g.scale.setScalar(1.4); return g; },
+  picnic: () => { const g = new THREE.Group(); g.add(box(0.5, 0.03, 0.26, C.wood, 0, 0.2, 0)); for (const x of [-0.2, 0.2]) g.add(box(0.03, 0.2, 0.22, C.dark, x, 0, 0)); for (const z of [-0.24, 0.24]) g.add(box(0.5, 0.03, 0.09, C.wood, 0, 0.11, z)); const cloth = box(0.3, 0.005, 0.26, C.red, 0, 0.23, 0, false); g.add(cloth); return g; },
+  windmill: () => { const g = new THREE.Group(); const t = mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.7, 8), C.white); t.position.y = 0.35; g.add(t); const cap = mesh(new THREE.ConeGeometry(0.15, 0.16, 8), C.red); cap.position.y = 0.78; g.add(cap); const hub = new THREE.Group(); hub.position.set(0, 0.62, 0.14); for (let k = 0; k < 4; k++) { const b = box(0.06, 0.32, 0.01, C.cream, 0, 0, 0); b.position.set(Math.sin(k * Math.PI / 2) * 0.16, Math.cos(k * Math.PI / 2) * 0.16, 0); b.rotation.z = -k * Math.PI / 2; hub.add(b); } hub.rotation.z = 0.4; g.add(hub); g.add(box(0.08, 0.14, 0.02, C.dark, 0, 0, 0.17)); return g; }
+};
+
 /* ---------- Earned decorations ---------- */
 const earnedDecor = {
   lanterns: () => { const g = new THREE.Group(); for (const x of [-0.32, 0.32]) { const l = m.lamp(); l.position.x = x; g.add(l); } const str = box(0.64, 0.008, 0.008, C.dark, 0, 0.42, 0, false); g.add(str); for (let k = 0; k < 5; k++) { const b = mesh(new THREE.SphereGeometry(0.03, 8, 6), mat.lamp, false, false); b.position.set(-0.24 + k * 0.12, 0.38 - Math.sin((k / 4) * Math.PI) * 0.04, 0); g.add(b); } return g; },
@@ -307,7 +354,7 @@ const earnedDecor = {
 
 const BUILDERS = {
   townhall, school, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
-  repairshop, vet, giftshop,
+  repairshop, vet, giftshop, nestegg, monument, bungalow, farmhouse, ...BIZ, ...FILLER,
   cottage, house: familyHouse, townhouse, apartments, ...decor, ...earnedDecor
 };
 
@@ -334,6 +381,7 @@ export function buildModel(type, w = 1, level = 1, variant = 0) {
   const fn = BUILDERS[type] || cottage;
   const inner = fn(level, variant);
   if (byId[type]?.kind === 'section' && level >= 2) grown(inner, level);
+  if (byId[type]?.kind === 'home' && byId[type].size[0] === 1) inner.scale.multiplyScalar(1.15);
   const g = new THREE.Group();
   inner.scale.multiplyScalar(w * 0.98);
   g.add(inner);
