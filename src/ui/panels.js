@@ -1,7 +1,7 @@
 import { SECTIONS, SECTION_KEYS, BUILDINGS, byId, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from '../data/catalog.js';
 import { levelNeed, population, TOWNHALL, taskReward, goalReward, canUpgradeTownHall, unlockedAt } from '../systems/economy.js';
 import { isAvailable, isLive, isPaused, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS, targetLabel } from '../systems/lists.js';
-import { sectionUnlocked, unlockHint, unlockShort, SECTION_ORDER, areaOrderFull, tierOpen, habitsFormed, taskSlots, activeItems, freeSlots, habitProgress, nextTier, HABIT_DAYS } from '../systems/progression.js';
+import { sectionUnlocked, unlockHint, unlockShort, SECTION_ORDER, areaOrderFull, hasLimit, tierOpen, habitsFormed, taskSlots, activeItems, freeSlots, habitProgress, nextTier, HABIT_DAYS } from '../systems/progression.js';
 import { IDEAS } from '../data/ideas.js';
 import { toolForBuilding } from '../systems/tools.js';
 import { EARNED, earnedProgress, isEarned } from '../systems/earned.js';
@@ -108,7 +108,7 @@ function taskRow(state, list, t, day, r) {
 }
 /* Three dots toward a habit (3 different days). Once-tasks don't build habits, so they get none. */
 export const habitDots = (t, compact = false) => (t.kind === 'once' ? '' : habitProgress(t) >= HABIT_DAYS ? `<span class="hdots done" title="Habit formed">${compact ? '✓' : '✓ habit'}</span>` : `<span class="hdots" title="${habitProgress(t)} of ${HABIT_DAYS} days toward a habit">${[0, 1, 2].map((k) => `<i class="${k < habitProgress(t) ? 'on' : ''}"></i>`).join('')}</span>`);
-const slotLine = (state, section) => { const a = activeItems(state, section), n = taskSlots(state, section); return `${Math.min(a, n)} of ${n} task ${n === 1 ? 'slot' : 'slots'} in use`; };
+const slotLine = (state, section) => { if (!hasLimit(section)) return `${activeItems(state, section)} active · no limit on ${SECTIONS[section].name} tasks`; const a = activeItems(state, section), n = taskSlots(state, section); return `${Math.min(a, n)} of ${n} task ${n === 1 ? 'slot' : 'slots'} in use`; };
 export function renderListCard(state, list, day, { compact = false } = {}) {
   const b = state.buildings.find((x) => x.id === list.buildingId);
   const def = byId[b.type];
@@ -154,9 +154,9 @@ export function renderLists(state, day, filterDue) {
     }
     const free = freeSlots(state, s), nx = nextTier(state, s);
     const home = ls.at(-1);
-    const foot = `${free > 0 && home ? `<button type="button" class="kadd" data-addt="${home.id}">+ Add a task <small>${free} ${free === 1 ? 'slot' : 'slots'} open</small></button>` : `<span class="knote">All ${taskSlots(state, s)} slots in use</span>`}
+    const foot = `${free > 0 && home ? `<button type="button" class="kadd" data-addt="${home.id}">+ Add a task ${hasLimit(s) ? `<small>${free} ${free === 1 ? 'slot' : 'slots'} open</small>` : ''}</button>` : `<span class="knote">All ${taskSlots(state, s)} slots in use</span>`}
       ${nx ? `<span class="knote">${nx.open ? `🔓 ${esc(nx.def.name)} is ready to build` : `Form ${nx.need} more ${nx.need === 1 ? 'habit' : 'habits'} to unlock the ${esc(nx.def.name)}`}</span>` : ''}`;
-    return `<div class="kcol" style="--c:${SECTIONS[s].color}"><div class="khead">${svgI(SECTIONS[s].icon, '#fff', 14, 2.6)}<b>${SECTIONS[s].name}</b><small>${Math.min(activeItems(state, s), taskSlots(state, s))}/${taskSlots(state, s)}</small></div>
+    return `<div class="kcol" style="--c:${SECTIONS[s].color}"><div class="khead">${svgI(SECTIONS[s].icon, '#fff', 14, 2.6)}<b>${SECTIONS[s].name}</b><small>${hasLimit(s) ? `${Math.min(activeItems(state, s), taskSlots(state, s))}/${taskSlots(state, s)}` : activeItems(state, s)}</small></div>
       <div class="kbody">${cards.join('') || `<p class="knote">${filterDue ? 'All done here today ✓' : 'Nothing here yet.'}</p>`}</div><div class="kfoot">${foot}</div></div>`;
   });
   return `<div class="kanban">${cols.join('')}</div><p class="foot">Dots show progress toward a habit: check a task off on ${HABIT_DAYS} different days. Each habit unlocks the area’s next building and room for one more task.</p>`;
@@ -196,7 +196,7 @@ export function renderBuilder(d) {
     ${d.kind === 'goal' ? `<label class="q" for="gfGoal">Goal <small>(something bigger, like “Run a 5K” or “Host friends for dinner”)</small></label><input class="field" id="gfGoal" maxlength="60" value="${esc(d.goal)}" autocomplete="off"><label class="q" for="gfTarget">Target date <small>(optional, no pressure)</small></label><input class="field date" type="date" id="gfTarget" value="${esc(d.target || '')}"><label class="q">Steps <small>(optional. Each one can be daily, a few times a week, or once)</small></label>` : '<label class="q">Tasks <small>(simple things, like chores or habits)</small></label>'}
     ${rows}
     ${fam.length ? '<p class="foot">Tap the circle on a row to pick who does it. Everyone is the default.</p>' : ''}
-    ${d.kind !== 'goal' && d.mode !== 'step' && d.maxRows != null ? `<p class="foot">${d.maxRows === 1 ? 'One task for now.' : `Up to ${d.maxRows} tasks right now.`} Check a task off on ${HABIT_DAYS} different days to form a habit, and you’ll unlock the next building and room for another.</p>` : ''}
+    ${d.kind !== 'goal' && d.mode !== 'step' && d.maxRows != null && hasLimit(d.section) ? `<p class="foot">${d.maxRows === 1 ? 'One task for now.' : `Up to ${d.maxRows} tasks right now.`} Check a task off on ${HABIT_DAYS} different days to form a habit, and you’ll unlock the next building and room for another.</p>` : ''}
     <div class="brow">${d.tasks.length < (d.kind === 'goal' || d.mode === 'step' ? 6 : d.maxRows ?? MAX_TASKS) ? `<button type="button" class="btn link" data-addtask="1">+ Add another</button>` : ''}<button type="button" class="btn soft small" data-ideas="${d.section}:draft">💡 Ideas</button></div>
     <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(d.saveLabel)}</button></div>`;
 }

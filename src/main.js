@@ -31,7 +31,7 @@ import { checkPaths, tabLocked, currentTab, pathStatus, PATHS } from './systems/
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter, ensureNature } from './systems/placement.js';
-import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, updateGoal, removeGoal, setListPaused, freqCode, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
+import { createList, completeTask, achieveGoal, isAvailable, addGoal, addTask, updateTask, removeTask, updateGoal, removeGoal, setListPaused, freqCode, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
 import { sectionUnlocked, unlockHint, nextSection, choiceFor, chooseArea, areaOrder, AREA_LINES, SECTION_ORDER, isOpened, freeSlots, taskSlots, tierOpen, noteFormed, nextTier, habitsFormed, HABIT_DAYS } from './systems/progression.js';
 import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
@@ -43,6 +43,7 @@ import * as BZ from './systems/business.js';
 import { renderBiz, renderNest, renderMonument } from './ui/business.js';
 import * as DI from './systems/district.js';
 import { reqFor } from './systems/unlocks.js';
+import { ensureMoneyTasks, findAutoTask } from './systems/autotasks.js';
 import { renderCatHub, renderDistrictWin } from './ui/district.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
@@ -386,7 +387,7 @@ function boot(state, opts) {
     if (o.mode !== 'step') {
       const free = o.mode === 'unlock' ? 1 : freeSlots(state, draft.section);
       if (free < 1) { toast(taskSlots(state, draft.section) === 1 ? `Your ${SECTIONS[draft.section].name} task slot is in use` : `All ${taskSlots(state, draft.section)} ${SECTIONS[draft.section].name} slots are in use`, `Check a task off on ${HABIT_DAYS} different days to open another, or pause or finish one`); return; }
-      draft.maxRows = free;
+      draft.maxRows = Math.min(free, 12);
       if (draft.kind !== 'goal') draft.tasks = draft.tasks.slice(0, free);
     }
     if (o.idea) applyIdeaToDraft(draft, o.idea);
@@ -499,6 +500,7 @@ function boot(state, opts) {
   function moneyUp(lv) {
     if (!lv) return;
     if (lv >= 4) ensureEmergencyFund(state);
+    if (ensureMoneyTasks(state, today).length) later(4200, () => toast('New Financial task', 'Update debt and savings balances, once a week'));
     later(500, () => { sound.chime(); fx.fireworks(controls.target, 4, () => sound.firework()); openPanel('moneyup', { level: lv }); });
   }
   function readTx() {
@@ -519,6 +521,7 @@ function boot(state, opts) {
       sound.coin();
       toast('Logged', r.tx.type === 'income' ? 'Money in' : `${catById(r.tx.cat).short} · keep it up, every log levels up your money skills`);
       panel.ui.tx = { ...t, amount: '', note: '' };
+      autoDone('tx', el);
       moneyUp(r.levelUp);
       checkDistrict();
     }
@@ -660,6 +663,7 @@ function boot(state, opts) {
           rec.story = pending.kind === 'goal' ? `your first ${SECTIONS[sec].name.toLowerCase()} goal: “${pending.goal.trim()}”` : `your first ${SECTIONS[sec].name.toLowerCase()} list`;
           const list = createList(state, rec, '', [], today);
           applyDraft(list, pending);
+          if (d.type === 'bank') ensureMoneyTasks(state, today);
           note(state, today, 'opened', { section: sec });
           win('place', screenOf(bld.views.get(rec.id).top));
           if (d.type === 'bank') { later(3800, () => { toast('Next: set up your budget', 'It’s step 1 of the Money path'); openBudgetSetup(); }); return; }
@@ -1058,8 +1062,8 @@ function boot(state, opts) {
     if (d.bank) { bankAction(d.bank, b); return; }
     if (d.txtype) { readTx().type = d.txtype; renderPanel(); return; }
     if (d.txcat) { readTx().cat = d.txcat; renderPanel(); return; }
-    if (d.bal) { const [kind, id] = d.bal.split(':'); const v = $('panelBody').querySelector(`[data-balin="${d.bal}"]`).value; const r = updateBalance(state, kind, id, v); if (r) { flyRewards(centerOf(b), r.reward); sound.coin(); toast('Balance updated', 'Keeping it current is a money skill too'); moneyUp(r.levelUp); afterProgress(); renderPanel(); } return; }
-    if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); monumentUpdate(true); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
+    if (d.bal) { const [kind, id] = d.bal.split(':'); const v = $('panelBody').querySelector(`[data-balin="${d.bal}"]`).value; const r = updateBalance(state, kind, id, v); if (r) { autoDone('bal', b); flyRewards(centerOf(b), r.reward); sound.coin(); toast('Balance updated', 'Keeping it current is a money skill too'); moneyUp(r.levelUp); afterProgress(); renderPanel(); } return; }
+    if (d.pay && panel?.kind === 'bank') { const v = $('panelBody').querySelector(`[data-payin="${d.pay}"]`).value; const r = payDebt(state, d.pay, v, today); if (!r) { toast('Enter a payment amount'); return; } autoDone('bal', b); sound.coin(); if (r.paidOff) { fx.fireworks(controls.target, 6, () => sound.firework()); toast(`${r.debt.name} is paid off!`, 'Roll that whole payment onto the next debt. That’s the snowball.'); monumentUpdate(true); } else toast('Payment recorded', `${catById('debt').short} · snowball keeps rolling`); moneyUp(r.levelUp); afterProgress(); renderPanel(); return; }
     if (d.bs) { readBudgetSetup(); const dr = panel.draft; if (d.bs === 'back') { dr.step = Math.max(0, dr.step - 1); renderPanel(); return; } if (dr.step === 1 && !dr.incomes.some((i) => toMoney(i.amount) > 0)) { toast('Add at least one paycheck amount'); return; } if (dr.step < 3) { dr.step++; renderPanel(); $('panelBody').scrollTop = 0; return; } const r = setupBudget(state, { incomes: dr.incomes, expenses: dr.expenses }, today); later(1200, checkDistrict); if (r.first) { flyRewards(centerOf(b), { coins: 40, xp: 25 }); sound.chime(); toast('Your budget is set!', 'Log transactions at the Bank to level up your money skills'); } else toast('Budget updated'); moneyUp(r.levelUp); afterProgress(); openPanel('bank', { tab: 'budget', ui: {} }); return; }
     if (d.incadd) { readBudgetSetup(); panel.draft.incomes.push({ name: '', amount: '', freq: 'biweekly', next: nextFridayKey() }); renderPanel(); return; }
     if (d.incdel) { readBudgetSetup(); panel.draft.incomes.splice(+d.incdel, 1); renderPanel(); return; }
@@ -1102,6 +1106,8 @@ function boot(state, opts) {
     if (d.close) { if (panel?.kind === 'goalDone' && panel.prev) back(panel.prev); else closePanel(); return; }
     if (d.menu) { menuAction(d.menu, b); }
   });
+  /* Check off a game-added task when the real thing happens (logging a purchase, updating a balance). */
+  function autoDone(k, el) { const f = findAutoTask(state, k); if (f && isAvailable(f.task, today, f.list)) doTask(f.list.id, f.task.id, el || $('btnMoney')); }
   function doTask(listId, taskId, el) {
     const before = state.lists.find((l) => l.id === listId);
     const lv0 = before ? useLevel(before) : 1;
@@ -1238,6 +1244,7 @@ function boot(state, opts) {
       if (r.reward) flyRewards(centerOf(el), r.reward);
       sound.coin(); toast('Logged', `${catById(cat).short} · every log builds the money habit`);
       ui.camt = ''; ui.cnote = '';
+      autoDone('tx', el);
       moneyUp(r.levelUp);
     }
     if (a === 'plan') { const v = DI.setCatBudget(state, cat, ui.cplan); toast(v ? 'Plan saved' : 'Plan cleared', v ? `${catById(cat).short}: $${v} a month` : ''); ui.cplan = undefined; checkDistrict(); }
@@ -1557,6 +1564,7 @@ function boot(state, opts) {
   stage.resetView();
   noteStreak(state, today);
   noteFormed(state);
+  ensureMoneyTasks(state, today);
   if (state.budget) { const lv = addPoints(state, 0); if (lv && lv >= 4) ensureEmergencyFund(state); }
   checkPaths(state, true);
   if (state.invest?.notice) { const n = state.invest.notice; delete state.invest.notice; persist(); later(5200, () => toast(`${n.toLocaleString('en-US')} coins are back from the Nest Egg`, 'The Nest Egg is a Money master trophy now. Every coin you invested came back.')); }

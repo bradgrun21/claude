@@ -133,14 +133,17 @@ export function habitsFormed(state, section) {
   }
   return Object.values(f).filter((s) => s === section).length;
 }
-export const taskSlots = (state, section) => Math.min(MAX_SLOTS, 1 + habitsFormed(state, section));
+/* To-Do has no task limit (it's everyday chores); the other areas grow one slot per habit. */
+export const NO_LIMIT = new Set(['todo']);
+export const hasLimit = (section) => !NO_LIMIT.has(section);
+export const taskSlots = (state, section) => (hasLimit(section) ? Math.min(MAX_SLOTS, 1 + habitsFormed(state, section)) : Infinity);
 export function activeItems(state, section) {
   let n = 0;
   for (const l of state.lists) {
     if (l.section !== section || l.paused) continue;
     const goals = l.goals || [];
     for (const t of l.tasks) {
-      if (t.goalId || t.paused) continue;
+      if (t.goalId || t.paused || t.auto) continue;
       if (t.kind === 'once' && t.done.length) continue;
       n++;
     }

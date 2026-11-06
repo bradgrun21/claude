@@ -120,3 +120,29 @@ describe('loading an older save', () => {
     expect(sectionUnlocked(load(), 'relational')).toBe(true);
   });
 });
+
+import { ensureMoneyTasks, findAutoTask } from '../src/systems/autotasks.js';
+import { taskSlots, freeSlots, activeItems } from '../src/systems/progression.js';
+describe('To-Do has no limit; Financial gets automatic tasks', () => {
+  it('To-Do has unlimited task slots; other areas still pace by habits', () => {
+    const s = city();
+    const jb = put(s, 'jobboard'); const l = createList(s, jb, '', [], T);
+    for (let k = 0; k < 15; k++) addTask(s, l.id, { title: `Chore ${k}`, kind: 'daily' });
+    expect(freeSlots(s, 'todo')).toBe(Infinity);
+    expect(taskSlots(s, 'physical')).toBe(1);
+  });
+  it('adds Daily upload transactions with the Bank, and the weekly balances task at money level 3, without using slots', () => {
+    const s = city();
+    put(s, 'bank');
+    expect(ensureMoneyTasks(s, T).map((t) => t.title)).toEqual(['Daily upload transactions']);
+    expect(activeItems(s, 'financial')).toBe(0);
+    expect(freeSlots(s, 'financial')).toBe(1);
+    s.budget.level = 3;
+    const added = ensureMoneyTasks(s, T);
+    expect(added.map((t) => [t.title, t.kind, t.per])).toEqual([['Update debt and savings balances', 'weekly', 1]]);
+    expect(ensureMoneyTasks(s, T)).toEqual([]);
+    const f = findAutoTask(s, 'tx');
+    f.list.tasks = f.list.tasks.filter((t) => t.auto !== 'tx');
+    expect(ensureMoneyTasks(s, T)).toEqual([]);
+  });
+});
