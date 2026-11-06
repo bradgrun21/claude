@@ -18,26 +18,18 @@ export function renderBiz(state, rec, now = Date.now()) {
       <p>Earns ${coin(def.income)} a day on its own. The register holds up to ${B.REGISTER_DAYS} days.</p></div></div>
     <div class="req"><span class="ri">${ART.coin}</span><span>In the register: ${ready} of ${cap}</span></div><div class="pbar"><i style="width:${Math.min(100, (ready / cap) * 100).toFixed(0)}%"></i></div>
     <div class="actions">${ready >= 1 ? `<button type="button" class="btn go-btn" data-biz="${rec.id}">Collect ${ready} coins</button>` : '<span class="hint">Nothing to collect yet. Check back later.</span>'}${all.length > 1 && allReady >= 1 ? `<button type="button" class="btn soft" data-bizall="1">Collect from all ${all.length} shops · ${allReady}</button>` : ''}</div>
-    <div class="card2"><b>Main Street</b><p class="hint">${all.length} ${all.length === 1 ? 'shop earns' : 'shops earn'} ${coin(B.dailyBizIncome(state))} a day together. Your ${state.buildings.length ? '' : ''}town supports ${B.bizSlots(state)} ${B.bizSlots(state) === 1 ? 'shop' : 'shops'}: every ${B.RESIDENTS_PER_SHOP} residents bring enough customers for one more.</p></div>
+    <div class="card2"><b>Main Street</b><p class="hint">${all.length} ${all.length === 1 ? 'shop earns' : 'shops earn'} ${coin(B.dailyBizIncome(state))} a day together. New shops open as the town levels up.</p></div>
     <p class="foot">Shops pay coins, not XP. XP still comes only from real life.</p>`;
 }
 
-export function renderNest(state, ui, day) {
-  const inv = B.ensureInvest(state);
-  const bal = Math.floor(inv.bal);
-  const recent = B.recentDeposits(state, day);
-  const q = ui.wamt ? B.withdrawQuote(state, ui.wamt, day) : null;
-  const lessonIx = Math.floor((new Date(day + 'T12:00').getTime() / 86400000)) % B.NEST_LESSONS.length;
-  const [lt, lb] = B.NEST_LESSONS[lessonIx];
-  const rows = [[4, '4 weeks'], [12, '3 months'], [26, '6 months'], [52, '1 year']];
-  return `<div class="sub-sum"><span><b>${bal.toLocaleString('en-US')}</b><small>coins in the Nest Egg</small></span><span class="saved"><b>+${Math.floor(inv.growth).toLocaleString('en-US')}</b><small>earned by growth so far</small></span><span><b>2%</b><small>growth every week</small></span></div>
-    <div class="lesson"><b>📘 ${esc(lt)}</b><span>${esc(lb)}</span></div>
-    ${bal > 0 ? `<div class="h3">If you leave it alone</div><div class="proj">${rows.map(([w, l]) => `<span><small>${l}</small><b>${B.project(inv.bal, w).toLocaleString('en-US')}</b></span>`).join('')}</div>` : '<p class="hint">Put some coins in and watch them grow every week, even on days you don’t play.</p>'}
-    <div class="card2"><b>Invest coins</b><div class="te-row"><input class="field small" data-uf="iamt" inputmode="numeric" value="${v(ui, 'iamt')}" placeholder="How many coins" autocomplete="off">
-      ${[25, 50, 100].filter((n) => n <= state.coins).map((n) => `<button type="button" class="pickchip" data-nest="fill:${n}">${n}</button>`).join('')}<button type="button" class="btn go-btn small" data-nest="invest">Invest</button></div><p class="foot">You have ${state.coins.toLocaleString('en-US')} coins.</p></div>
-    ${bal > 0 ? `<div class="card2"><b>Take coins out</b><div class="te-row"><input class="field small" data-uf="wamt" inputmode="numeric" value="${v(ui, 'wamt')}" placeholder="How many coins" autocomplete="off"><button type="button" class="btn soft small" data-nest="quote">Check</button>${q && q.amount > 0 ? `<button type="button" class="btn go-btn small" data-nest="withdraw">Take out ${q.amount}${q.fee ? ` (get ${q.get})` : ''}</button>` : ''}</div>
-      <p class="foot">${recent ? `${recent.toLocaleString('en-US')} coins went in during the last 4 weeks. Taking those out early costs a 10% fee${q?.fee ? `: ${q.fee} coins this time` : ''}.` : 'No early-withdrawal fee right now: everything has been in for 4 weeks or more.'}</p></div>` : ''}
-    <p class="foot">This is a game lesson with coins, not financial advice. In real life, growth isn’t guaranteed and goes up and down, but time and steady saving help in the same way.</p>`;
+export function renderNest(state) {
+  const back = state.invest?.refunded || 0;
+  return `<div class="gdone"><span class="earn-big">${img('nestegg')}</span><b class="ttl">Money master 🥚</b>
+      <p class="hint">You finished every step of the Money path. The Nest Egg Tower stands for saving for later, for the family you’ll be in 20 years.</p></div>
+    ${back ? `<p class="hint">The coins that used to be invested here (${back.toLocaleString('en-US')}) are back in your coins.</p>` : ''}
+    <div class="h3">Saving for later, in real life</div>
+    ${B.NEST_LESSONS.map(([t, b]) => `<div class="lesson"><b>📘 ${esc(t)}</b><span>${esc(b)}</span></div>`).join('')}
+    <p class="foot">General ideas to talk through together, not financial advice.</p>`;
 }
 
 export function renderMonument(state) {

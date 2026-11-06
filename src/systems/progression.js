@@ -1,51 +1,106 @@
 import { byId, SECTIONS } from '../data/catalog.js';
 
 /*
- * Areas open one at a time, so nobody is handed five lists on day one:
- *   To-Do → Financial (after the Job Board has something on it)
- *         → Relational (after the budget is set up)
- *         → Physical (after the Park has something on it)
- *         → Spiritual (after the Gym has something on it)
- * An area that's already been opened always stays open.
+ * Life areas open one at a time, so nobody is handed five lists on day one:
+ *   To-Do → Financial → the player picks 1 of (Relational, Physical, Spiritual) → picks 1 of the 2 left → the last one.
+ * Every gate is the same simple rule: the area before it "has something on it" (at least one active task or goal).
+ *   - Financial opens when To-Do has something on it.
+ *   - When Financial has something on it, the player chooses their next area from the three.
+ *   - When that area has something on it, they choose from the two left.
+ *   - When the second chosen area has something on it, the last one opens on its own.
+ * The chosen order is saved as state.areaOrder and used by the Store and the Tasks board.
+ * An area that's already open always stays open.
  */
-export const SECTION_ORDER = ['todo', 'financial', 'relational', 'physical', 'spiritual'];
+export const FIXED_AREAS = ['todo', 'financial'];
+export const CHOICE_AREAS = ['relational', 'physical', 'spiritual'];
+export const SECTION_ORDER = [...FIXED_AREAS, ...CHOICE_AREAS];
+export const AREA_LINES = {
+  relational: 'Family, friends, date nights and staying close.',
+  physical: 'Movement, sleep, food and feeling good.',
+  spiritual: 'Faith, gratitude, prayer and quiet time.'
+};
 
 const mainBuilt = (state, section) => state.buildings.find((b) => byId[b.type]?.section === section && byId[b.type].tier === 1);
 const hasItems = (state, section) => state.lists.some((l) => l.section === section && (l.tasks.length || (l.goals || []).length));
 export const isOpened = (state, section) => !!mainBuilt(state, section) || state.lists.some((l) => l.section === section);
+/* "Has something on it": at least one active task or goal. */
+export const hasSomething = (state, section) => activeItems(state, section) > 0;
 
-/* Is the previous area "built and laid out"? */
-function laidOut(state, section) {
-  if (!mainBuilt(state, section)) return false;
-  if (section === 'financial') return !!state.budget?.setup;
-  return hasItems(state, section);
+/* When an area first opened (its first building or list), for ordering older saves. */
+function openedOn(state, section) {
+  const days = [
+    ...state.buildings.filter((b) => byId[b.type]?.section === section).map((b) => b.builtOn),
+    ...state.lists.filter((l) => l.section === section).map((l) => l.createdOn)
+  ].filter(Boolean).sort();
+  return days[0] || '9999';
+}
+/* Older saves: keep every area that was open (or unlocked) under the old rules, in the order it opened. */
+function migrateAreaOrder(state) {
+  const laidOutOld = (s) => !!mainBuilt(state, s) && (s === 'financial' ? !!state.budget?.setup : hasItems(state, s));
+  const keep = new Set(CHOICE_AREAS.filter((s) => isOpened(state, s)));
+  if (laidOutOld('financial')) keep.add('relational');
+  if (laidOutOld('relational')) keep.add('physical');
+  if (laidOutOld('physical')) keep.add('spiritual');
+  const ordered = [...keep].sort((a, b) => openedOn(state, a).localeCompare(openedOn(state, b)) || CHOICE_AREAS.indexOf(a) - CHOICE_AREAS.indexOf(b));
+  return [...FIXED_AREAS, ...ordered];
+}
+/* The saved order (created for older saves; any open area missing from it is added). */
+export function areaOrder(state) {
+  if (!Array.isArray(state.areaOrder)) state.areaOrder = migrateAreaOrder(state);
+  const o = state.areaOrder;
+  for (const s of FIXED_AREAS) if (!o.includes(s)) o.splice(FIXED_AREAS.indexOf(s), 0, s);
+  const missing = CHOICE_AREAS.filter((s) => !o.includes(s) && isOpened(state, s)).sort((a, b) => openedOn(state, a).localeCompare(openedOn(state, b)));
+  o.push(...missing);
+  return o;
+}
+/* Display order: the chosen areas first, then the ones not chosen yet. */
+export const areaOrderFull = (state) => { const o = areaOrder(state); return [...o, ...SECTION_ORDER.filter((s) => !o.includes(s))]; };
+
+/*
+ * What happens next: null, { options: [...] } (the player picks), or { auto: area } (the last one opens on its own).
+ */
+export function choiceFor(state) {
+  const o = areaOrder(state);
+  const remaining = CHOICE_AREAS.filter((s) => !o.includes(s));
+  if (!remaining.length) return null;
+  const last = o[o.length - 1];
+  if (!isOpened(state, last) || !hasSomething(state, last)) return null;
+  return remaining.length === 1 ? { auto: remaining[0], after: last } : { options: remaining, after: last };
+}
+export function chooseArea(state, section) {
+  const c = choiceFor(state);
+  if (!c || !(c.options?.includes(section) || c.auto === section)) return false;
+  state.areaOrder.push(section);
+  return true;
 }
 
 export function sectionUnlocked(state, section) {
-  const i = SECTION_ORDER.indexOf(section);
-  if (i <= 0 || isOpened(state, section)) return true;
-  return laidOut(state, SECTION_ORDER[i - 1]);
+  if (section === 'todo' || isOpened(state, section)) return true;
+  if (section === 'financial') return hasSomething(state, 'todo');
+  return areaOrder(state).includes(section);
 }
 
+/* One plain reason an area is locked (or that it's ready to choose). */
 export function unlockHint(state, section) {
-  const i = SECTION_ORDER.indexOf(section);
-  if (i <= 0) return '';
-  const prev = SECTION_ORDER[i - 1];
-  if (prev === 'financial') return mainBuilt(state, 'financial') ? 'Opens when your budget is set up' : 'Opens after the Bank and budget';
-  return `Opens after ${SECTIONS[prev].name}`;
+  if (sectionUnlocked(state, section)) return '';
+  if (section === 'financial') return 'Opens when To-Do has something on it';
+  const c = choiceFor(state);
+  if (c?.options?.includes(section) || c?.auto === section) return 'Ready to choose: you pick what opens next';
+  const last = areaOrder(state).at(-1);
+  return `Choose this after ${SECTIONS[last].name} has something on it.`;
 }
-
-/* Short label for a locked tile: "after Budget", "after To-Do". */
+/* Short label for a locked tile. */
 export function unlockShort(state, section) {
-  const i = SECTION_ORDER.indexOf(section);
-  if (i <= 0) return '';
-  const prev = SECTION_ORDER[i - 1];
-  return `after ${prev === 'financial' ? 'Budget' : SECTIONS[prev].name}`;
+  if (sectionUnlocked(state, section)) return '';
+  if (section === 'financial') return 'After To-Do';
+  const c = choiceFor(state);
+  if (c?.options?.includes(section) || c?.auto === section) return 'Choose next';
+  return `After ${SECTIONS[areaOrder(state).at(-1)].name}`;
 }
 
-/* The next area waiting to be opened, for nudges and the tour. */
+/* The next area that's unlocked but not opened yet (for nudges), or null. */
 export function nextSection(state) {
-  return SECTION_ORDER.find((s) => !isOpened(state, s)) || null;
+  return areaOrderFull(state).find((s) => sectionUnlocked(state, s) && !isOpened(state, s)) || null;
 }
 
 /*

@@ -1,5 +1,4 @@
 import { grant } from './economy.js';
-import { population } from './economy.js';
 import { daysBetween } from './time.js';
 import { byId } from '../data/catalog.js';
 
@@ -7,27 +6,21 @@ import { byId } from '../data/catalog.js';
  * Main Street businesses, the Nest Egg and the Debt Freedom Monument.
  *
  * Businesses earn coins on their own, a steady amount per day. Their register holds up to 3 days, and tapping the
- * shop collects it. People are the customers: every 15 residents support one more shop, so homes and shops grow
- * together. Shops pay coins only, never XP (XP still comes only from real life).
+ * shop collects it. Shops open by town level (one kind of gate); a second copy of the same shop costs more.
+ * Shops pay coins only, never XP (XP still comes only from real life).
  *
- * Nest Egg Tower teaches compound growth with coins: invest coins, they grow 2% a week, and growth earns growth.
- * Taking out coins invested in the last 4 weeks costs a 10% early-withdrawal fee, like a real retirement account.
+ * Nest Egg Tower: a trophy for reaching Money master, with a few real-life lessons about saving for later.
+ * (It used to hold invested coins that grew each week. That's gone: older saves get every coin back.)
  *
  * Debt Freedom Monument: one new tier for every debt paid off, and a crown when every debt is gone.
  */
 export const REGISTER_DAYS = 3;
-export const RESIDENTS_PER_SHOP = 15;
 const DAY_MS = 86400000;
 
 export const bizCount = (state) => state.buildings.filter((b) => byId[b.type]?.kind === 'biz').length;
-export const bizSlots = (state) => 1 + Math.floor(population(state) / RESIDENTS_PER_SHOP);
 export const bizOwned = (state, type) => state.buildings.filter((b) => b.type === type).length;
 /* Each extra copy of the same shop costs 50% more. */
 export const bizCost = (state, type) => Math.round(byId[type].cost * (1 + 0.5 * bizOwned(state, type)));
-export function canAddBiz(state) {
-  const n = bizCount(state), slots = bizSlots(state);
-  return n < slots ? { ok: true } : { ok: false, need: (n) * RESIDENTS_PER_SHOP, have: population(state) };
-}
 export function bizReady(rec, now = Date.now()) {
   const def = byId[rec.type];
   if (!def?.income) return 0;
@@ -52,74 +45,31 @@ export function collectAll(state, now = Date.now()) {
   return total;
 }
 
-/* ---------- Nest Egg (compound growth) ---------- */
-export const WEEKLY_GROWTH = 0.02;
-export const EARLY_DAYS = 28;
-export const EARLY_FEE = 0.1;
-export function ensureInvest(state) {
-  state.invest = state.invest || { bal: 0, principal: 0, growth: 0, last: null, deposits: [], fees: 0 };
-  return state.invest;
+/* ---------- Nest Egg ---------- */
+/*
+ * Older saves may still hold invested coins. Give every one back, with growth earned up to today
+ * (the old rule: 2% a week, compounding), rounded up. Returns the coins returned (0 if nothing was invested).
+ */
+export function refundNestEgg(state, day) {
+  const v = state.invest;
+  if (!v || !(v.bal > 0)) return 0;
+  let bal = v.bal;
+  if (v.last && day) {
+    const days = Math.min(365, Math.max(0, daysBetween(v.last, day)));
+    bal = bal * Math.pow(1.02, days / 7);
+  }
+  const back = Math.ceil(bal - 1e-9);
+  state.coins += back;
+  state.invest = { bal: 0, refunded: (v.refunded || 0) + back, refundedOn: day || null, notice: back };
+  return back;
 }
-export function accrue(state, day) {
-  const v = ensureInvest(state);
-  if (!v.last) { v.last = day; return 0; }
-  const days = Math.min(365, Math.max(0, daysBetween(v.last, day)));
-  v.last = day;
-  if (!days || v.bal <= 0) return 0;
-  const before = v.bal;
-  v.bal = Math.round(v.bal * Math.pow(1 + WEEKLY_GROWTH, days / 7) * 100) / 100;
-  v.growth = Math.round((v.growth + (v.bal - before)) * 100) / 100;
-  return v.bal - before;
-}
-export function invest(state, amount, day) {
-  const a = Math.floor(+amount || 0);
-  if (!(a > 0) || a > state.coins) return null;
-  accrue(state, day);
-  const v = ensureInvest(state);
-  state.coins -= a;
-  v.bal = Math.round((v.bal + a) * 100) / 100;
-  v.principal += a;
-  v.deposits.push({ day, amt: a });
-  if (v.deposits.length > 200) v.deposits.shift();
-  state.stats.invested = (state.stats.invested || 0) + a;
-  return { amount: a, bal: v.bal };
-}
-/* Coins invested in the last 4 weeks that haven't been taken back out yet. */
-export function recentDeposits(state, day) {
-  const v = ensureInvest(state);
-  return v.deposits.filter((d) => daysBetween(d.day, day) < EARLY_DAYS).reduce((a, d) => a + d.amt, 0);
-}
-export function withdrawQuote(state, amount, day) {
-  const v = ensureInvest(state);
-  const a = Math.min(Math.floor(+amount || 0), Math.floor(v.bal));
-  const early = Math.min(a, recentDeposits(state, day));
-  const fee = Math.round(early * EARLY_FEE);
-  return { amount: a, fee, get: a - fee };
-}
-export function withdraw(state, amount, day) {
-  accrue(state, day);
-  const q = withdrawQuote(state, amount, day);
-  if (!(q.amount > 0)) return null;
-  const v = ensureInvest(state);
-  v.bal = Math.round((v.bal - q.amount) * 100) / 100;
-  v.principal = Math.max(0, v.principal - q.amount);
-  v.fees += q.fee;
-  /* use up the newest deposits first so the fee isn't charged twice */
-  let left = q.amount;
-  for (let i = v.deposits.length - 1; i >= 0 && left > 0; i--) { const take = Math.min(left, v.deposits[i].amt); v.deposits[i].amt -= take; left -= take; }
-  v.deposits = v.deposits.filter((d) => d.amt > 0);
-  state.coins += q.get;
-  return q;
-}
-export const project = (bal, weeks) => Math.floor(bal * Math.pow(1 + WEEKLY_GROWTH, weeks));
-/* The tower grows with the balance. */
-export const nestLevel = (state) => { const b = state.invest?.bal || 0; return b >= 5000 ? 5 : b >= 1500 ? 4 : b >= 500 ? 3 : b >= 100 ? 2 : 1; };
+export const NEST_LEVEL = 3;
 export const NEST_LESSONS = [
-  ['Growth earns growth', 'Each week, your coins grow 2%, and last week’s growth grows too. That snowball is called compound growth.'],
-  ['Time beats timing', 'Coins left alone for a year end up about 2.8× bigger. The same coins left for 4 weeks grow about 8%. Starting early matters most.'],
-  ['Leave it alone', 'Taking out coins you put in during the last 4 weeks costs a 10% fee, like early withdrawals from real retirement accounts.'],
-  ['The Rule of 72', 'Divide 72 by the growth rate to see how long money takes to double. At 2% a week: about 36 weeks.'],
-  ['Small and steady', 'Putting a little in every week beats waiting for a big amount. Real retirement plans work the same way.']
+  ['Pay yourself first', 'Many families move a little into savings on payday, before anything else, so saving happens on its own.'],
+  ['Emergency fund first', 'A $1,000 starter emergency fund keeps a surprise from turning into new debt. That comes before investing.'],
+  ['Time is the secret ingredient', 'Money saved for retirement grows on its growth over many years. Starting early, even small, matters more than starting big.'],
+  ['Know your plan at work', 'If an employer offers a retirement plan with a match, that match is part of your pay. Ask HR how it works.'],
+  ['Leave it alone', 'Retirement money is for later. Taking it out early usually means fees and taxes, so plan around it.']
 ];
 
 /* ---------- Debt Freedom Monument ---------- */

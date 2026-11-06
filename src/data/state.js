@@ -5,6 +5,9 @@ import { migrateList } from '../systems/lists.js';
 import { ensureTools } from '../systems/tools.js';
 import { migrateLogs, migrateVet } from '../systems/logbook.js';
 import { byId } from './catalog.js';
+import { areaOrder } from '../systems/progression.js';
+import { refundNestEgg } from '../systems/business.js';
+import { dateKey } from '../systems/time.js';
 
 /*
  * One state object that every system reads, saved in this browser only (Phase 1: no real user data leaves the device).
@@ -52,6 +55,7 @@ export function newCity({ cityName, family }, today) {
   s.buildings.push({ id: 'th', type: 'townhall', i: TOWNHALL_AT.i, j: TOWNHALL_AT.j, rot: 0, level: 1, builtOn: today, story: 'the day your family founded the city' });
   addStation(s, today);
   ensureTools(s);
+  s.areaOrder = ['todo', 'financial'];
   s.stats.lastDay = today;
   return s;
 }
@@ -93,6 +97,8 @@ export function load() {
     s.lists.forEach(migrateList);
     ensureTools(s);
     removedFeatures(s);
+    areaOrder(s);
+    refundNestEgg(s, dateKey());
     addStation(s, s.stats?.lastDay || s.startDate);
     return s;
   } catch (e) {

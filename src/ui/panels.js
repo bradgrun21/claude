@@ -1,11 +1,12 @@
 import { SECTIONS, SECTION_KEYS, BUILDINGS, byId, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from '../data/catalog.js';
 import { levelNeed, population, TOWNHALL, taskReward, goalReward, canUpgradeTownHall, unlockedAt } from '../systems/economy.js';
 import { isAvailable, isLive, isPaused, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS, targetLabel } from '../systems/lists.js';
-import { sectionUnlocked, unlockHint, unlockShort, SECTION_ORDER, tierOpen, habitsFormed, taskSlots, activeItems, freeSlots, habitProgress, nextTier, HABIT_DAYS } from '../systems/progression.js';
+import { sectionUnlocked, unlockHint, unlockShort, SECTION_ORDER, areaOrderFull, tierOpen, habitsFormed, taskSlots, activeItems, freeSlots, habitProgress, nextTier, HABIT_DAYS } from '../systems/progression.js';
 import { IDEAS } from '../data/ideas.js';
 import { toolForBuilding } from '../systems/tools.js';
 import { EARNED, earnedProgress, isEarned } from '../systems/earned.js';
-import { bizCost, bizSlots, bizCount, RESIDENTS_PER_SHOP, canBuildMonument } from '../systems/business.js';
+import { bizCost, bizCount } from '../systems/business.js';
+import { reqFor } from '../systems/unlocks.js';
 import { renderDistrictStore } from './district.js';
 import { DISTRICT, catActive, districtForBuilding } from '../systems/district.js';
 import { dailyChallenges, challengeProgress, milestoneState, QUICK_WINS } from '../systems/challenges.js';
@@ -15,7 +16,14 @@ import { svgI, esc } from './icons.js';
 import { ART } from './art.js';
 import { thumb } from '../world/thumbs.js';
 
-const shopCard = (state, d, bank) => { const dd = districtForBuilding(d.id); const free = !!(dd && bank && catActive(state, dd.cat)); return card(d, state, { locked: (d.needsBank && !bank) || (!free && state.level < d.level), lockText: d.needsBank && !bank ? 'Build the Bank first' : `Level ${d.level}`, disabled: !free && state.coins < d.cost, note: toolNote(d), price: free ? '<span class="cost free">Free with your budget</span>' : undefined }); };
+/* A Store card driven by the one gate for its type: Built, ready to Build (price), or Locked with one reason. */
+function gatedCard(state, d, note, { builtNote = 'Built' } = {}) {
+  const r = reqFor(state, d.id);
+  if (r.built) return card(d, state, { disabled: true, action: 'built', note: builtNote, price: '<span class="cost done">Built</span>' });
+  if (!r.ok) return card(d, state, { locked: true, lockText: r.short, note, action: 'pick', price: '<span class="cost done">Locked</span>' });
+  const free = !r.cost;
+  return card(d, state, { disabled: !free && state.coins < r.cost, note, price: free ? (districtForBuilding(d.id) ? '<span class="cost free">Free with your budget</span>' : '<span class="cost free">Free</span>') : coin(r.cost) });
+}
 const toolNote = (d) => { const t = toolForBuilding(d.id); return t ? `${t.emoji} Opens the ${t.name}` : ''; };
 const coin = (n) => `<span class="cost"><i class="ci">${ART.coin}</i>${n}</span>`;
 const xpTag = (n) => `<span class="cost xp"><i class="ci">${ART.xp}</i>${n}</span>`;
@@ -41,41 +49,29 @@ export function renderBuild(state, tab) {
     const areaLocked = !sectionUnlocked(state, tab);
     for (const d of mains) {
       if (has(d.id)) cards.push(card(d, state, { note: 'Built · holds your first list', disabled: true, action: 'built', price: '<span class="cost done">Built</span>' }));
-      else cards.push(card(d, state, { locked: areaLocked, lockText: unlockHint(state, tab), note: tab === 'spiritual' && !state.spiritualStyle ? (d.id === 'garden' ? 'Open to any faith, or none' : 'For a family of faith') : 'Free. Add your first task or goal', price: areaLocked ? '<span class="cost done">Coming soon</span>' : '<span class="cost free">Start here</span>' }));
+      else cards.push(card(d, state, { locked: areaLocked, lockText: unlockShort(state, tab), note: tab === 'spiritual' && !state.spiritualStyle ? (d.id === 'garden' ? 'Open to any faith, or none' : 'For a family of faith') : 'Free. Add your first task or goal', price: areaLocked ? '<span class="cost done">Coming soon</span>' : '<span class="cost free">Start here</span>' }));
     }
-    for (const d of rest) {
-      const built = has(d.id);
-      const moneyLocked = d.money && (state.budget?.level || 1) < d.money;
-      const habitLocked = !tierOpen(state, tab, d.tier);
-      const need = d.tier - 1 - habitsFormed(state, tab);
-      const locked = !built && (habitLocked || !open || moneyLocked);
-      cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : habitLocked ? `Form ${need} more ${need === 1 ? 'habit' : 'habits'}` : `Money level ${d.money}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${toolNote(d) ? `${toolNote(d)}. ` : d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
-    }
-    if (tab === 'financial') for (const d of BUILDINGS.filter((b) => b.kind === 'finance')) {
-      const built = has(d.id);
-      const locked = !built && (state.level < d.level || !has('bank') || (d.id === 'monument' && !canBuildMonument(state)));
-      cards.push(card(d, state, { locked, lockText: !has('bank') ? 'Build the Bank first' : state.level < d.level ? `Level ${d.level}` : 'Add a debt at the Bank', disabled: built, action: built ? 'built' : 'pick', note: built ? 'Built' : d.desc, price: built ? '<span class="cost done">Built</span>' : '<span class="cost free">Free</span>' }));
-    }
+    for (const d of rest) cards.push(gatedCard(state, d, `${toolNote(d) ? `${toolNote(d)}. ` : d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`));
+    if (tab === 'financial') for (const d of BUILDINGS.filter((b) => b.kind === 'finance')) cards.push(gatedCard(state, d, d.desc));
     return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(tab)}<span>${esc(sec.blurb)}</span></div><div class="grid">${cards.join('')}</div>
       <p class="foot">${open ? `Check a task off on ${HABIT_DAYS} different days to form a habit. Each habit opens the next building here and room for one more task. Higher buildings pay more for every task.` : sectionUnlocked(state, tab) ? 'Add your first task or goal to open this area. The first building is free.' : `${unlockHint(state, tab)}. Areas open one at a time so it never feels like too much.`}</p>`;
   }
   if (tab === 'district') return renderDistrictStore(state);
   if (tab === 'biz') {
-    const n = bizCount(state), slots = bizSlots(state), full = n >= slots;
-    return `<div class="sec-head"><span>Shops earn coins on their own, every day. ${n} of ${slots} shops · every ${RESIDENTS_PER_SHOP} residents support one more. ${full ? `<b>Build homes to open another shop.</b>` : ''}</span></div>
-      <div class="grid">${BUILDINGS.filter((b) => b.kind === 'biz').map((d) => { const c = bizCost(state, d.id); const lvl = state.level < d.level; return card(d, state, { locked: lvl || full, lockText: lvl ? `Level ${d.level}` : `${n * RESIDENTS_PER_SHOP} people`, disabled: state.coins < c, note: `+${d.income} coins a day${has(d.id) ? ' · build another' : ''}`, price: coin(c) }); }).join('')}</div>
+    const n = bizCount(state);
+    return `<div class="sec-head"><span>Shops earn coins on their own, every day. ${n} ${n === 1 ? 'shop' : 'shops'} on Main Street. New shops open as the town levels up.</span></div>
+      <div class="grid">${BUILDINGS.filter((b) => b.kind === 'biz').map((d) => gatedCard(state, d, `+${d.income} coins a day${has(d.id) ? ' · build another' : ''}`)).join('')}</div>
       <p class="foot">Shops pay coins, not XP. A second copy of the same shop costs 50% more.</p>`;
   }
   if (tab === 'shops') {
-    const bank = has('bank');
-    return `<p class="hint">Shops and services open handy tools: a meal planner, car and home care, subscriptions, and a Kids’ Corner. On payday, money trucks deliver to the shops too.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'shop').map((d) => has(d.id) ? card(d, state, { disabled: true, action: 'built', note: 'Built', price: '<span class="cost done">Built</span>' }) : shopCard(state, d, bank)).join('')}</div>`;
+    return `<p class="hint">Shops and services open handy tools. The Grocery Store, Gas Station and News Station appear free when that category is in your budget; the rest open with town levels.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'shop').map((d) => gatedCard(state, d, toolNote(d))).join('')}</div>`;
   }
   if (tab === 'homes') {
-    return `<p class="hint">Homes bring people to town. You need population to level up and to grow the Town Hall.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'home').map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost, note: `+${d.pop} people` })).join('')}</div>`;
+    return `<p class="hint">Homes bring people to town. You need population to level up and to grow the Town Hall.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'home').map((d) => gatedCard(state, d, `+${d.pop} people`)).join('')}</div>`;
   }
   if (tab === 'roads') {
     const road = `<button type="button" class="bcard" data-road="1"><span class="bimg road-img">${svgI('road', '#5A6370', 40, 2)}</span><b>Road</b><span class="bnote">Every building needs a road that leads to the Town Hall</span><span class="bprice">${coin(ROAD_COST)}<small>/tile</small></span></button>`;
-    return `<div class="grid">${road}${BUILDINGS.filter((b) => b.kind === 'decor' && !b.earned).map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost })).join('')}</div><p class="foot">Decorations don't need a road.</p><div class="h3">Earned by steady use</div>${renderEarnedGrid(state)}`;
+    return `<div class="grid">${road}${BUILDINGS.filter((b) => b.kind === 'decor' && !b.earned).map((d) => gatedCard(state, d, d.desc)).join('')}</div><p class="foot">Decorations don't need a road.</p><div class="h3">Earned by steady use</div>${renderEarnedGrid(state)}`;
   }
   if (tab === 'townhall') return renderTownHall(state);
   return '';
@@ -142,7 +138,7 @@ function kTask(state, list, t, day) {
 }
 export function renderLists(state, day, filterDue) {
   if (!state.lists.length) return '<p class="hint">No lists yet. Tap Build, pick an area, and add your first task.</p>';
-  const secs = SECTION_ORDER.filter((s) => state.lists.some((l) => l.section === s));
+  const secs = areaOrderFull(state).filter((s) => state.lists.some((l) => l.section === s));
   const anyDue = state.lists.some((l) => dueCount(l, day) > 0);
   if (filterDue && !anyDue) return '<div class="empty">' + svgI('check', '#3E8E57', 34, 3) + '<b>Everything due today is done.</b><p class="hint">Come back tomorrow. Rest is part of the plan too.</p></div>';
   const cols = secs.map((s) => {
@@ -275,25 +271,26 @@ export const STORE = [
   { id: 'townhall', label: 'Town Hall', rep: () => 'townhall' }
 ];
 /* How many things in a category are ready right now (unlocked, not built, affordable). */
+const readyNow = (state, id) => { const r = reqFor(state, id); return !!r.ok && state.coins >= r.cost; };
 export function readyCount(state, cat) {
   const built = (id) => state.buildings.some((b) => b.type === id);
   if (SECTIONS[cat] && !sectionUnlocked(state, cat)) return 0;
   if (SECTIONS[cat]) {
     const open = state.lists.some((l) => l.section === cat);
     if (!open) return 1;
-    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && tierOpen(state, cat, b.tier) && (!b.money || (state.budget?.level || 1) >= b.money) && state.coins >= b.cost).length;
+    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && readyNow(state, b.id)).length;
   }
-  if (cat === 'district') return built('bank') ? DISTRICT.filter((d) => !built(d.building) && catActive(state, d.cat)).length : 0;
-  if (cat === 'biz') return bizCount(state) < bizSlots(state) ? BUILDINGS.filter((b) => b.kind === 'biz' && state.level >= b.level && state.coins >= bizCost(state, b.id)).length ? 1 : 0 : 0;
-  if (cat === 'shops') return BUILDINGS.filter((b) => b.kind === 'shop' && !built(b.id) && state.coins >= b.cost && state.level >= b.level && (!b.needsBank || built('bank'))).length;
-  if (cat === 'homes') return BUILDINGS.filter((b) => b.kind === 'home' && state.level >= b.level && state.coins >= b.cost).length ? 1 : 0;
+  if (cat === 'district') return DISTRICT.filter((d) => readyNow(state, d.building)).length;
+  if (cat === 'biz') return BUILDINGS.some((b) => b.kind === 'biz' && readyNow(state, b.id)) ? 1 : 0;
+  if (cat === 'shops') return BUILDINGS.filter((b) => b.kind === 'shop' && readyNow(state, b.id)).length;
+  if (cat === 'homes') return BUILDINGS.some((b) => b.kind === 'home' && readyNow(state, b.id)) ? 1 : 0;
   if (cat === 'townhall') return canUpgradeTownHall(state).ok ? 1 : 0;
   if (cat === 'roads') return BUILDINGS.filter((b) => b.earned && isEarned(state, b.id) && !built(b.id)).length;
   return 0;
 }
-const STORE_GROUPS = [['Life areas', ['todo', 'financial', 'relational', 'physical', 'spiritual']], ['Town', ['homes', 'biz', 'roads', 'townhall']], ['Services', ['shops', 'district']]];
+const STORE_GROUPS = [['Life areas', null], ['Town', ['homes', 'biz', 'roads', 'townhall']], ['Services', ['shops', 'district']]];
 export function renderStore(state) {
-  return STORE_GROUPS.map(([label, ids]) => `<div class="hsec-h"><b>${label}</b></div>${storeTiles(state, ids.map((id) => STORE.find((c) => c.id === id)))}`).join('');
+  return STORE_GROUPS.map(([label, ids]) => `<div class="hsec-h"><b>${label}</b></div>${storeTiles(state, (ids || areaOrderFull(state)).map((id) => STORE.find((c) => c.id === id)))}`).join('');
 }
 function storeTiles(state, tiles) {
   return `<div class="store">${tiles.map((c) => { const n = readyCount(state, c.id); const locked = SECTIONS[c.id] && !sectionUnlocked(state, c.id); return `<button type="button" class="stile${locked ? ' locked' : ''}" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>

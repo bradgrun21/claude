@@ -3,6 +3,7 @@ import { newCity } from '../src/data/state.js';
 import * as B from '../src/systems/business.js';
 import { addDebt, payDebt } from '../src/systems/budget.js';
 import { homePop, byId } from '../src/data/catalog.js';
+import { reqFor } from '../src/systems/unlocks.js';
 
 const D = '2026-11-05';
 const DAY = 86400000;
@@ -22,16 +23,14 @@ describe('Main Street businesses', () => {
     expect(B.bizReady(bakery, t0 + 1.5 * DAY)).toBe(0);
     expect(B.bizReady(bakery, t0 + 2 * DAY)).toBe(4);
   });
-  it('population decides how many shops, and copies cost more', () => {
+  it('shops open by town level only, and a second copy costs more', () => {
     const s = city();
-    expect(B.bizSlots(s)).toBe(1);
+    expect(reqFor(s, 'bakery')).toMatchObject({ ok: false, why: 'Opens at town level 2' });
+    s.level = 2;
+    expect(reqFor(s, 'bakery')).toEqual({ ok: true, cost: 80 });
     put(s, 'bakery');
-    expect(B.canAddBiz(s).ok).toBe(false);
-    for (let k = 0; k < 3; k++) put(s, 'cottage');
-    expect(B.bizSlots(s)).toBe(2);
-    expect(B.canAddBiz(s).ok).toBe(true);
-    expect(B.bizCost(s, 'bakery')).toBe(120);
-    expect(B.bizCost(s, 'florist')).toBe(byId.florist.cost);
+    expect(reqFor(s, 'bakery')).toEqual({ ok: true, cost: 120 });
+    expect(reqFor(s, 'florist').cost).toBe(byId.florist.cost);
   });
   it('shops pay coins but never XP', () => {
     const s = city();
@@ -43,24 +42,26 @@ describe('Main Street businesses', () => {
 });
 
 describe('Nest Egg', () => {
-  it('compounds 2% a week, and charges 10% only on coins invested in the last 4 weeks', () => {
-    const s = city(); s.coins = 1000;
-    B.invest(s, 500, D);
-    expect(s.coins).toBe(500);
-    B.accrue(s, '2026-11-12');
-    expect(s.invest.bal).toBeCloseTo(510);
-    expect(B.withdrawQuote(s, 100, '2026-11-12')).toEqual({ amount: 100, fee: 10, get: 90 });
-    B.accrue(s, '2026-12-10');
-    expect(B.recentDeposits(s, '2026-12-10')).toBe(0);
-    expect(B.withdrawQuote(s, 100, '2026-12-10').fee).toBe(0);
-    expect(B.project(1000, 52)).toBe(2800);
-    expect(B.invest(s, 99999, D)).toBe(null);
+  it('gives every invested coin back, with growth earned up to today, rounded up', () => {
+    const s = city(); s.coins = 100;
+    s.invest = { bal: 500, principal: 500, growth: 0, last: '2026-11-05', deposits: [{ day: '2026-11-05', amt: 500 }], fees: 0 };
+    const back = B.refundNestEgg(s, '2026-11-12');
+    expect(back).toBe(510);
+    expect(s.coins).toBe(610);
+    expect(s.invest.bal).toBe(0);
+    expect(B.refundNestEgg(s, '2026-11-20')).toBe(0);
+    expect(s.coins).toBe(610);
   });
-  it('the tower grows with the balance', () => {
-    const s = city(); s.coins = 2000;
-    expect(B.nestLevel(s)).toBe(1);
-    B.invest(s, 600, D);
-    expect(B.nestLevel(s)).toBe(3);
+  it('rounds up and never takes coins away', () => {
+    const s = city(); s.coins = 0;
+    s.invest = { bal: 10.01, last: null };
+    expect(B.refundNestEgg(s, '2026-11-12')).toBe(11);
+  });
+  it('opens at Money master only (one gate)', () => {
+    const s = city();
+    expect(reqFor(s, 'nestegg')).toMatchObject({ ok: false, why: 'Opens at Money master (Money path step 5)' });
+    s.budget.level = 5;
+    expect(reqFor(s, 'nestegg')).toEqual({ ok: true, cost: 0 });
   });
 });
 

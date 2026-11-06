@@ -31,8 +31,8 @@ export const BUILDINGS = [
   { id: 'clinic', name: 'Wellness Clinic', section: 'physical', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 11, desc: 'A fourth Physical list.' },
 
   { id: 'bank', name: 'Bank', section: 'financial', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Financial list.' },
-  { id: 'payoff', name: 'Debt Payoff Center', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 1, money: 3, desc: 'Home of your debt snowball.' },
-  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 1, money: 4, desc: 'Emergency fund and sinking funds live here.' },
+  { id: 'payoff', name: 'Debt Payoff Center', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 5, desc: 'Home of your debt snowball.' },
+  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 8, desc: 'Emergency fund and sinking funds live here.' },
   { id: 'office', name: 'Office Tower', section: 'financial', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 10, desc: 'A fourth Financial list.' },
 
   { id: 'park', name: 'Park', section: 'relational', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Relational list.' },
@@ -41,13 +41,13 @@ export const BUILDINGS = [
   { id: 'hall', name: 'Event Hall', section: 'relational', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 11, desc: 'A fourth Relational list.' },
 
   { id: 'jobboard', name: 'Community Job Board', section: 'todo', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first To-Do list.' },
-  { id: 'workshop', name: 'Workshop', section: 'todo', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 6, desc: 'A second To-Do list.' },
-  { id: 'postoffice', name: 'Post Office', section: 'todo', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 9, desc: 'A third To-Do list.' },
+  { id: 'postoffice', name: 'Post Office', section: 'todo', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 6, desc: 'A second To-Do list.' },
+  { id: 'workshop', name: 'Workshop', section: 'todo', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 9, desc: 'A third To-Do list.' },
   { id: 'library', name: 'Library', section: 'todo', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 12, desc: 'A fourth To-Do list.' },
 
-  { id: 'grocery', name: 'Grocery Store', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Grocery money gets delivered here on payday.' },
-  { id: 'gasstation', name: 'Gas Station', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Gas and car money goes here on payday.' },
-  { id: 'newsstation', name: 'News Station', kind: 'shop', size: [1, 1], cost: 40, level: 1, needsBank: true, desc: 'Subscriptions and phone bills go here on payday.' },
+  { id: 'grocery', name: 'Grocery Store', kind: 'shop', size: [2, 2], cost: 0, level: 1, desc: 'Grocery money gets delivered here on payday.' },
+  { id: 'gasstation', name: 'Gas Station', kind: 'shop', size: [2, 2], cost: 0, level: 1, desc: 'Gas and car money goes here on payday.' },
+  { id: 'newsstation', name: 'News Station', kind: 'shop', size: [1, 1], cost: 0, level: 1, desc: 'Subscriptions and phone bills go here on payday.' },
   { id: 'school', name: 'School', kind: 'shop', size: [2, 2], cost: 120, level: 3, desc: 'Kids’ Corner: chore stars, rewards and a reading log.' },
   { id: 'repairshop', name: 'Repair Shop', kind: 'shop', size: [2, 2], cost: 80, level: 2, desc: 'Repair Log: every service and repair on your cars.' },
   { id: 'vet', name: 'Vet Clinic', kind: 'shop', size: [2, 2], cost: 80, level: 2, desc: 'Pet Records: checkups, vaccines and medicines.' },
@@ -62,15 +62,15 @@ export const BUILDINGS = [
   { id: 'toystore', name: 'Toy Store', kind: 'biz', size: [1, 1], cost: 280, level: 6, income: 25, desc: 'Every kid’s first stop.' },
   { id: 'cinema', name: 'Movie Theater', kind: 'biz', size: [2, 2], cost: 500, level: 8, income: 42, desc: 'Popcorn and a big screen.' },
   /* Budget District: unlocked free by budgeting or spending in the category (see systems/district.js). */
-  { id: 'housingoffice', name: 'Housing Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Rent or mortgage money lives here.' },
-  { id: 'utility', name: 'Power & Water Works', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Lights, water and heat.' },
-  { id: 'insurance', name: 'Insurance Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Covered for a rainy day.' },
-  { id: 'pantry', name: 'Giving Pantry', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Where your generosity goes.' },
-  { id: 'fair', name: 'Fun Fair', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Eating out and fun money.' },
-  { id: 'general', name: 'General Store', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, needsBank: true, desc: 'Everything else.' },
+  { id: 'housingoffice', name: 'Housing Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, desc: 'Rent or mortgage money lives here.' },
+  { id: 'utility', name: 'Power & Water Works', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, desc: 'Lights, water and heat.' },
+  { id: 'insurance', name: 'Insurance Office', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, desc: 'Covered for a rainy day.' },
+  { id: 'pantry', name: 'Giving Pantry', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, desc: 'Where your generosity goes.' },
+  { id: 'fair', name: 'Fun Fair', kind: 'district', size: [2, 2], cost: 0, level: 1, unique: true, desc: 'Eating out and fun money.' },
+  { id: 'general', name: 'General Store', kind: 'district', size: [1, 1], cost: 0, level: 1, unique: true, desc: 'Everything else.' },
   /* Money lessons */
-  { id: 'nestegg', name: 'Nest Egg Tower', kind: 'finance', size: [1, 1], cost: 0, level: 4, unique: true, needsBank: true, desc: 'Invest coins and watch compound growth do the work.' },
-  { id: 'monument', name: 'Debt Freedom Monument', kind: 'finance', size: [2, 2], cost: 0, level: 1, unique: true, needsBank: true, desc: 'A new tier for every debt you pay off.' },
+  { id: 'nestegg', name: 'Nest Egg Tower', kind: 'finance', size: [1, 1], cost: 0, level: 1, unique: true, desc: 'A trophy for reaching Money master, and a few lessons about saving for later.' },
+  { id: 'monument', name: 'Debt Freedom Monument', kind: 'finance', size: [2, 2], cost: 0, level: 1, unique: true, desc: 'A new tier for every debt you pay off.' },
   { id: 'station', name: 'Train Station', kind: 'civic', size: [2, 2], cost: 0, level: 0, unique: true, desc: 'The payday train stops here.' },
 
   { id: 'cottage', name: 'Cottage', kind: 'home', size: [1, 1], cost: 50, level: 1, pop: 5, desc: '+5 population' },

@@ -75,6 +75,17 @@ Every tile is open, New (grand opening), ready to Build, or greyed out with a lo
   | Pet Records | Add your pet → Log a visit → Set a next-due date |
   | Gifts & Sizes | Save a gift idea → Log a size → Log a gift given |
   The Debt Payoff Center is now the 2nd Financial building and the Savings Tower the 3rd, matching the money path.
+- **Life areas, in the player's order.** To-Do → Financial → the player chooses Relational, Physical or Spiritual →
+  chooses one of the two left → the last opens on its own. Each opens when the area before it has something on it
+  (an active task or goal). The chosen order is saved (`areaOrder`) and drives the Store and the Tasks board. The
+  budget no longer gates any life area.
+- **One kind of gate per type of thing** (`src/systems/unlocks.js`), one plain reason on every locked tile, and
+  coins are only ever a price: life-area buildings open by habits; money-linked buildings (Budget District, Grocery
+  Store, Gas Station, News Station) open free when their category is budgeted; town things (homes, Main Street shops,
+  decorations, Repair Shop, Vet Clinic, School, Gift Shop, Family Meeting) open by town level; the Nest Egg at Money
+  master; the Debt Freedom Monument once a debt is listed. Trackers inside life-area buildings open with that
+  building: Date Night Jar with the Coffee House, Birthdays & Cards with the Post Office (now To-Do's 2nd building,
+  before the Workshop).
 - **Habits pace each area.** An area starts with one task slot. Checking a task off on 3 different days forms a
   habit (a finished goal counts too), which unlocks that area's next building and opens one more slot. A goal is one
   slot and its steps ride along; paused or finished items free their slot; habits stay counted even if a task is
@@ -107,18 +118,16 @@ Every tile is open, New (grand opening), ready to Build, or greyed out with a lo
   (Lantern Row, Golden Fountain), or check things off on 30 or 100 different days (Rose Arch, Town Clock Tower).
   Progress shows in Profile → Earned and in Build → Decor & roads.
 - **Main Street businesses** (Bakery, Flower Shop, Ice Cream Parlor, Barber, Bookstore, Pizza Place, Toy Store, Movie
-  Theater) earn coins on their own every day; the register holds 3 days and a tap collects it. Every 15 residents
-  support one more shop, so homes and shops grow together. A second copy of a shop costs 50% more. Shops pay coins
-  only, never XP.
+  Theater) earn coins on their own every day; the register holds 3 days and a tap collects it. They open by town
+  level. A second copy of a shop costs 50% more. Shops pay coins only, never XP.
 - **Budget District.** Every budget category has a building (Housing Office, Power & Water Works, Grocery Store, Gas
   Station, Insurance Office, News Station, Giving Pantry, Fun Fair, General Store). It unlocks free the first time the
   family budgets in that category or logs spending there, with a "New in town!" celebration. That category's payday
   truck delivers to it, and tapping it shows planned vs spent this month, a quick "log a purchase", recent spending
   and the monthly plan. It grows (pennants, then a gold star) after 1 and 3 months on plan (3+ purchases logged,
   spending within the plan). Grocery, Gas and News stations become free once their category is in the budget.
-- **Nest Egg Tower** (Financial, level 4) teaches compound growth with coins: invest coins, they grow 2% a week, growth
-  earns growth, and coins invested in the last 4 weeks cost a 10% fee to take out early. The tower grows with the
-  balance, with a projection table and a rotating lesson (Rule of 72, time beats timing…).
+- **Nest Egg Tower** (free at Money master, Money path step 5): a trophy with real-life lessons about saving for later.
+  There's no investing or growth in the game; older saves got every invested coin back (with growth earned so far).
 - **Debt Freedom Monument** (Financial, once a debt is listed): a new tier for every debt paid off, a crown and
   fireworks when the last one is gone, and a plaque of debts paid (names and dates, never amounts).
 - **More filler:** Bungalow and Farmhouse homes (all 1-tile homes are drawn a bit larger), plus Flower Planter, Hedge
@@ -205,6 +214,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Building tools (meals, care, subscriptions, cards, dates, kids, meeting) | `src/systems/tools.js`, `src/ui/tools.js` |
 | Logbooks (repair, vet, gifts) | `src/systems/logbook.js`, `src/ui/logbook.js` |
 | Earned decorations (steady use) | `src/systems/earned.js` |
+| What unlocks what (one gate per type, one reason) | `src/systems/unlocks.js`, `src/systems/progression.js` |
 | Step-by-step paths (money, meals, every tracker) | `src/systems/paths.js`, `src/ui/paths.js` |
 | Backups, restore, storage protection, install | `src/data/backup.js` |
 | Businesses, Nest Egg, Debt Freedom Monument | `src/systems/business.js`, `src/ui/business.js` |

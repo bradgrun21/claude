@@ -26,12 +26,13 @@ import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
 import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall, renderEarnedWin, profileBody } from './ui/panels.js';
 import { renderMoneyHub, renderTrackersHub, renderHowItWorks } from './ui/hubs.js';
+import { thumb } from './world/thumbs.js';
 import { checkPaths, tabLocked, currentTab, pathStatus, PATHS } from './systems/paths.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
 import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, updateGoal, removeGoal, setListPaused, freqCode, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
-import { sectionUnlocked, unlockHint, nextSection, freeSlots, taskSlots, tierOpen, noteFormed, nextTier, habitsFormed, HABIT_DAYS } from './systems/progression.js';
+import { sectionUnlocked, unlockHint, nextSection, choiceFor, chooseArea, areaOrder, AREA_LINES, SECTION_ORDER, isOpened, freeSlots, taskSlots, tierOpen, noteFormed, nextTier, habitsFormed, HABIT_DAYS } from './systems/progression.js';
 import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
 import * as TL from './systems/tools.js';
@@ -41,6 +42,7 @@ import { markUse, checkEarned, noteStreak, isEarned, earnedById } from './system
 import * as BZ from './systems/business.js';
 import { renderBiz, renderNest, renderMonument } from './ui/business.js';
 import * as DI from './systems/district.js';
+import { reqFor } from './systems/unlocks.js';
 import { renderCatHub, renderDistrictWin } from './ui/district.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
@@ -254,6 +256,7 @@ function boot(state, opts) {
       });
     }
     if (new Set(state.lists.map((l) => l.section)).size >= 2) win('area2');
+    later(levels.length ? 3200 : 1200, areaMoment);
     const steps = checkPaths(state);
     if (steps.length) later(levels.length ? 2200 : 700, () => {
       const s0 = steps.at(-1);
@@ -284,7 +287,7 @@ function boot(state, opts) {
     $('panelBody').scrollTop = 0; $('panelBody').scrollLeft = 0;
     emit('panel:' + kind);
   }
-  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); else if (k && k !== 'districtNew' && state.district?.pending?.length) later(350, () => { if (!panel && !mode) showDistrict(); }); }
+  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); else if (k && k !== 'districtNew' && state.district?.pending?.length) later(350, () => { if (!panel && !mode) showDistrict(); }); else if (k && k !== 'chooseArea' && k !== 'areaOpen' && areaWaiting) later(350, areaMoment); }
   /* Earned decorations get their celebration the next time nothing else is on screen. */
   const unseenEarned = () => (state.earned || []).find((e) => !e.seen);
   function showEarned() { const e = unseenEarned(); if (!e) return; e.seen = true; persist(); openPanel('earned', { id: e.id }); }
@@ -303,7 +306,9 @@ function boot(state, opts) {
     else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added, !p.draft && freeSlots(state, p.section) < 1); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
     else if (p.kind === 'biz') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBiz(state, b) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
-    else if (p.kind === 'nest') { title = '🥚 Nest Egg Tower'; body = renderNest(state, p.ui, today); }
+    else if (p.kind === 'nest') { title = '🥚 Nest Egg Tower'; body = renderNest(state); }
+    else if (p.kind === 'chooseArea') { const c = choiceFor(state); if (!c?.options) { closePanel(); return; } title = 'Choose your next area'; body = renderChooseArea(c); }
+    else if (p.kind === 'areaOpen') { title = 'Grand opening'; body = renderAreaOpen(p.section); }
     else if (p.kind === 'district') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } const dd = DI.districtForBuilding(b.type); title = `${dd.emoji} ${byId[b.type].name}`; body = renderCatHub(state, dd.cat, p.ui, today) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
     else if (p.kind === 'districtNew') { title = 'New in town!'; body = renderDistrictWin(p.entries.map((c) => DI.districtForCat(c))); }
     else if (p.kind === 'monument') { title = 'Debt Freedom Monument'; body = renderMonument(state); }
@@ -412,7 +417,7 @@ function boot(state, opts) {
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
     if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
-  $('panelBody').addEventListener('input', (e) => { if ((panel?.kind === 'tool' || panel?.kind === 'nest' || panel?.kind === 'district') && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
+  $('panelBody').addEventListener('input', (e) => { if ((panel?.kind === 'tool' || panel?.kind === 'district') && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
   $('panelBody').addEventListener('change', (e) => {
     if (panel?.kind !== 'tool') return;
     if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
@@ -466,7 +471,7 @@ function boot(state, opts) {
     if (b.type === 'payoff') return openPanel('bank', { tab: 'debts', ui: {} });
     if (b.type === 'station' && (payday || paydayDue(state.budget, today))) return startPayday();
     if (byId[b.type].kind === 'biz') { if (BZ.bizReady(b) >= 1 && panel?.kind !== 'biz') { collectShop(b); return; } return openPanel('biz', { id }); }
-    if (b.type === 'nestegg') { BZ.accrue(state, today); syncNest(); return openPanel('nest', { ui: {} }); }
+    if (b.type === 'nestegg') return openPanel('nest');
     if (b.type === 'monument') return openPanel('monument');
     if (byId[b.type].kind === 'district') { districtGrow(b.type); return openPanel('district', { id, ui: {} }); }
     const tool = TL.toolForBuilding(b.type);
@@ -655,24 +660,22 @@ function boot(state, opts) {
           applyDraft(list, pending);
           note(state, today, 'opened', { section: sec });
           win('place', screenOf(bld.views.get(rec.id).top));
-          if (d.type === 'bank') { later(3800, () => { toast('Next: set up your budget', 'Relational opens once your budget is set'); openBudgetSetup(); }); return; }
-          const nx = nextSection(state);
-          toast(`${SECTIONS[sec].name} is open!`, nx && sectionUnlocked(state, nx) ? `${SECTIONS[nx].name} is ready to open next` : 'Tap the bubble to check off a task');
+          if (d.type === 'bank') { later(3800, () => { toast('Next: set up your budget', 'It’s step 1 of the Money path'); openBudgetSetup(); }); return; }
+          toast(`${SECTIONS[sec].name} is open!`, 'Tap the bubble to check off a task');
         }
       });
       return;
     }
-    const wasUnlocked = new Set(SECTION_LIST.filter((s) => sectionUnlocked(state, s)));
+    const wasUnlocked = new Set(SECTION_ORDER.filter((s) => sectionUnlocked(state, s)));
     let list = d.listId ? state.lists.find((x) => x.id === d.listId) : listFor(state, d.buildingId);
     if (!list) list = createList(state, state.buildings.find((x) => x.id === d.buildingId), '', [], today);
     const n = applyDraft(list, d);
     if (d.kind === 'goal') win('goal');
-    const opened = SECTION_LIST.find((s) => !wasUnlocked.has(s) && sectionUnlocked(state, s));
+    const opened = SECTION_ORDER.find((s) => !wasUnlocked.has(s) && sectionUnlocked(state, s));
     toast(d.kind === 'goal' ? 'Goal added' : n === 1 ? 'Task added' : `${n} added`, opened ? `${SECTIONS[opened].name} is ready to open in the Store!` : 'Fewer, finished beats more, half-done');
     back(panel.prev, d.buildingId);
     afterProgress();
   }
-  const SECTION_LIST = ['todo', 'financial', 'relational', 'physical', 'spiritual'];
   /* Go back to the panel we came from (a building, the Lists, the Bank), or to the building. */
   function back(prev, buildingId) {
     if (prev) openPanel(prev.kind, { ...prev });
@@ -771,31 +774,19 @@ function boot(state, opts) {
   /* ---------- Building things ---------- */
   function pickBuilding(id) {
     const def = byId[id];
-    if (def.earned) {
-      if (!isEarned(state, id)) { toast(`${def.name} is earned, not bought`, earnedById[id].text); return; }
-      if (state.buildings.some((b) => b.type === id)) { toast(`${def.name} is already in town`, 'Tap it to move it'); return; }
-    }
-    if (def.section && !sectionUnlocked(state, def.section)) { toast(`${SECTIONS[def.section].name} isn’t open yet`, `${unlockHint(state, def.section)}. One area at a time keeps it doable.`); return; }
+    const r = reqFor(state, id);
+    if (r.built) { toast(`${def.name} is already in town`, 'Tap it to move it'); return; }
+    if (!r.ok) { if (r.choose) { openPanel('chooseArea'); return; } toast(`${def.name} isn’t open yet`, r.why); return; }
     if (def.kind === 'section' && def.tier === 1) { openBuilder({ mode: 'unlock', type: id }); return; }
-    const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
-    if (def.kind === 'section' && def.tier > 1) { if (!tierOpen(state, def.section, def.tier)) { const need = def.tier - 1 - habitsFormed(state, def.section); toast(`Form ${need} more ${SECTIONS[def.section].name.toLowerCase()} ${need === 1 ? 'habit' : 'habits'} first`, `Check a task off on ${HABIT_DAYS} different days`); return; } }
-    else if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
-    if (def.money && state.budget.level < def.money) { toast(`${def.name} unlocks at money level ${def.money}`, 'Log transactions and update balances at the Bank'); return; }
-    if (def.needsBank && !state.buildings.some((b) => b.type === 'bank')) { toast('Build the Bank first', 'Set a Financial goal to open it'); return; }
-    if (!open) { toast(`Open ${SECTIONS[def.section].name} first`, `Set a goal at the ${mainBuildingFor(def.section, state.spiritualStyle || 'church').name}`); return; }
-    if (def.kind === 'biz') { const c = BZ.canAddBiz(state); if (!c.ok) { toast('Main Street needs more customers', `Grow to ${c.need} people (you have ${c.have}) to open another shop`); return; } }
-    if (def.unique && state.buildings.some((b) => b.type === id)) { toast(`${def.name} is already in town`); return; }
-    if (id === 'monument' && !BZ.canBuildMonument(state)) { toast('Add your debts at the Bank first', 'Then every one you pay off adds a tier'); return; }
     const dist = DI.districtForBuilding(id);
-    if (def.kind === 'district' && !DI.catActive(state, dist.cat)) { toast(`${def.name} opens with your budget`, `Budget or log spending in ${catById(dist.cat).short} at the Bank`); return; }
-    const price = def.kind === 'biz' ? BZ.bizCost(state, id) : dist && DI.catActive(state, dist.cat) ? 0 : def.cost;
+    const price = r.cost;
     if (state.coins < price) { toast(`${price - state.coins} more coins needed`, 'Check off tasks to earn coins'); return; }
     startPlacement({
       type: id,
       onPlace: (rec) => {
         spend(state, price);
         if (def.kind === 'biz') { rec.bizAt = Date.now(); later(3400, () => toast(`${def.name} is open for business!`, `It earns ${def.income} coins a day. Tap it to collect.`)); }
-        if (id === 'nestegg') { BZ.accrue(state, today); rec.level = BZ.nestLevel(state); later(3400, () => openBuilding(rec.id)); }
+        if (id === 'nestegg') { rec.level = BZ.NEST_LEVEL; later(3400, () => openBuilding(rec.id)); }
         if (def.kind === 'district') { rec.level = DI.districtLevel(state, dist.cat, today); rec.story = `home of the ${catById(dist.cat).short.toLowerCase()} budget`; later(3400, () => toast(`${def.name} is open`, `Tap it to see your ${catById(dist.cat).short.toLowerCase()} budget. Payday trucks deliver here.`)); }
         if (id === 'monument') { rec.level = BZ.monumentLevel(state); rec.story = 'built for the road to debt freedom'; later(3400, () => openPanel('monument')); }
         if (def.kind === 'section') rec.story = 'a new list for your family';
@@ -1040,7 +1031,8 @@ function boot(state, opts) {
     if (d.openp) { if (d.openp === 'calendar') openPanel('calendar', { ym: ymOf(today), sel: today }); else openPanel(d.openp); return; }
     if (d.biz) { const r = state.buildings.find((x) => x.id === d.biz); if (r) collectShop(r, b); renderPanel(); return; }
     if (d.bizall) { const n = BZ.collectAll(state); if (n) { flyRewards(centerOf(b), { coins: n }); sound.coin(); toast(`+${n} coins from Main Street`); for (const x of state.buildings) if (byId[x.type]?.kind === 'biz') bld.bounce(x.id); } persist(); hud(); renderPanel(); return; }
-    if (d.nest) { nestAction(d.nest, b); return; }
+    if (d.choose) { if (chooseArea(state, d.choose)) { persist(); sound.chime(); fx.confetti(controls.target); openPanel('areaOpen', { section: d.choose }); } return; }
+    if (d.areago) { const sec = d.areago; closePanel(); if (sec === 'spiritual' && !state.spiritualStyle) openPanel('build', { tab: 'spiritual' }); else pickBuilding(mainBuildingFor(sec, state.spiritualStyle || 'church').id); return; }
     if (d.dist) { distAction(d.dist, b); return; }
     if (d.bankgo) { openPanel('bank', { tab: d.bankgo, ui: {} }); return; }
     if (d.ta) { toolAction(d.ta, d.id, b); return; }
@@ -1178,32 +1170,40 @@ function boot(state, opts) {
     living.construct(rec, () => { syncWorld(); persist(); });
     return true;
   }
-  const syncNest = () => grow('nestegg', BZ.nestLevel(state));
-  function nestAction(a, el) {
-    const ui = panel.ui;
-    if (a.startsWith('fill:')) { ui.iamt = a.slice(5); renderPanel(); return; }
-    if (a === 'invest') {
-      const r = BZ.invest(state, ui.iamt, today);
-      if (!r) { toast(+ui.iamt > state.coins ? 'Not enough coins' : 'Enter how many coins'); return; }
-      sound.coin(); toast(`${r.amount} coins invested`, 'They grow 2% every week, even when you’re not playing');
-      ui.iamt = ''; if (syncNest()) toast('The Nest Egg Tower is growing!', 'Your investment reached a new level');
-    }
-    if (a === 'quote') { renderPanel(); return; }
-    if (a === 'withdraw') {
-      const r = BZ.withdraw(state, ui.wamt, today);
-      if (!r) { toast('Enter how many coins'); return; }
-      flyRewards(centerOf(el), { coins: r.get }); sound.coin();
-      toast(`Took out ${r.amount} coins`, r.fee ? `${r.fee} coin early-withdrawal fee. Patience pays!` : 'No fee: those coins were in long enough');
-      ui.wamt = ''; syncNest();
-    }
-    persist(); hud(); renderPanel();
-  }
   function monumentUpdate(paidOff) {
     const s = BZ.debtStatus(state);
     if (grow('monument', BZ.monumentLevel(state))) {
       later(900, () => toast(s.free ? 'DEBT FREE! The crown is on the monument' : 'A new tier on the Debt Freedom Monument', s.free ? 'What a day. Go celebrate together.' : `${s.paid} of ${s.total} debts paid off`));
       if (s.free) { const v = bld.views.get(state.buildings.find((x) => x.type === 'monument').id); later(3600, () => { fx.fireworks(v?.top || controls.target, 8, () => sound.firework()); fx.confetti(v?.top || controls.target); }); }
     } else if (paidOff && !state.buildings.some((x) => x.type === 'monument')) later(900, () => toast('Build the Debt Freedom Monument', 'Build → Financial. Every debt you pay off adds a tier.'));
+  }
+
+  /* ---------- Choosing the next life area ---------- */
+  let areaWaiting = false;
+  /* The last area opens on its own; the others are the player's choice. Shown once per choice (the Store tile can reopen it). */
+  function areaMoment() {
+    const c = choiceFor(state);
+    if (!c) { areaWaiting = false; return; }
+    if (c.auto) chooseArea(state, c.auto), persist();
+    if (panel || mode) { areaWaiting = true; return; }
+    areaWaiting = false;
+    if (c.auto) { sound.chime(); fx.fireworks(controls.target, 3, () => sound.firework()); openPanel('areaOpen', { section: c.auto }); return; }
+    const sig = c.options.join(',');
+    if (state.areaPrompted === sig) return;
+    state.areaPrompted = sig; persist();
+    sound.chime(); openPanel('chooseArea');
+  }
+  const areaImg = (sec) => { const u = thumb(mainBuildingFor(sec, state.spiritualStyle || 'church').id); return u ? `<img src="${u}" alt="">` : ''; };
+  function renderChooseArea(c) {
+    return `<p class="hint">${SECTIONS[c.after].name} is up and running. Which part of life do you want to grow next? You’ll get to the others later.</p>
+      <div class="choose-grid">${c.options.map((s) => `<button type="button" class="choose-card" data-choose="${s}" style="--c:${SECTIONS[s].color}"><span class="cc-top">${svgI(SECTIONS[s].icon, '#fff', 16, 2.6)}<b>${SECTIONS[s].name}</b></span><span class="cc-img">${areaImg(s)}</span><small>${esc(AREA_LINES[s])}</small><span class="cc-b">${s === 'spiritual' ? 'Church or Reflection Garden' : esc(mainBuildingFor(s).name)} · free</span></button>`).join('')}</div>`;
+  }
+  function renderAreaOpen(sec) {
+    return `<div class="ribbon-wrap"><div class="rb-band"><span class="rb-l"></span><span class="rb-bow">🎀</span><span class="rb-r"></span></div>
+      <b class="ttl" style="color:${SECTIONS[sec].color}">${SECTIONS[sec].name} is open!</b>
+      <span class="earn-big">${areaImg(sec)}</span>
+      <p class="hint">${esc(AREA_LINES[sec])} Its first building is free. Start with one task.</p>
+      <div class="actions"><button type="button" class="btn go-btn big" data-areago="${sec}">Let’s go</button></div></div>`;
   }
 
   /* ---------- Budget District ---------- */
@@ -1491,7 +1491,7 @@ function boot(state, opts) {
 
   /* ---------- Layout + daily refresh ---------- */
   addEventListener('resize', () => stage.resize());
-  setInterval(() => { if (dateKey() !== today) { today = dateKey(); state.stats.lastDay = today; if (state.invest) { BZ.accrue(state, today); syncNest(); } hud(); renderPanel(); persist(); } refreshBubbles(); }, 60000);
+  setInterval(() => { if (dateKey() !== today) { today = dateKey(); state.stats.lastDay = today; hud(); renderPanel(); persist(); } refreshBubbles(); }, 60000);
 
   /* ---------- Loop ---------- */
   const clock = new THREE.Clock();
@@ -1548,9 +1548,10 @@ function boot(state, opts) {
   noteFormed(state);
   if (state.budget) { const lv = addPoints(state, 0); if (lv && lv >= 4) ensureEmergencyFund(state); }
   checkPaths(state, true);
-  if (state.invest) BZ.accrue(state, today);
-  later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
+  if (state.invest?.notice) { const n = state.invest.notice; delete state.invest.notice; persist(); later(5200, () => toast(`${n.toLocaleString('en-US')} coins are back from the Nest Egg`, 'The Nest Egg is a Money master trophy now. Every coin you invested came back.')); }
+  later(2600, () => { if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
   later(4200, () => { if (state.tour.done) checkDistrict(); });
+  later(6500, () => { if (state.tour.done) areaMoment(); });
   later(9000, backupNudge);
   addEventListener('pagehide', () => save(state, true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(state, true); });

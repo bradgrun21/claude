@@ -1,5 +1,5 @@
 import { byId } from '../data/catalog.js';
-import { reqFor } from '../systems/unlocks.js';
+import { reqFor, trackerLock } from '../systems/unlocks.js';
 import * as TL from '../systems/tools.js';
 import * as DI from '../systems/district.js';
 import * as BZ from '../systems/business.js';
@@ -25,15 +25,15 @@ const section = (title, tiles, note = '') => `<div class="hsec"><div class="hsec
 
 /* A tile for something that lives in a building: open it, cut its ribbon, build it, or show why it's locked. */
 function buildingTile(state, type, emoji, name, openLine, toolId = null) {
-  const r = reqFor(state, type);
+  const r = trackerLock(state, type);
   const id = bid(state, type);
   if (r.built) {
-    if (toolId && !TL.toolAvailable(state, toolId)) return tile({ emoji, name, line: `Reach town level ${TL.toolById[toolId].level}`, status: 'locked' });
+    if (toolId && !TL.toolAvailable(state, toolId)) return tile({ emoji, name, line: `Opens at town level ${TL.toolById[toolId].level}`, status: 'locked' });
     if (toolId && !TL.toolOpened(state, toolId)) return tile({ emoji, name, line: 'Tap for the grand opening', status: 'new', attrs: `data-open="${id}"` });
     return tile({ emoji, name, line: openLine(), attrs: `data-open="${id}"` });
   }
   if (r.ok) return tile({ emoji, name, line: `Build the ${byId[type].name}${r.cost ? ` · ${r.cost} coins` : ' · free'}`, status: 'build', attrs: `data-pick="${type}"` });
-  return tile({ emoji, name, line: `${byId[type].name}: ${r.why}`, status: 'locked' });
+  return tile({ emoji, name, line: r.why, status: 'locked' });
 }
 
 /* ---------------- Money ---------------- */
@@ -52,13 +52,12 @@ export function renderMoneyHub(state, day) {
   const district = DI.DISTRICT.map((d) => {
     const def = byId[d.building], id = bid(state, d.building), c = catById(d.cat);
     if (id) { const m = DI.catMonth(state, d.cat, day); return tile({ emoji: d.emoji, name: c.short, line: m.planned ? `${$m(m.spent)} of ${$m(m.planned)}` : `${$m(m.spent)} this month`, attrs: `data-distopen="${id}"` }); }
-    if (bank && DI.catActive(state, d.cat)) return tile({ emoji: d.emoji, name: c.short, line: `Place the ${def.name} · free`, status: 'build', attrs: `data-pick="${d.building}"` });
-    return tile({ emoji: d.emoji, name: c.short, line: bank ? 'Budget for it to unlock' : 'Build the Bank first', status: 'locked' });
+    if (DI.catActive(state, d.cat)) return tile({ emoji: d.emoji, name: c.short, line: `Place the ${def.name} · free`, status: 'build', attrs: `data-pick="${d.building}"` });
+    return tile({ emoji: d.emoji, name: c.short, line: `Opens when ${c.short} is budgeted`, status: 'locked' });
   });
-  const inv = state.invest;
   const grow = [
     buildingTile(state, 'newsstation', '📰', 'Subscriptions', () => { const n = TL.subsToReview(state, day).length; return n ? `${n} to check in` : `${state.subs.filter((s) => s.status === 'active').length} active`; }, 'subs'),
-    buildingTile(state, 'nestegg', '🥚', 'Nest Egg', () => `${Math.floor(inv?.bal || 0).toLocaleString('en-US')} coins growing`),
+    buildingTile(state, 'nestegg', '🥚', 'Nest Egg', () => 'Money master trophy'),
     buildingTile(state, 'monument', '🏛️', 'Debt Freedom Monument', () => { const s = BZ.debtStatus(state); return s.free ? 'Debt free!' : `${s.paid} of ${s.total} paid off`; })
   ];
   return `${bank ? renderPath(state, 'money', 'Money path') : '<p class="hint">Money opens with the Bank. It’s the second area, right after To-Do.</p>'}
@@ -92,10 +91,10 @@ export function renderHowItWorks() {
   return `<p class="hint">Life City grows when real life does. Here’s the whole path, one step at a time.</p>
     ${step(1, 'Start with To-Do', 'Build the Community Job Board (free) and add one task. That’s it for day one.')}
     ${step(2, 'Form a habit', 'Check a task off on 3 different days. That unlocks the area’s next building and room for one more task.')}
-    ${step(3, 'Open areas one at a time', 'To-Do → Financial (Bank) → Relational (after your budget is set) → Physical → Spiritual.')}
-    ${step(4, 'Money', 'At the Bank: set up the budget, log purchases, and catch the payday train. Each category you budget builds its own building. Money levels open savings (level 2) and the debt snowball (level 3).')}
+    ${step(3, 'Open areas one at a time', 'To-Do → Financial (Bank) → then you choose: Relational, Physical or Spiritual, one after another. Each opens when the area before it has something on it.')}
+    ${step(4, 'Money', 'At the Bank, one step at a time: income & bills, build the budget, list debts, then savings. Each category you budget builds its own building, including the Grocery Store, Gas Station and News Station. Finishing every step makes you a Money master.')}
     ${step(5, 'Grow the town', 'Coins build homes, shops and roads. People let you open more Main Street shops, and shops earn coins every day. XP and people level up the town.')}
-    ${step(6, 'Trackers', 'Some buildings open helpers: meals, car care, birthdays, the date jar, Kids’ Corner, the family meeting (level 3), and more. All of them live in the Trackers menu.')}
+    ${step(6, 'Trackers', 'Some buildings open helpers: meals, car care and subscriptions (with your budget), birthdays (Post Office) and the date jar (Coffee House), plus Kids’ Corner, pets, gifts, repairs and the family meeting as the town levels up. All of them live in the Trackers menu.')}
     ${step(7, 'Rewards', 'Quick wins, daily challenges, achievements, and decorations you can only earn by showing up week after week.')}
     <p class="foot">Showing up daily matters more than adding more. One rest day a week never breaks a streak.</p>`;
 }

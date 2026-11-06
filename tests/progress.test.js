@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { newCity } from '../src/data/state.js';
 import { createList, addTask, addGoal, completeTask, achieveGoal, streak, reviewWeek, canReviewWeek, useLevel, migrateList, dueCount, isAvailable, fromFreq, freqLabel, updateTask, FULL_REWARDS_PER_DAY, TOKEN_REWARD, DAILY_VISIT, STREAK_BONUS } from '../src/systems/lists.js';
-import { sectionUnlocked, nextSection, SECTION_ORDER } from '../src/systems/progression.js';
+import { sectionUnlocked, nextSection, SECTION_ORDER, choiceFor, chooseArea, areaOrder, areaOrderFull, unlockHint } from '../src/systems/progression.js';
 import { addDays } from '../src/systems/time.js';
 
 const T = '2026-11-06'; // Friday
 const city = () => newCity({ cityName: 'Test', family: [] }, T);
-const place = (s, type, i, j) => { const b = { id: `b${s.buildSeq++}`, type, i, j, rot: 0, level: 1, builtOn: T }; s.buildings.push(b); return b; };
+const place = (s, type, i, j, extra = {}) => { const b = { id: `b${s.buildSeq++}`, type, i, j, rot: 0, level: 1, builtOn: T, ...extra }; s.buildings.push(b); return b; };
 
 describe('tasks without a big goal', () => {
   it('a list can be just simple tasks', () => {
@@ -83,25 +83,65 @@ describe('progress from consistency, not from adding more', () => {
   });
 });
 
-describe('areas open in order', () => {
-  it('To-Do → Financial → Relational (after budget) → Physical → Spiritual', () => {
+describe('areas open in order: To-Do → Financial → the player chooses', () => {
+  const addItem = (s, type, i, j) => { const b = place(s, type, i, j); createList(s, b, '', [{ title: 'Something', kind: 'daily' }], T); return b; };
+  const MAIN = { relational: 'park', physical: 'gym', spiritual: 'church' };
+  const perms = [['relational', 'physical', 'spiritual'], ['relational', 'spiritual', 'physical'], ['physical', 'relational', 'spiritual'], ['physical', 'spiritual', 'relational'], ['spiritual', 'relational', 'physical'], ['spiritual', 'physical', 'relational']];
+  it('Financial opens when To-Do has something on it; the budget no longer gates anything', () => {
     const s = city();
     expect(SECTION_ORDER.map((x) => sectionUnlocked(s, x))).toEqual([true, false, false, false, false]);
-    const jb = place(s, 'jobboard', 15, 19);
+    place(s, 'jobboard', 15, 19);
     expect(sectionUnlocked(s, 'financial')).toBe(false);
-    createList(s, jb, '', [{ title: 'Dishes', kind: 'daily' }], T);
+    createList(s, s.buildings.at(-1), '', [{ title: 'Dishes', kind: 'daily' }], T);
     expect(sectionUnlocked(s, 'financial')).toBe(true);
-    createList(s, place(s, 'bank', 20, 16), '', [{ title: 'Log', kind: 'daily' }], T);
-    expect(sectionUnlocked(s, 'relational')).toBe(false);
+    expect(choiceFor(s)).toBe(null);
     s.budget.setup = true;
-    expect(sectionUnlocked(s, 'relational')).toBe(true);
-    expect(sectionUnlocked(s, 'physical')).toBe(false);
-    expect(nextSection(s)).toBe('relational');
+    expect(sectionUnlocked(s, 'relational')).toBe(false);
+  });
+  for (const order of perms) it(`choice order ${order.join(' → ')}`, () => {
+    const s = city();
+    addItem(s, 'jobboard', 15, 19);
+    addItem(s, 'bank', 20, 16);
+    expect(choiceFor(s)).toEqual({ options: ['relational', 'physical', 'spiritual'], after: 'financial' });
+    expect(chooseArea(s, order[0])).toBe(true);
+    expect(sectionUnlocked(s, order[0])).toBe(true);
+    for (const o of order.slice(1)) expect(sectionUnlocked(s, o)).toBe(false);
+    expect(choiceFor(s)).toBe(null);
+    addItem(s, MAIN[order[0]], 10, 24);
+    expect(choiceFor(s)).toEqual({ options: order.slice(1).sort((a, b) => ['relational', 'physical', 'spiritual'].indexOf(a) - ['relational', 'physical', 'spiritual'].indexOf(b)), after: order[0] });
+    expect(chooseArea(s, order[0])).toBe(false);
+    expect(chooseArea(s, order[1])).toBe(true);
+    expect(sectionUnlocked(s, order[2])).toBe(false);
+    addItem(s, MAIN[order[1]], 13, 24);
+    expect(choiceFor(s)).toEqual({ auto: order[2], after: order[1] });
+    expect(chooseArea(s, order[2])).toBe(true);
+    expect(s.areaOrder).toEqual(['todo', 'financial', ...order]);
+    expect(areaOrderFull(s)).toEqual(['todo', 'financial', ...order]);
+    expect(choiceFor(s)).toBe(null);
+  });
+  it('locked areas give one plain reason', () => {
+    const s = city();
+    addItem(s, 'jobboard', 15, 19);
+    addItem(s, 'bank', 20, 16);
+    chooseArea(s, 'physical');
+    expect(unlockHint(s, 'relational')).toBe('Choose this after Physical has something on it.');
   });
   it('anything already opened stays open', () => {
     const s = city();
     place(s, 'church', 10, 16);
     expect(sectionUnlocked(s, 'spiritual')).toBe(true);
+  });
+  it('older saves keep every area open under the old rules, in the order they opened', () => {
+    const s = city();
+    delete s.areaOrder;
+    const jb = place(s, 'jobboard', 15, 19, { builtOn: '2026-10-01' }); createList(s, jb, '', [{ title: 'A', kind: 'daily' }], '2026-10-01');
+    const bk = place(s, 'bank', 20, 16, { builtOn: '2026-10-02' }); createList(s, bk, '', [{ title: 'B', kind: 'daily' }], '2026-10-02');
+    s.budget.setup = true;
+    const park = place(s, 'park', 10, 24, { builtOn: '2026-10-05' }); createList(s, park, '', [{ title: 'C', kind: 'daily' }], '2026-10-05');
+    expect(areaOrder(s)).toEqual(['todo', 'financial', 'relational', 'physical']);
+    expect(sectionUnlocked(s, 'relational')).toBe(true);
+    expect(sectionUnlocked(s, 'physical')).toBe(true);
+    expect(sectionUnlocked(s, 'spiritual')).toBe(false);
   });
 });
 

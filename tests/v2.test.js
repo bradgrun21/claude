@@ -23,7 +23,6 @@ describe('catalog', () => {
     for (const s of SECTION_KEYS) {
       const list = BUILDINGS.filter((b) => b.section === s && !b.alt).sort((a, b) => a.tier - b.tier);
       expect(list.map((b) => b.tier)).toEqual([1, 2, 3, 4]);
-      if (s === 'financial') { expect(list.map((b) => b.money || 0)).toEqual([0, 3, 4, 0]); continue; }
       for (let i = 1; i < 4; i++) expect(list[i].level).toBeGreaterThan(list[i - 1].level);
     }
   });
