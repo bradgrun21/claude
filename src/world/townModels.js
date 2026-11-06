@@ -169,6 +169,17 @@ function postoffice() {
 function library() { const g = new THREE.Group(); g.add(pad(0.96)); const l = m.library(); l.position.y = 0.05; g.add(l); g.add(tree(0.38, 0.36, 0.5)); return g; }
 
 /* ---------- Shops (payday truck destinations) + station + debt payoff ---------- */
+function school() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0'));
+  const h = m.schoolhouse(); h.scale.setScalar(1.15); h.position.set(-0.08, 0.05, -0.12); g.add(h);
+  /* playground: a little slide and swing */
+  const yard = mesh(new THREE.BoxGeometry(0.36, 0.012, 0.3), C.sand, false, true); yard.position.set(0.28, 0.056, 0.3); g.add(yard);
+  g.add(box(0.03, 0.18, 0.03, C.red, 0.18, 0.05, 0.22)); g.add(box(0.03, 0.18, 0.03, C.red, 0.38, 0.05, 0.22)); g.add(box(0.24, 0.025, 0.03, C.red, 0.28, 0.23, 0.22));
+  g.add(box(0.06, 0.012, 0.04, C.yellow, 0.28, 0.12, 0.22));
+  const slide = mesh(new THREE.BoxGeometry(0.06, 0.012, 0.22), C.blue); slide.position.set(0.3, 0.1, 0.38); slide.rotation.x = 0.55; g.add(slide);
+  const flag = box(0.012, 0.36, 0.012, C.white, -0.4, 0.05, 0.36); g.add(flag); g.add(box(0.1, 0.06, 0.006, C.blue, -0.35, 0.33, 0.36));
+  return g;
+}
 function groceryStore() { const g = new THREE.Group(); g.add(pad(0.96)); const s = m.grocery(); s.position.y = 0.05; g.add(s); const cart = box(0.12, 0.06, 0.08, C.white, 0.34, 0.05, 0.4); g.add(cart); return g; }
 function gasstation() {
   const g = new THREE.Group(); g.add(pad(0.98, '#C9CED6'));
@@ -252,7 +263,7 @@ const decor = {
 };
 
 const BUILDERS = {
-  townhall, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
+  townhall, school, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
   cottage, house: familyHouse, townhouse, apartments, ...decor
 };
 

@@ -3,6 +3,7 @@ import { budgetSummary, eventsOn, upcoming, OUTING_REWARD } from '../systems/cal
 import { memoriesFor, MAX_RECAP } from '../systems/memories.js';
 import { fromKey, addDays, shortDate, weekday } from '../systems/time.js';
 import { svgI, esc, fmt$ } from './icons.js';
+import { peopleOn } from '../systems/tools.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const chip = (s) => `<span class="schip" style="--c:${SECTIONS[s].color}">${svgI(SECTIONS[s].icon, '#fff', 12, 2.4)}${SECTIONS[s].name}</span>`;
@@ -24,7 +25,8 @@ export function renderCalendar(state, today, ym, sel) {
     if (k >= 35 && !key.startsWith(ym)) break;
     const evs = eventsOn(state, key), mems = memoriesFor(state, { day: key });
     const gts = goalTargetsOn(state, key);
-    const dots = [...gts.map((g) => `<i class="gt" style="--c:${SECTIONS[g.section].color}"></i>`), ...evs.map((e) => `<i style="background:${SECTIONS[e.section].color}"></i>`), ...(mems.length ? ['<i class="mem"></i>'] : [])].slice(0, 4).join('');
+    const bds = peopleOn(state, key);
+    const dots = [...bds.map(() => '<i class="bd"></i>'), ...gts.map((g) => `<i class="gt" style="--c:${SECTIONS[g.section].color}"></i>`), ...evs.map((e) => `<i style="background:${SECTIONS[e.section].color}"></i>`), ...(mems.length ? ['<i class="mem"></i>'] : [])].slice(0, 4).join('');
     cells.push(`<button type="button" class="cday${key.startsWith(ym) ? '' : ' out'}${key === today ? ' today' : ''}${key === sel ? ' sel' : ''}" data-day="${key}"><b>${fromKey(key).getDate()}</b><span class="dots">${dots}</span></button>`);
   }
   const pct = b.limit ? Math.min(100, (b.planned / b.limit) * 100) : 0;
@@ -34,6 +36,7 @@ export function renderCalendar(state, today, ym, sel) {
   const dayEvents = eventsOn(state, sel), dayMems = memoriesFor(state, { day: sel });
   const dayGoals = goalTargetsOn(state, sel);
   const day = `<div class="h3">${weekday(sel)}, ${shortDate(sel)}</div>
+    ${peopleOn(state, sel).map((p) => `<div class="goal-target" style="--c:#F28CA0">${p.kind === 'anniversary' ? '💍' : '🎂'} <span><b>${esc(p.name)}’s ${p.kind}</b><small>Send a card from the Post Office</small></span></div>`).join('')}
     ${dayGoals.map((g) => `<div class="goal-target" style="--c:${SECTIONS[g.section].color}">🎯 <span><b>${esc(g.title)}</b><small>Goal target date</small></span></div>`).join('')}
     ${dayEvents.map((e) => renderEventCard(state, e, today)).join('') || '<p class="hint">Nothing planned this day.</p>'}
     ${dayMems.length ? `<div class="mem-strip">${dayMems.map(memoryThumb).join('')}</div>` : ''}

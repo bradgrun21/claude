@@ -2,6 +2,7 @@ import { TOWNHALL_AT, STATION_AT, starterRoads, stationRoad, key } from './map.j
 import { emptyBudget } from '../systems/budget.js';
 import { occupancy } from '../systems/placement.js';
 import { migrateList } from '../systems/lists.js';
+import { ensureTools } from '../systems/tools.js';
 
 /*
  * One state object that every system reads, saved in this browser only (Phase 1: no real user data leaves the device).
@@ -48,6 +49,7 @@ export function newCity({ cityName, family }, today) {
   s.roads = starterRoads().map(([i, j]) => key(i, j));
   s.buildings.push({ id: 'th', type: 'townhall', i: TOWNHALL_AT.i, j: TOWNHALL_AT.j, rot: 0, level: 1, builtOn: today, story: 'the day your family founded the city' });
   addStation(s, today);
+  ensureTools(s);
   s.stats.lastDay = today;
   return s;
 }
@@ -76,6 +78,7 @@ export function load() {
     s.settings = { ...base.settings, ...s.settings };
     s.budget = { ...base.budget, ...s.budget };
     s.lists.forEach(migrateList);
+    ensureTools(s);
     addStation(s, s.stats?.lastDay || s.startDate);
     return s;
   } catch (e) {

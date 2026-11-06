@@ -48,6 +48,7 @@ export const BUILDINGS = [
   { id: 'grocery', name: 'Grocery Store', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Grocery money gets delivered here on payday.' },
   { id: 'gasstation', name: 'Gas Station', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Gas and car money goes here on payday.' },
   { id: 'newsstation', name: 'News Station', kind: 'shop', size: [1, 1], cost: 40, level: 1, needsBank: true, desc: 'Subscriptions and phone bills go here on payday.' },
+  { id: 'school', name: 'School', kind: 'shop', size: [2, 2], cost: 120, level: 3, desc: 'Kids’ Corner: chore stars, rewards and a reading log.' },
   { id: 'station', name: 'Train Station', kind: 'civic', size: [2, 2], cost: 0, level: 0, unique: true, desc: 'The payday train stops here.' },
 
   { id: 'cottage', name: 'Cottage', kind: 'home', size: [1, 1], cost: 50, level: 1, pop: 5, desc: '+5 population' },

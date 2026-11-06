@@ -24,7 +24,7 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
@@ -32,6 +32,8 @@ import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, re
 import { sectionUnlocked, unlockHint, nextSection } from './systems/progression.js';
 import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
+import * as TL from './systems/tools.js';
+import { renderTool, renderRibbon, TOOL_TABS } from './ui/tools.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
@@ -132,8 +134,15 @@ function boot(state, opts) {
   const bubbles = new Map();
   function refreshBubbles() {
     const want = new Map();
+    const dow = new Date(today + 'T12:00').getDay();
     for (const b of state.buildings) {
       const def = byId[b.type];
+      const tool = TL.toolForBuilding(b.type);
+      if (tool && TL.toolAvailable(state, tool.id) && !TL.toolOpened(state, tool.id)) { want.set(b.id, { sig: 'new', html: bubbleHtml(`<span class="bub-emoji">${tool.emoji}</span>`, `New: ${tool.name}`, b.id, def.section || null) }); continue; }
+      if (tool && TL.toolOpened(state, tool.id)) {
+        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
+        if (tb && !(def.kind === 'section' && listFor(state, b.id) && dueCount(listFor(state, b.id), today))) { want.set(b.id, { sig: `t${tb[1]}`, html: bubbleHtml(`<span class="bub-emoji">${tb[0]}</span>`, tb[1], b.id, def.section || null) }); continue; }
+      }
       if (def.kind === 'section') {
         const list = listFor(state, b.id);
         if (!list) want.set(b.id, { sig: 'add', html: bubbleHtml(svgI('plus', SECTIONS[def.section].color, 20, 3), 'Add a list', b.id, def.section) });
@@ -203,6 +212,7 @@ function boot(state, opts) {
       const lv = levels.at(-1);
       note(state, today, 'levelup', { level: lv });
       if (lv >= 3) win('level3');
+      if (lv >= 3 && !TL.toolOpened(state, 'meeting')) later(4200, () => toast('New at the Town Hall: Family Meeting', 'Tap the Town Hall to cut the ribbon'));
       later(700, () => {
         sound.chime(); sound.firework();
         fx.fireworks(controls.target, 5, () => sound.firework());
@@ -241,6 +251,14 @@ function boot(state, opts) {
     else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
     else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
+    else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : ''); }
+    else if (p.kind === 'tool') {
+      const t = TL.toolById[p.tool]; const b = state.buildings.find((x) => x.id === p.buildingId);
+      const tl = [...(b && byId[b.type].kind === 'section' ? [['list', 'List']] : []), ...TOOL_TABS[p.tool], ...(p.tool === 'meeting' ? [['upgrade', 'Upgrade']] : [])];
+      title = `${t.emoji} ${t.name}`;
+      tabs = tl.map(([k, l]) => `<button type="button" class="wtab${p.tab === k || (p.tab === 'recipe' && k === 'recipes') ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
+      body = p.tab === 'list' && b && byId[b.type].kind === 'section' ? renderBuilding(state, b, today) : p.tab === 'upgrade' ? renderTownHall(state) : renderTool(state, p, today);
+    }
     else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
     else if (p.kind === 'calendar') { title = 'Calendar'; body = renderCalendar(state, today, p.ym, p.sel); }
@@ -319,6 +337,12 @@ function boot(state, opts) {
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
     if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
+  $('panelBody').addEventListener('input', (e) => { if (panel?.kind === 'tool' && e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value; });
+  $('panelBody').addEventListener('change', (e) => {
+    if (panel?.kind !== 'tool') return;
+    if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
+    if (e.target.dataset.meal) { TL.setMeal(state, e.target.dataset.meal, e.target.value); persist(); renderPanel(); }
+  });
   $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); });
   function readJournalForm() {
     const d = panel?.draft; if (!d) return;
@@ -362,6 +386,13 @@ function boot(state, opts) {
     if (b.type === 'savings') return openPanel('bank', { tab: 'savings', ui: {} });
     if (b.type === 'payoff') return openPanel('bank', { tab: 'debts', ui: {} });
     if (b.type === 'station' && (payday || paydayDue(state.budget, today))) return startPayday();
+    const tool = TL.toolForBuilding(b.type);
+    if (tool && TL.toolAvailable(state, tool.id)) {
+      if (!TL.toolOpened(state, tool.id)) return openPanel('ribbon', { tool: tool.id, buildingId: id });
+      const l = byId[b.type].kind === 'section' && listFor(state, id);
+      const tab = (l && dueCount(l, today)) ? 'list' : tool.id === 'meeting' && canUpgradeTownHall(state).ok ? 'upgrade' : TOOL_TABS[tool.id][0][0];
+      return openPanel('tool', { tool: tool.id, buildingId: id, tab, ui: {} });
+    }
     openPanel('building', { id });
   }
   const nextFridayKey = () => { let k = today; for (let i = 0; i < 7; i++) { const d = addDays(today, i); if (new Date(d + 'T12:00').getDay() === 5) { k = d; break; } } return k; };
@@ -653,6 +684,7 @@ function boot(state, opts) {
         if (def.kind === 'section') rec.story = 'a new list for your family';
         flyRewards(screenOf(bld.views.get(rec.id).top), { pop: def.pop || 0 });
         if (def.kind === 'home') { win('home'); toast(`${def.name} built`, `+${def.pop} people moved in`); emit('home'); }
+        else if (TL.toolForBuilding(id) && TL.toolAvailable(state, TL.toolForBuilding(id).id)) later(3600, () => { if (!panel && !mode) openBuilding(rec.id); });
         else if (def.kind === 'section') later(3600, () => { if (!panel && !mode) openBuilder({ mode: 'add', buildingId: rec.id }); });
         else toast(`${def.name} placed`);
       }
@@ -882,6 +914,8 @@ function boot(state, opts) {
     if (d.ideas) { const [sec, src] = d.ideas.split(':'); if (src === 'draft') { readGoalForm(); openPanel('ideas', { section: sec, draft: panel.draft, builderPrev: panel.prev, added: new Set() }); } else openPanel('ideas', { section: sec, listId: src, added: new Set(), prev: snapshot() }); return; }
     if (d.idea) { addIdea(d.idea, b); return; }
     if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
+    if (d.ribbon) { cutRibbon(d.ribbon, b); return; }
+    if (d.ta) { toolAction(d.ta, d.id, b); return; }
     if (d.reviewopen) { openPanel('review', { prev: snapshot() }); return; }
     if (d.review) { const r = reviewWeek(state, today); if (r) { flyRewards(centerOf(b), r.reward); sound.chime(); toast('Week reviewed', 'See you next week'); afterProgress(); renderPanel(); } return; }
     if (d.upgrade) { upgradeHome(d.upgrade); return; }
@@ -959,11 +993,98 @@ function boot(state, opts) {
       rec.level = lv1;
       later(1200, () => { toast(`${byId[rec.type].name} is growing!`, `${lv1 === 2 ? 10 : 30} days of steady use`); living.construct(rec, () => { syncWorld(); persist(); }); });
     }
+    if (r.task.who && state.family.some((m) => m.name === r.task.who && m.kind === 'kid')) { TL.ensureTools(state); const st = TL.giveStar(state, r.task.who, 'Chore done', today); if (st) later(700, () => toast(`⭐ for ${r.task.who}!`, `${st.stars} stars · spend them in Kids’ Corner`)); }
     living.refresh();
     if (totalDue(state, today) === 0) later(900, () => { fx.fireworks(controls.target, 4, () => sound.firework()); toast('Everything due today is done!', 'The town is celebrating'); });
     emit('task');
     afterProgress(); renderPanel();
   }
+  /* ---------- Building tools ---------- */
+  function cutRibbon(id, el) {
+    if (!TL.openTool(state, id, today)) return;
+    const p = panel; const t = TL.toolById[id];
+    const v = bld.views.get(p.buildingId);
+    sound.chime(); later(250, () => sound.firework());
+    if (v) { fx.confetti(v.top); fx.fireworks(v.top, 3, () => sound.firework()); bld.bounce(p.buildingId); }
+    flyRewards(centerOf(el), { xp: 10 });
+    state.xp += 10;
+    note(state, today, 'built', { name: `${t.name} at the ${byId[state.buildings.find((x) => x.id === p.buildingId)?.type]?.name || 'town'}` });
+    toast(`${t.name} is open!`, `${t.keeper} says welcome`);
+    openPanel('tool', { tool: id, buildingId: p.buildingId, tab: TOOL_TABS[id][0][0], ui: {} });
+    afterProgress();
+  }
+  function toolReward(el, r, main, sub) { if (r) { flyRewards(centerOf(el), r); sound.coin(); } else sound.pop(); if (main) toast(main, sub); }
+  const KID_COLORS = ['#F28CA0', '#F2B54A', '#4CAF6A', '#9A72D6', '#4E9BCB', '#E8643F'];
+  function toolAction(a, id, el) {
+    const p = panel, ui = p.ui || (p.ui = {});
+    const clear = (...keys) => keys.forEach((k) => { ui[k] = ''; });
+    const need = (val, msg) => { if (val && String(val).trim()) return true; toast(msg); return false; };
+    switch (a) {
+      case 'tab': p.tab = id; break;
+      case 'quest': { const r = TL.claimQuest(state, p.tool); if (r) { flyRewards(centerOf(el), r); sound.chime(); fx.confetti(bld.views.get(p.buildingId)?.top || controls.target); toast('First step done!', `+${r.coins} coins · +${r.xp} XP`); } break; }
+      /* meals */
+      case 'rnew': Object.assign(ui, { rid: null, rname: '', ring: '', rnotes: '' }); p.tab = 'recipe'; break;
+      case 'redit': { const r = state.meals.recipes.find((x) => x.id === id); if (r) { Object.assign(ui, { rid: r.id, rname: r.name, ring: r.ingredients.join('\n'), rnotes: r.notes }); p.tab = 'recipe'; } break; }
+      case 'rsave': { if (!need(ui.rname, 'Name the recipe first')) return; const data = { name: ui.rname, ingredients: ui.ring || '', notes: ui.rnotes || '' }; if (ui.rid) TL.updateRecipe(state, ui.rid, data); else TL.addRecipe(state, data); toolReward(el, null, ui.rid ? 'Recipe updated' : 'Recipe saved', 'Pick it for a night on This week'); clear('rname', 'ring', 'rnotes'); ui.rid = null; p.tab = 'recipes'; break; }
+      case 'rdel': TL.removeRecipe(state, id); toast('Recipe removed'); p.tab = 'recipes'; break;
+      case 'rstarter': { const [n, ing, notes] = TL.STARTER_RECIPES[+id]; TL.addRecipe(state, { name: n, ingredients: ing, notes }); toolReward(el, null, `${n} added`, 'Edit it any time to match how your family makes it'); break; }
+      case 'mweek': ui.week = id; break;
+      case 'gbuild': { const n = TL.buildGroceryList(state, ui.week || today); p.tab = 'list'; toast(n ? `${n} items added to the list` : 'Nothing new to add', n ? 'Check them off at the store' : 'Plan some dinners with recipes first'); break; }
+      case 'gadd': if (!need(ui.gitem, 'Type an item first')) return; TL.addGroceryItem(state, ui.gitem); clear('gitem'); sound.pop(); break;
+      case 'gtoggle': TL.toggleGroceryItem(state, id); sound.pop(); break;
+      case 'gclear': TL.clearGroceryDone(state); toast('Cart cleared', 'Nice shopping trip'); break;
+      case 'mclaim': { const r = TL.claimMealPlan(state, today); toolReward(el, r, 'Week of dinners planned!', 'Future you says thanks'); break; }
+      /* car & home care */
+      case 'thadd': { const th = TL.addThing(state, ui.thname, id); clear('thname'); toast(`${th.name} added`, 'We filled in the usual upkeep. Set when each was last done.'); break; }
+      case 'cthdel': if (ui.confirm !== id) { ui.confirm = id; el.textContent = 'Tap again to remove'; return; } TL.removeThing(state, id); ui.confirm = null; break;
+      case 'clast': { if (!need(ui[`last_${id}`], 'Pick the date it was last done')) return; const it = TL.setCareLast(state, id, ui[`last_${id}`]); toast('Got it', it ? `Next one: ${shortDate(TL.careNext(it))}` : ''); break; }
+      case 'clog': { const r = TL.logCare(state, id, today); if (r) toolReward(el, r.reward, `${r.item.name} logged`, `Next one around ${shortDate(TL.careNext(r.item))}`); break; }
+      case 'cidel': TL.removeCareItem(state, id); break;
+      case 'ciadd': if (!need(ui[`cin_${id}`], 'Name it first')) return; TL.addCareItem(state, id, ui[`cin_${id}`], ui[`cim_${id}`] || 12); clear(`cin_${id}`); break;
+      /* subscriptions */
+      case 'sadd': if (!need(ui.sname, 'Name the subscription')) return; TL.addSub(state, { name: ui.sname, amount: ui.samt, cycle: ui.scycle, day: today }); clear('sname', 'samt'); sound.pop(); break;
+      case 'skeep': { const r = TL.keepSub(state, id, today); if (r) toolReward(el, r.reward, `Keeping ${r.sub.name}`, 'Checked in. See you in 6 months.'); break; }
+      case 'scancel': { const r = TL.cancelSub(state, id, today); if (r) { toolReward(el, r.reward, `${r.sub.name} canceled!`, 'That money stays with your family now'); fx.fireworks(bld.views.get(p.buildingId)?.top || controls.target, 3, () => sound.firework()); } break; }
+      case 'sdel': TL.removeSub(state, id); break;
+      /* birthdays & cards */
+      case 'padd': { if (!need(ui.pname, 'Add a name')) return; if (!need(ui.pdate, 'Pick the date')) return; const pp = TL.addPerson(state, { name: ui.pname, date: ui.pdate, kind: ui.pkind, day: today }); if (pp) { clear('pname', 'pdate'); toast(`${pp.name} added`, `You’ll get a heads-up a week before`); sound.pop(); } break; }
+      case 'pdel': TL.removePerson(state, id); break;
+      case 'csent': { const r = TL.markCardSent(state, id, today); if (r) toolReward(el, r.reward, `Card for ${r.person.name} sent 💌`, 'Little things mean a lot'); break; }
+      case 'tyadd': if (!need(ui.tyto, 'Who are you thanking?')) return; TL.addThanks(state, ui.tyto, ui.tyfor); clear('tyto', 'tyfor'); sound.pop(); break;
+      case 'tysent': { const r = TL.thanksSent(state, id, today); if (r) toolReward(el, r.reward, `Thank-you to ${r.note.to} sent`, 'Gratitude is a good habit'); break; }
+      /* date night jar */
+      case 'dfilter': ui.dfilter = id; break;
+      case 'ddraw': { const i = TL.drawDate(state, ui.dfilter || 'any'); if (!i) { toast('No ideas match', 'Add some under All ideas'); return; } ui.drawn = i.id; ui.ddate = ''; sound.pop(); break; }
+      case 'ddate': break;
+      case 'dplan': { const nf = (() => { for (let k = 1; k <= 7; k++) { const d2 = addDays(today, k); if (new Date(d2 + 'T12:00').getDay() === 5) return d2; } return addDays(today, 1); })(); const ev = TL.planDate(state, id, ui.ddate || nf, state.family.filter((m) => m.kind === 'adult').map((m) => m.name)); if (ev) { win('outing', centerOf(el)); sound.chime(); toast(`${ev.title} is on the calendar`, `${weekday(ev.date)}, ${shortDate(ev.date)} · have fun!`); ui.drawn = null; } break; }
+      case 'dadd': if (!need(ui.dtext, 'Type an idea first')) return; TL.addDateIdea(state, ui.dtext, ui.dcost || 'free'); clear('dtext'); sound.pop(); break;
+      case 'ddel': TL.removeDateIdea(state, id); break;
+      /* kids */
+      case 'kadd': { if (!need(ui.kname, 'Add a first name')) return; const m = TL.addKid(state, ui.kname, KID_COLORS[state.family.length % KID_COLORS.length]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); clear('kname'); toast(`Welcome, ${m.name}!`, 'Assign chores from any list under “Who does it”'); break; }
+      case 'kpick': ui.kid = ui.kid === id ? '' : id; break;
+      case 'kstar': { const [n, why] = id.split('|'); const r = TL.giveStar(state, n, why, today); if (r) { toolReward(el, r.reward, `⭐ for ${n}: ${why}`, `${r.stars} stars to spend on rewards`); ui.kid = ''; } break; }
+      case 'kredeem': { const [n, rid] = id.split('|'); const r = TL.redeemReward(state, n, rid, today); if (r) { sound.chime(); fx.confetti(bld.views.get(p.buildingId)?.top || controls.target); toast(`${n} earned: ${r.name}! 🎉`, 'Enjoy it together'); } break; }
+      case 'kradd': if (!need(ui.krname, 'Name the reward')) return; TL.addKidReward(state, ui.krname, ui.krcost || 10); clear('krname'); break;
+      case 'krdel': TL.removeKidReward(state, id); break;
+      case 'kbook': { if (!need(ui[`book_${id}`], 'Type the book title')) return; const r = TL.logBook(state, id, ui[`book_${id}`], today); if (r) { toolReward(el, r.reward, `📚 ${id} finished “${r.book.title}”`, `+1 star · ${TL.booksThisYear(state, id, today)} books this year`); clear(`book_${id}`); } break; }
+      /* family meeting */
+      case 'mfinish': {
+        const checkins = {};
+        for (const m of state.family.filter((x) => x.kind !== 'pet')) { const hi = ui[`hi_${m.name}`] || '', lo = ui[`lo_${m.name}`] || ''; if (hi || lo) checkins[m.name] = { high: hi, low: lo }; }
+        const r = TL.holdMeeting(state, { wins: ui.mwins, checkins, focus: ui.mfocus, notes: ui.mnotes }, today);
+        if (!r) return;
+        flyRewards(centerOf(el), r.reward); sound.chime();
+        fx.fireworks(thc, 4, () => sound.firework());
+        note(state, today, 'meeting', { focus: r.meeting.focus });
+        toast('Family meeting done!', r.meeting.focus ? `This week’s focus: ${r.meeting.focus}` : 'See you next week');
+        p.ui = {};
+        break;
+      }
+      default: return;
+    }
+    persist(); hud(); afterProgress(); renderPanel();
+  }
+
   /* ---------- Menu + paper ---------- */
   function renderMenu(confirm) {
     const q = state.settings.quality;

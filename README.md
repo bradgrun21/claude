@@ -34,6 +34,17 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   the day earns a daily-visit bonus, streaks pay at 3/7/14/30/60/100 days (one rest day a week never breaks one),
   and a weekly **Week in review** pays for looking back. Buildings **grow** (pennants, then a gold star) after 10 and
   30 days of use, with scaffolding and a crane while they build.
+- **Building tools.** Some buildings open a practical tool, with a ribbon cutting, a shopkeeper, one easy first step
+  that pays a bonus, and small capped rewards for using it (fixed amounts, never based on dollars):
+  | Building | Tool |
+  |---|---|
+  | Grocery Store | Meal Planner: recipe box (with starter favorites), dinners for the week, grocery list built from the plan |
+  | Gas Station | Car & Home Care: oil, tires, filters, smoke detectors… log it once and it comes around again |
+  | News Station | Subscriptions: monthly total, a check-in every 6 months, celebrate what you cancel |
+  | Post Office | Birthdays & Cards: heads-up a week ahead, ages, “card sent”, thank-you notes; birthdays on the calendar |
+  | Coffee House | Date Night Jar: draw an idea, put it on the calendar |
+  | School (new) | Kids’ Corner: stars for chores and kindness (kid-assigned tasks give stars), rewards to spend them on, reading log |
+  | Town Hall (level 3) | Family Meeting: celebrate, high/low check-ins, the week ahead, money minute, one focus. Counts as the weekly review |
 - **A living town.** Ducks on the ponds, boats on the river, flowers along the roads that spread with the streak,
   windows that glow brighter with it, real-clock day and night (or pick Day/Night in the menu), and neighbors you can
   tap who notice the family's real week.
@@ -113,6 +124,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Lists and tasks (daily / weekly / one-time), goals reached, streak | `src/systems/lists.js` |
 | Which areas are open (progressive unlock) | `src/systems/progression.js` |
 | 💡 Idea lists | `src/data/ideas.js` |
+| Building tools (meals, care, subscriptions, cards, dates, kids, meeting) | `src/systems/tools.js`, `src/ui/tools.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
 | Daily challenges, milestones, quick wins | `src/systems/challenges.js` |
 | Saved state (one object, localStorage) | `src/data/state.js` |
