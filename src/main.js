@@ -116,6 +116,15 @@ function boot(state, opts) {
   const persist = () => save(state);
   for (const b of state.buildings) bld.add(b);
   walkers.addFamily(state.family);
+  /* Family name tags follow each person (hidden when zoomed far out); the family's cars drive around town. */
+  const famTags = [];
+  function syncFamilyTags() {
+    for (const t of famTags) tags.remove(t.tag, false);
+    famTags.length = 0;
+    for (const o of walkers.familyObjs()) { const m = o.userData.member; famTags.push({ o, tag: tags.add(`<span class="ftag" style="--c:${m.color}">${m.kind === 'pet' ? '🐾 ' : ''}${esc(m.name)}</span>`, o.position, 'ftag-wrap', { bubble: true }), h: m.kind === 'pet' ? 0.45 : m.kind === 'kid' ? 0.55 : 0.72 }); }
+  }
+  const syncFamilyCars = () => walkers.setFamilyCars((state.care?.things || []).filter((t) => t.kind === 'car').map((t) => ({ name: t.name, type: t.type || 'car', color: t.color || '#4E9BCB' })));
+  syncFamilyTags(); syncFamilyCars();
   const living = createLiving(scene, { state, fx, bld, sound, today: () => today, onRebuilt: (id) => { const t = bubbles.get(id); if (t) { tags.remove(t.tag, false); bubbles.delete(id); } refreshBubbles(); } });
 
   /* ---------- Static HUD art ---------- */
@@ -161,7 +170,7 @@ function boot(state, opts) {
     $('lblWins').textContent = 'Rewards';
     badge('bdgWins', requestItems(state, today).length + milestoneState(state).filter((m) => m.ready).length + (state.earned || []).filter((e) => !state.buildings.some((b) => b.type === e.id)).length);
     badge('bdgMoney', (paydayDue(state.budget, today) ? 1 : 0) + (state.buildings.some((x) => x.type === 'bank') && !state.budget.setup ? 1 : 0));
-    badge('bdgTrack', TL.TOOLS.filter((t) => TL.toolAvailable(state, t.id) && !TL.toolOpened(state, t.id)).length + TL.careDueCount(state, today) + TL.cardsDueSoon(state, today));
+    badge('bdgTrack', TL.TOOLS.filter((t) => TL.toolAvailable(state, t.id) && !TL.toolOpened(state, t.id)).length + TL.cardsDueSoon(state, today));
     const first = state.family[0];
     $('avatarIn').textContent = (state.cityName || 'L').trim()[0].toUpperCase();
     $('profileBtn').style.setProperty('--c', first ? first.color : '#3F8FE0');
@@ -176,7 +185,7 @@ function boot(state, opts) {
       const tool = TL.toolForBuilding(b.type);
       if (tool && TL.toolAvailable(state, tool.id) && !TL.toolOpened(state, tool.id)) { want.set(b.id, { sig: 'new', html: bubbleHtml(`<span class="bub-emoji">${tool.emoji}</span>`, `New: ${tool.name}`, b.id, def.section || null) }); continue; }
       if (tool && TL.toolOpened(state, tool.id)) {
-        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
+        const tb = tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
         if (tb && !(def.kind === 'section' && listFor(state, b.id) && dueCount(listFor(state, b.id), today))) { want.set(b.id, { sig: `t${tb[1]}`, html: bubbleHtml(`<span class="bub-emoji">${tb[0]}</span>`, tb[1], b.id, def.section || null) }); continue; }
       }
       if (def.kind === 'biz') { const n = BZ.bizReady(b); if (n >= Math.max(1, def.income / 2)) want.set(b.id, { sig: BZ.bizFull(b) ? 'bizfull' : 'biz', html: bubbleHtml(svgI('coin', '#C98E25', 20, 2.6), BZ.bizFull(b) ? 'Register full' : `+${n}`, b.id, null) }); continue; }
@@ -329,7 +338,7 @@ function boot(state, opts) {
       const t = p.tab || 'wins';
       title = 'Rewards';
       tabs = [['wins', 'Quick wins'], ['earned', 'Earned'], ['achievements', 'Achievements'], ['stickers', 'Stickers']].map(([k, l]) => `<button type="button" class="wtab${t === k ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
-      body = t === 'wins' ? renderRequests(state, today) : t === 'earned' ? `<p class="hint">These can’t be bought. They’re earned by showing up week after week.</p>${profileBody(state, 'earned')}` : profileBody(state, t);
+      body = t === 'wins' ? renderRequests(state, today) : profileBody(state, t);
     }
     else if (p.kind === 'money') { title = '💰 Money'; body = renderMoneyHub(state, today); }
     else if (p.kind === 'trackers') { title = '📓 Trackers'; body = renderTrackersHub(state, today); }
@@ -975,10 +984,11 @@ function boot(state, opts) {
     if (mode?.kind === 'place') { if (p && !mode.pan) { const [w, d] = byId[mode.type].size; const t = tileUnder(p, ghost.rot % 2 ? d : w, ghost.rot % 2 ? w : d); ghost.move(t.i, t.j); validate(); } return; }
     if (mode) return;
     ray.setFromCamera(ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
-    const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs(), ...walkers.peopleObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
+    const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs(), ...walkers.peopleObjs(), ...walkers.carObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
     if (sh) {
       let o = sh.object; while (o && !o.userData.surprise) o = o.parent;
       const kind = o.userData.surprise;
+      if (kind === 'familycar') { const c = o.userData.car; toast(`${c.name}`, `Your ${({ car: 'car', suv: 'SUV', crossover: 'crossover', truck: 'truck' })[c.type] || 'car'} · log work in Car & Home Care`); sound.pop(); return; }
       if (kind === 'neighbor') { const n = living.neighborSays(o.userData.nb); walkers.pause(o, 2600); toast(`${n.name}: “${n.line}”`); fx.heartPop(o.position); sound.pop(); return; }
       if (kind === 'family') { const m = o.userData.member; toast(`${m.name} says hi!`, pick(['Nice work today.', 'This town feels like home.', 'What should we build next?', 'Let’s check something off together.'])); fx.heartPop(o.position); return; }
       fx.heartPop(o.position); sound.pop();
@@ -1289,12 +1299,19 @@ function boot(state, opts) {
       case 'gclear': TL.clearGroceryDone(state); toast('Cart cleared', 'Nice shopping trip'); break;
       case 'mclaim': { const r = TL.claimMealPlan(state, today); toolReward(el, r, 'Week of dinners planned!', 'Future you says thanks'); break; }
       /* car & home care */
-      case 'thadd': { const th = TL.addThing(state, ui.thname, id); clear('thname'); toast(`${th.name} added`, 'We filled in the usual upkeep. Set when each was last done.'); break; }
-      case 'cthdel': if (ui.confirm !== id) { ui.confirm = id; el.textContent = 'Tap again to remove'; return; } TL.removeThing(state, id); ui.confirm = null; break;
-      case 'clast': { if (!need(ui[`last_${id}`], 'Pick the date it was last done')) return; const it = TL.setCareLast(state, id, ui[`last_${id}`]); toast('Got it', it ? `Next one: ${shortDate(TL.careNext(it))}` : ''); break; }
-      case 'clog': { const r = TL.logCare(state, id, today); if (r) toolReward(el, r.reward, `${r.item.name} logged`, `Next one around ${shortDate(TL.careNext(r.item))}`); break; }
-      case 'cidel': TL.removeCareItem(state, id); break;
-      case 'ciadd': if (!need(ui[`cin_${id}`], 'Name it first')) return; TL.addCareItem(state, id, ui[`cin_${id}`], ui[`cim_${id}`] || 12); clear(`cin_${id}`); break;
+      case 'thadd': { const th = TL.addThing(state, ui.thname, id, { type: ui.newtype, color: ui.newcolor }); clear('thname'); ui.logfor = th.id; toast(`${th.name} added`, id === 'car' ? 'Log work as it’s done: what, when, and the odometer' : 'Log work as it’s done'); syncFamilyCars(); break; }
+      case 'newtype': ui.newtype = id; break;
+      case 'newcolor': ui.newcolor = id; break;
+      case 'thedit': ui.editthing = ui.editthing === id ? null : id; break;
+      case 'thtype': { const [tid, t] = id.split('|'); TL.updateThing(state, tid, { type: t }); syncFamilyCars(); break; }
+      case 'thcolor': { const [tid, c] = id.split('|'); TL.updateThing(state, tid, { color: c }); syncFamilyCars(); break; }
+      case 'cthdel': if (ui.confirm !== id) { ui.confirm = id; el.textContent = 'Tap again to remove'; return; } TL.removeThing(state, id); ui.confirm = null; syncFamilyCars(); break;
+      case 'cwopen': Object.assign(ui, { logfor: id, cw_what: '', cw_date: today, cw_odo: '' }); break;
+      case 'cwcancel': ui.logfor = null; break;
+      case 'cwpick': ui.cw_what = id; break;
+      case 'cwsave': { if (!need(ui.cw_what, 'Pick or type what was done')) return; const r = TL.logCareWork(state, id, { what: ui.cw_what, date: ui.cw_date || today, odometer: ui.cw_odo }, today); if (r) { toolReward(el, r.reward, `${r.entry.what} logged`, `${shortDate(r.entry.date)}${r.entry.odometer ? ` · ${r.entry.odometer.toLocaleString('en-US')} mi` : ''}`); ui.logfor = null; markUse(state, 'care', today); } break; }
+      case 'cldel': TL.removeCareLog(state, id); break;
+      case 'clall': ui.allfor = id; break;
       /* subscriptions */
       case 'sadd': if (!need(ui.sname, 'Name the subscription')) return; TL.addSub(state, { name: ui.sname, amount: ui.samt, cycle: ui.scycle, day: today }); clear('sname', 'samt'); sound.pop(); break;
       case 'skeep': { const r = TL.keepSub(state, id, today); if (r) toolReward(el, r.reward, `Keeping ${r.sub.name}`, 'Checked in. See you in 6 months.'); break; }
@@ -1314,7 +1331,7 @@ function boot(state, opts) {
       case 'dadd': if (!need(ui.dtext, 'Type an idea first')) return; TL.addDateIdea(state, ui.dtext, ui.dcost || 'free'); clear('dtext'); sound.pop(); break;
       case 'ddel': TL.removeDateIdea(state, id); break;
       /* kids */
-      case 'kadd': { if (!need(ui.kname, 'Add a first name')) return; const m = TL.addKid(state, ui.kname, KID_COLORS[state.family.length % KID_COLORS.length]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); clear('kname'); toast(`Welcome, ${m.name}!`, 'Assign chores from any list under “Who does it”'); break; }
+      case 'kadd': { if (!need(ui.kname, 'Add a first name')) return; const m = TL.addKid(state, ui.kname, KID_COLORS[state.family.length % KID_COLORS.length]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); syncFamilyTags(); clear('kname'); toast(`Welcome, ${m.name}!`, 'Assign chores from any list under “Who does it”'); break; }
       case 'kpick': ui.kid = ui.kid === id ? '' : id; break;
       case 'kstar': { const [n, why] = id.split('|'); const r = TL.giveStar(state, n, why, today); if (r) { toolReward(el, r.reward, `⭐ for ${n}: ${why}`, `${r.stars} stars to spend on rewards`); ui.kid = ''; } break; }
       case 'kredeem': { const [n, rid] = id.split('|'); const r = TL.redeemReward(state, n, rid, today); if (r) { sound.chime(); fx.confetti(bld.views.get(p.buildingId)?.top || controls.target); toast(`${n} earned: ${r.name}! 🎉`, 'Enjoy it together'); } break; }
@@ -1339,8 +1356,8 @@ function boot(state, opts) {
       case 'laddsubopen': ui.addsub = true; break;
       case 'laddsub': {
         const n = (ui.newsub || '').trim(); if (!need(n, 'Type a name')) return;
-        if (p.tool === 'repair') TL.addThing(state, n, 'car');
-        else if (p.tool === 'vet') { const m = LB.addPet(state, n, ['#C9A06A', '#3A2A1E', '#F2E2CF', '#8A5A30'][state.family.length % 4]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); }
+        if (p.tool === 'repair') { TL.addThing(state, n, 'car'); syncFamilyCars(); }
+        else if (p.tool === 'vet') { const m = LB.addPet(state, n, ['#C9A06A', '#3A2A1E', '#F2E2CF', '#8A5A30'][state.family.length % 4]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); syncFamilyTags(); }
         else LB.addLogPerson(state, n);
         Object.assign(ui, { subject: n, addsub: false, newsub: '' }); toast(`${n} added`); break;
       }
@@ -1370,7 +1387,7 @@ function boot(state, opts) {
       }
       default: return;
     }
-    const USE = { rsave: 'meals', rstarter: 'meals', mclaim: 'meals', gbuild: 'meals', clog: 'care', clast: 'care', sadd: 'subs', skeep: 'subs', scancel: 'subs', padd: 'cards', csent: 'cards', tyadd: 'cards', tysent: 'cards', dplan: 'dates', kstar: 'kids', kbook: 'kids', kredeem: 'kids', mfinish: 'meeting' };
+    const USE = { rsave: 'meals', rstarter: 'meals', mclaim: 'meals', gbuild: 'meals', sadd: 'subs', skeep: 'subs', scancel: 'subs', padd: 'cards', csent: 'cards', tyadd: 'cards', tysent: 'cards', dplan: 'dates', kstar: 'kids', kbook: 'kids', kredeem: 'kids', mfinish: 'meeting' };
     if (USE[a]) markUse(state, USE[a], today);
     persist(); hud(); afterProgress(); renderPanel();
   }
@@ -1552,6 +1569,8 @@ function boot(state, opts) {
     controls.update();
     stage.followShadows();
     const cd = camera.position.distanceTo(controls.target); scene.fog.near = cd * 1.4; scene.fog.far = cd * 3.2;
+    const far = camera.position.distanceTo(controls.target) > 34;
+    for (const f of famTags) { f.tag.pos.copy(f.o.position); f.tag.pos.y += f.h; f.tag.hidden = far || !f.o.visible; }
     tags.place(camera, 0);
     stage.render();
     if (!autoChecked) {

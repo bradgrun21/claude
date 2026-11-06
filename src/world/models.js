@@ -115,6 +115,23 @@ export function car(color) {
   const hl = mesh(new THREE.BoxGeometry(0.01, 0.025, 0.14), mat.lamp, false, false); hl.position.set(0.185, 0.09, 0); g.add(hl);
   return g;
 }
+/* Family vehicles: car (sedan), SUV, crossover and pickup truck, in the family's chosen color. */
+export function vehicle(color, type = 'car') {
+  if (type === 'car') return car(color);
+  const g = new THREE.Group();
+  const paint = M(color, { roughness: 0.45 }), glass = M('#D8ECF5', { roughness: 0.2 });
+  const dims = { suv: [0.4, 0.14, 0.21, 0.26, 0.11, 0.19, -0.03], crossover: [0.38, 0.12, 0.2, 0.22, 0.09, 0.18, -0.02], truck: [0.44, 0.12, 0.21, 0.16, 0.1, 0.19, 0.07] }[type] || [0.36, 0.1, 0.19, 0.19, 0.08, 0.17, -0.02];
+  const [bl, bh, bw, cl, ch, cw, cx] = dims;
+  const body = mesh(new RoundedBoxGeometry(bl, bh, bw, 2, 0.03), paint); body.position.y = 0.05 + bh / 2; g.add(body);
+  const cab = mesh(new RoundedBoxGeometry(cl, ch, cw, 2, 0.03), type === 'truck' ? paint : glass); cab.position.set(cx, 0.05 + bh + ch / 2 - 0.01, 0); g.add(cab);
+  if (type === 'truck') { const win = mesh(new THREE.BoxGeometry(0.01, ch * 0.6, cw * 0.85), glass, false); win.position.set(cx + cl / 2 + 0.002, 0.05 + bh + ch / 2, 0); g.add(win); const bed = mesh(new THREE.BoxGeometry(0.18, 0.04, bw - 0.02), mat.navy); bed.position.set(-0.11, 0.05 + bh + 0.02, 0); g.add(bed); }
+  if (type === 'suv') { const rack = mesh(new THREE.BoxGeometry(cl * 0.8, 0.012, cw * 0.85), mat.navy, false); rack.position.set(cx, 0.05 + bh + ch + 0.006, 0); g.add(rack); }
+  const r = type === 'car' ? 0.04 : 0.048;
+  const wg = new THREE.CylinderGeometry(r, r, 0.035, 10); wg.rotateX(Math.PI / 2);
+  for (const x of [-bl * 0.32, bl * 0.32]) for (const z of [-bw / 2, bw / 2]) { const w = mesh(wg, mat.navy, false); w.position.set(x, r, z); g.add(w); }
+  const hl = mesh(new THREE.BoxGeometry(0.01, 0.025, bw * 0.7), mat.lamp, false, false); hl.position.set(bl / 2 + 0.005, 0.05 + bh * 0.6, 0); g.add(hl);
+  return g;
+}
 const skin = M('#E9B48F');
 export function person(color, hair) {
   const g = new THREE.Group();

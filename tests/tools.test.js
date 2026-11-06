@@ -51,26 +51,40 @@ describe('meal planner', () => {
 });
 
 describe('car & home care', () => {
-  it('adds defaults, logs work, and comes around again', () => {
+  it('is a plain log: what, the date it was done, and the odometer', () => {
     const s = city();
-    const car = T.addThing(s, 'Minivan', 'car');
-    const oil = s.care.items.find((i) => i.thingId === car.id && i.name === 'Oil change');
-    expect(T.careStatus(oil, D)).toBe('new');
-    T.setCareLast(s, oil.id, '2026-05-10');
-    expect(T.careNext(oil)).toBe('2026-11-10');
-    expect(T.careStatus(oil, D)).toBe('soon');
-    expect(T.careStatus(oil, '2026-11-12')).toBe('ready');
-    expect(T.careDueCount(s, '2026-11-12')).toBe(1);
-    const r = T.logCare(s, oil.id, D);
+    const car = T.addThing(s, 'Highlander', 'car', { type: 'suv', color: '#2F4058' });
+    expect([car.type, car.color]).toEqual(['suv', '#2F4058']);
+    expect(T.logCareWork(s, car.id, { what: '' }, D)).toBe(null);
+    const r = T.logCareWork(s, car.id, { what: 'Oil change', date: '2026-10-01', odometer: '48,210' }, D);
+    expect(r.entry).toMatchObject({ what: 'Oil change', date: '2026-10-01', odometer: 48210 });
     expect(r.reward).toEqual(T.CARE_REWARD);
-    expect(T.careStatus(oil, D)).toBe('ok');
-    expect(T.addMonths('2026-01-31', 1)).toBe('2026-02-28');
+    T.logCareWork(s, car.id, { what: 'Car battery', odometer: '51000' }, D);
+    expect(T.careHistory(s, car.id).map((e) => e.what)).toEqual(['Car battery', 'Oil change']);
+    expect(T.lastOdometer(s, car.id)).toBe(51000);
+    expect(T.careChoices(car)).toContain('Car battery');
+    T.logCareWork(s, car.id, { what: 'Transmission fluid flush' }, D);
+    expect(T.careChoices(car)).toContain('Transmission fluid flush');
   });
-  it('caps the care reward at 3 a week', () => {
+  it('homes have no odometer; there are no schedules or "due" dates', () => {
     const s = city();
-    T.addThing(s, 'Home', 'home');
-    const got = s.care.items.slice(0, 5).map((i) => T.logCare(s, i.id, D).reward);
+    const home = T.addThing(s, 'Our home', 'home');
+    expect(T.logCareWork(s, home.id, { what: 'Furnace / AC filter', odometer: '123' }, D).entry.odometer).toBe(null);
+    expect(T.careDueCount).toBe(undefined);
+  });
+  it('caps the reward at 3 a week', () => {
+    const s = city();
+    const car = T.addThing(s, 'Van', 'car');
+    const got = [1, 2, 3, 4, 5].map((k) => T.logCareWork(s, car.id, { what: `Job ${k}` }, D).reward);
     expect(got.filter(Boolean).length).toBe(3);
+  });
+  it('older saves: scheduled items with last-done dates become log entries', () => {
+    const s = city();
+    s.care = { things: [{ id: 'th1', name: 'Van', kind: 'car' }], items: [{ id: 'ci1', thingId: 'th1', name: 'Oil change', months: 6, last: '2026-05-01' }, { id: 'ci2', thingId: 'th1', name: 'Wiper blades', months: 12, last: null }], log: [{ itemId: 'ci1', day: '2026-05-01' }] };
+    T.migrateCare(s);
+    expect(s.care.items).toEqual([]);
+    expect(T.careHistory(s, 'th1').map((e) => [e.what, e.date])).toEqual([['Oil change', '2026-05-01']]);
+    expect(s.care.things[0].type).toBe('car');
   });
 });
 

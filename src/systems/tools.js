@@ -40,6 +40,7 @@ export function ensureTools(state) {
   state.meetings = state.meetings || [];
   state.earned = state.earned || [];
   ensureLogs(state);
+  migrateCare(state);
   return state;
 }
 
@@ -232,10 +233,16 @@ export function claimMealPlan(state, day) {
   return MEAL_PLAN_REWARD;
 }
 
-/* ================= Car & Home Care ================= */
-export const CARE_DEFAULTS = {
-  car: [['Oil change', 6], ['Tire rotation', 6], ['Registration renewal', 12], ['Inspection', 12], ['Wiper blades', 12], ['Cabin air filter', 12]],
-  home: [['Furnace / AC filter', 3], ['Smoke detector batteries', 12], ['Clean the gutters', 6], ['Dryer vent', 12], ['Water heater flush', 12], ['Fridge coils', 12]]
+/* ================= Car & Home Care =================
+ * A simple log, no schedules: what was done, the date it was done, and (for cars) the odometer.
+ * Quick picks for common jobs, plus anything you type (it's remembered for next time).
+ * Cars have a type and a color, and drive around town looking like that.
+ */
+export const CAR_TYPES = [['car', 'Car'], ['suv', 'SUV'], ['crossover', 'Crossover'], ['truck', 'Truck']];
+export const CAR_COLORS = ['#C0392B', '#E8643F', '#F2B54A', '#4CAF6A', '#4E9BCB', '#2F4058', '#9A72D6', '#FFFDF7', '#9AA6B2', '#2B2B2B'];
+export const CARE_PRESETS = {
+  car: ['Oil change', 'Tire rotation', 'New tires', 'Car battery', 'Fluids', 'Brakes', 'Wiper blades', 'Air filter', 'Inspection', 'Registration', 'Car wash'],
+  home: ['Furnace / AC filter', 'Smoke detector batteries', 'Gutters cleaned', 'Dryer vent', 'Water heater', 'HVAC service', 'Pest control', 'Lawn mower service']
 };
 export function addMonths(day, n) {
   const d = fromKey(day);
@@ -243,41 +250,57 @@ export function addMonths(day, n) {
   t.setDate(Math.min(d.getDate(), new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate()));
   return dateKey(t);
 }
-export function addThing(state, name, kind = 'car') {
+export function addThing(state, name, kind = 'car', opts = {}) {
   ensureTools(state);
   const n = String(name || '').trim() || (kind === 'home' ? 'Our home' : 'Our car');
-  const th = { id: uid('th'), name: n.slice(0, 40), kind };
+  const th = { id: uid('th'), name: n.slice(0, 40), kind, custom: [] };
+  if (kind === 'car') { th.type = CAR_TYPES.some(([k]) => k === opts.type) ? opts.type : 'car'; th.color = CAR_COLORS.includes(opts.color) ? opts.color : CAR_COLORS[4]; }
   state.care.things.push(th);
-  for (const [nm, months] of CARE_DEFAULTS[kind] || []) state.care.items.push({ id: uid('ci'), thingId: th.id, name: nm, months, last: null });
   return th;
 }
-export function removeThing(state, id) { state.care.things = state.care.things.filter((t) => t.id !== id); state.care.items = state.care.items.filter((i) => i.thingId !== id); }
-export function addCareItem(state, thingId, name, months) {
-  const nm = String(name || '').trim();
-  if (!nm || !state.care.things.some((t) => t.id === thingId)) return null;
-  const it = { id: uid('ci'), thingId, name: nm.slice(0, 40), months: Math.max(1, Math.min(60, Math.round(+months || 12))), last: null };
-  state.care.items.push(it);
-  return it;
+export function updateThing(state, id, patch) {
+  const th = state.care.things.find((t) => t.id === id);
+  if (!th) return null;
+  if (patch.name != null && String(patch.name).trim()) th.name = String(patch.name).trim().slice(0, 40);
+  if (th.kind === 'car' && CAR_TYPES.some(([k]) => k === patch.type)) th.type = patch.type;
+  if (th.kind === 'car' && CAR_COLORS.includes(patch.color)) th.color = patch.color;
+  return th;
 }
-export function removeCareItem(state, id) { state.care.items = state.care.items.filter((i) => i.id !== id); }
-export function setCareLast(state, id, day) { const it = state.care.items.find((x) => x.id === id); if (it && /^\d{4}-\d{2}-\d{2}$/.test(day || '')) it.last = day; return it; }
-export const careNext = (it) => (it.last ? addMonths(it.last, it.months) : null);
-/* 'new' never logged · 'ok' · 'soon' within 14 days · 'ready' on or past the date (never "overdue") */
-export function careStatus(it, day) {
-  const n = careNext(it);
-  if (!n) return 'new';
-  const d = daysBetween(day, n);
-  return d <= 0 ? 'ready' : d <= 14 ? 'soon' : 'ok';
-}
-export const careDueCount = (state, day) => (state.care?.items || []).filter((i) => careStatus(i, day) === 'ready').length;
+export function removeThing(state, id) { state.care.things = state.care.things.filter((t) => t.id !== id); state.care.log = state.care.log.filter((e) => e.thingId !== id); }
+export const careChoices = (th) => [...(CARE_PRESETS[th.kind] || []), ...(th.custom || []).filter((c) => !(CARE_PRESETS[th.kind] || []).includes(c))];
 export const CARE_REWARD = { coins: 15, xp: 10 };
-export function logCare(state, id, day) {
-  const it = state.care.items.find((x) => x.id === id);
-  if (!it) return null;
-  it.last = day;
-  state.care.log.push({ itemId: id, day });
-  if (state.care.log.length > 300) state.care.log.shift();
-  return { item: it, reward: capped(state, 'care', 'log', weekStart(day), 3, CARE_REWARD) };
+const isDay = (d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+/* Log work: { what, date, odometer, note }. Typed-in jobs are remembered as quick picks for that car or home. */
+export function logCareWork(state, thingId, w, day) {
+  ensureTools(state);
+  const th = state.care.things.find((t) => t.id === thingId);
+  const what = String(w.what || '').trim().slice(0, 40);
+  if (!th || !what) return null;
+  const odo = th.kind === 'car' ? Math.round(parseFloat(String(w.odometer ?? '').replace(/[^0-9.]/g, ''))) : NaN;
+  const e = { id: uid('cl'), thingId, what, date: isDay(w.date) ? w.date : day, odometer: Number.isFinite(odo) ? odo : null, note: String(w.note || '').trim().slice(0, 120), from: w.from || null };
+  state.care.log.push(e);
+  if (state.care.log.length > 500) state.care.log.shift();
+  if (!careChoices(th).some((c) => c.toLowerCase() === what.toLowerCase())) { th.custom = th.custom || []; th.custom.push(what); if (th.custom.length > 24) th.custom.shift(); }
+  return { entry: e, reward: w.from ? null : capped(state, 'care', 'log', weekStart(day), 3, CARE_REWARD) };
+}
+export function removeCareLog(state, id) { state.care.log = state.care.log.filter((e) => e.id !== id); }
+export const careHistory = (state, thingId) => (state.care?.log || []).filter((e) => e.thingId === thingId).slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.odometer || 0) - (a.odometer || 0));
+export const lastOdometer = (state, thingId) => Math.max(0, ...(state.care?.log || []).filter((e) => e.thingId === thingId && e.odometer).map((e) => e.odometer));
+/* Older saves had scheduled items with "last done" dates: those become plain log entries. */
+export function migrateCare(state) {
+  const c = state.care;
+  if (!c) return;
+  const items = c.items || [];
+  const out = [];
+  for (const e of c.log || []) {
+    if (e.thingId) { out.push(e); continue; }
+    const it = items.find((x) => x.id === e.itemId);
+    if (it) out.push({ id: uid('cl'), thingId: it.thingId, what: it.name, date: e.day, odometer: null, note: '', from: null });
+  }
+  for (const it of items) if (it.last && !out.some((e) => e.thingId === it.thingId && e.what === it.name && e.date === it.last)) out.push({ id: uid('cl'), thingId: it.thingId, what: it.name, date: it.last, odometer: null, note: '', from: null });
+  c.log = out;
+  c.items = [];
+  for (const th of c.things) { th.custom = th.custom || []; if (th.kind === 'car') { th.type = th.type || 'car'; th.color = th.color || CAR_COLORS[4]; } }
 }
 
 /* ================= Subscriptions ================= */
@@ -469,7 +492,6 @@ export function meetingAgenda(state, day) {
   for (const e of state.events || []) if (!e.done && e.date >= day && e.date <= end) ahead.push({ day: e.date, text: e.title, kind: 'outing' });
   for (const p of upcomingPeople(state, day, 7)) ahead.push({ day: p.on, text: `${p.name}’s ${p.kind}${p.turning ? ` (${p.turning})` : ''}`, kind: 'card' });
   for (const l of state.lists) for (const g of l.goals || []) if (g.target && !g.achievedOn && g.target >= day && g.target <= end) ahead.push({ day: g.target, text: `Goal target: ${g.title}`, kind: 'goal' });
-  for (const it of state.care?.items || []) { const s = careStatus(it, day); if (s === 'ready' || s === 'soon') { const th = state.care.things.find((t) => t.id === it.thingId); ahead.push({ day: careNext(it) < day ? day : careNext(it), text: `${it.name}${th ? ` · ${th.name}` : ''}`, kind: 'care' }); } }
   ahead.sort((a, b) => a.day.localeCompare(b.day));
   const memories = (state.memories || []).filter((m) => m.date >= addDays(day, -6) && m.date <= day).length;
   return { total: w.total, days: w.days, goals: w.goals, bySection: w.bySection, memories, ahead, subsReview: subsToReview(state, day).length, meals: plannedCount(state, day), lastFocus: (state.meetings || []).at(-1)?.focus || '' };

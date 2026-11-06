@@ -103,19 +103,33 @@ function meals(state, tab, ui, day) {
 }
 
 /* ================= Car & Home Care ================= */
-const STATUS = { new: ['When was it last done?', 'new'], ok: ['', 'ok'], soon: ['Coming up', 'soon'], ready: ['Ready when you are', 'ready'] };
+const carIcon = (th) => (th.kind === 'home' ? '🏠' : `<span class="car-dot" style="--c:${th.color || '#4E9BCB'}">${{ car: '🚗', suv: '🚙', crossover: '🚙', truck: '🛻' }[th.type] || '🚗'}</span>`);
+const carPickers = (ui, prefix, type, color, idPrefix = '') => `<div class="car-pick"><div class="seg">${T.CAR_TYPES.map(([k, l]) => `<button type="button" data-ta="${prefix}type" data-id="${idPrefix}${k}" aria-pressed="${type === k}">${l}</button>`).join('')}</div>
+  <div class="swatches">${T.CAR_COLORS.map((c) => `<button type="button" class="swatch${color === c ? ' on' : ''}" style="--c:${c}" data-ta="${prefix}color" data-id="${idPrefix}${c}" aria-label="Color ${c}"></button>`).join('')}</div></div>`;
 function care(state, tab, ui, day) {
   const C = state.care;
   const thing = (th) => {
-    const items = C.items.filter((i) => i.thingId === th.id).sort((a, b) => (T.careNext(a) || '9') .localeCompare(T.careNext(b) || '9'));
-    return `<div class="care-card"><div class="brow"><b class="h3">${th.kind === 'home' ? '🏠' : '🚗'} ${esc(th.name)}</b>${btn('cthdel', 'Remove', { id: th.id, cls: 'link small' })}</div>
-      ${items.map((i) => { const st = T.careStatus(i, day); const nx = T.careNext(i); return `<div class="care-row ${st}"><span class="cr-t"><b>${esc(i.name)}</b><small>Every ${i.months} ${i.months === 1 ? 'month' : 'months'}${nx ? ` · next ${shortDate(nx)}` : ''}${STATUS[st][0] ? ` · ${STATUS[st][0]}` : ''}</small></span>
-        ${st === 'new' ? `<input class="field date small" type="date" data-uf="last_${i.id}" value="${v(ui, `last_${i.id}`)}" aria-label="Last done">${btn('clast', 'Set', { id: i.id })}` : ''}${btn('clog', 'Done today', { id: i.id, cls: st === 'ready' || st === 'soon' ? 'go-btn small' : 'soft small' })}${btn('cidel', '–', { id: i.id, cls: 'trm', extra: ' aria-label="Remove"' })}</div>`; }).join('')}
-      <div class="te-row add-care"><input class="field small" data-uf="cin_${th.id}" maxlength="40" value="${v(ui, `cin_${th.id}`)}" placeholder="Add something else" autocomplete="off"><select class="freq" data-uf="cim_${th.id}">${[1, 3, 6, 12, 24].map((m) => `<option value="${m}"${String(ui[`cim_${th.id}`] || 12) === String(m) ? ' selected' : ''}>Every ${m} mo</option>`).join('')}</select>${btn('ciadd', 'Add', { id: th.id })}</div></div>`;
+    const hist = T.careHistory(state, th.id);
+    const odo = th.kind === 'car' ? T.lastOdometer(state, th.id) : 0;
+    const open = ui.logfor === th.id, editing = ui.editthing === th.id;
+    const typeName = th.kind === 'car' ? T.CAR_TYPES.find(([k]) => k === th.type)?.[1] || 'Car' : 'Home';
+    return `<div class="care-card"><div class="brow"><b class="h3">${carIcon(th)} ${esc(th.name)}</b><small class="care-sub">${typeName}${odo ? ` · ${odo.toLocaleString('en-US')} mi` : ''}</small>
+        ${th.kind === 'car' ? btn('thedit', editing ? 'Done' : 'Edit', { id: th.id, cls: 'link small' }) : ''}${btn('cthdel', 'Remove', { id: th.id, cls: 'link small' })}</div>
+      ${editing ? carPickers(ui, 'th', th.type, th.color, `${th.id}|`) : ''}
+      ${open ? `<div class="care-form"><div class="chips-row quick">${T.careChoices(th).map((c) => `<button type="button" class="pickchip${(ui.cw_what || '') === c ? ' on' : ''}" data-ta="cwpick" data-id="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+          <div class="te-row"><input class="field small" data-uf="cw_what" maxlength="40" value="${v(ui, 'cw_what')}" placeholder="What was done (type anything: car battery, fluids…)" autocomplete="off">
+          <input class="field date small" type="date" data-uf="cw_date" value="${v(ui, 'cw_date', day)}" aria-label="Date it was done">
+          ${th.kind === 'car' ? `<input class="field small odo" data-uf="cw_odo" inputmode="numeric" value="${v(ui, 'cw_odo')}" placeholder="Odometer${odo ? ` (last ${odo.toLocaleString('en-US')})` : ''}" aria-label="Odometer">` : ''}</div>
+          <div class="actions left">${btn('cwsave', 'Save to the log', { id: th.id, cls: 'go-btn small' })}${btn('cwcancel', 'Cancel')}</div></div>`
+        : `<div class="actions left">${btn('cwopen', `${svgI('plus', 'currentColor', 13, 3)} Log work`, { id: th.id, cls: 'go-btn small' })}</div>`}
+      ${hist.length ? hist.slice(0, ui.allfor === th.id ? 200 : 6).map((e) => `<div class="care-row"><span class="cr-t"><b>${esc(e.what)}</b><small>${shortDate(e.date)} ${e.date.slice(0, 4)}${e.odometer ? ` · ${e.odometer.toLocaleString('en-US')} mi` : ''}${e.from === 'repair' ? ' · from the Repair Log' : ''}${e.note ? ` · ${esc(e.note)}` : ''}</small></span>${btn('cldel', '–', { id: e.id, cls: 'trm' })}</div>`).join('') : '<p class="hint">Nothing logged yet.</p>'}
+      ${hist.length > 6 && ui.allfor !== th.id ? btn('clall', `Show all ${hist.length}`, { id: th.id, cls: 'link small' }) : ''}</div>`;
   };
-  return `${C.things.map(thing).join('') || '<p class="hint">Add your car and your home. We’ll fill in the usual upkeep, and you can change anything.</p>'}
-    <div class="card2"><b>Add a car or home</b><div class="te-row"><input class="field" data-uf="thname" maxlength="40" value="${v(ui, 'thname')}" placeholder="Like “Honda Odyssey”" autocomplete="off">${btn('thadd', '🚗 Add a car', { id: 'car', cls: 'go-btn small' })}${btn('thadd', '🏠 Add a home', { id: 'home', cls: 'soft small' })}</div></div>
-    <p class="foot">Logging upkeep earns ${T.CARE_REWARD.coins} coins (up to 3 a week). Nothing here is ever “late”, it just comes around again.</p>`;
+  return `${C.things.map(thing).join('') || '<p class="hint">Add your car and your home, then log work as it’s done: what, when, and the odometer.</p>'}
+    <div class="card2"><b>Add a car or home</b><div class="te-row"><input class="field" data-uf="thname" maxlength="40" value="${v(ui, 'thname')}" placeholder="Like “Honda Odyssey”" autocomplete="off"></div>
+      ${carPickers(ui, 'new', ui.newtype || 'car', ui.newcolor || T.CAR_COLORS[4])}
+      <div class="actions left">${btn('thadd', '🚗 Add this car', { id: 'car', cls: 'go-btn small' })}${btn('thadd', '🏠 Add a home', { id: 'home', cls: 'soft small' })}</div></div>
+    <p class="foot">Logging work earns ${T.CARE_REWARD.coins} coins (up to 3 a week). Your cars drive around town in their colors.</p>`;
 }
 
 /* ================= Subscriptions ================= */

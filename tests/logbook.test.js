@@ -9,7 +9,7 @@ const D = '2026-11-05';
 const city = () => newCity({ cityName: 'T', family: [{ name: 'Pat', color: '#4E7FA0', kind: 'adult' }, { name: 'Rex', color: '#C9A06A', kind: 'pet' }] }, D);
 
 describe('logbooks', () => {
-  it('repair entries need a "what", pay capped rewards, and reset Car Care', () => {
+  it('repair entries need a "what", pay capped rewards, and show up in the car\'s Car & Home Care log', () => {
     const s = city();
     T.addThing(s, 'Minivan', 'car');
     expect(LB.logSubjects(s, 'repair')).toEqual(['Minivan']);
@@ -17,8 +17,8 @@ describe('logbooks', () => {
     const r = LB.addLogEntry(s, 'repair', { subject: 'Minivan', what: 'Oil change + filter', miles: '48,210', cost: '$59.99', date: '2026-11-01' }, D);
     expect(r.entry.miles).toBe(48210);
     expect(r.entry.cost).toBe(59.99);
-    expect(r.linked).toEqual(['Oil change']);
-    expect(s.care.items.find((i) => i.name === 'Oil change').last).toBe('2026-11-01');
+    expect(r.linked).toEqual(['Minivan']);
+    expect(s.care.log.at(-1)).toMatchObject({ what: 'Oil change + filter', date: '2026-11-01', odometer: 48210, from: 'repair' });
     expect(r.reward).toEqual(LB.LOG_REWARD);
     LB.addLogEntry(s, 'repair', { subject: 'Minivan', what: 'Wipers' }, D);
     LB.addLogEntry(s, 'repair', { subject: 'Minivan', what: 'Battery' }, D);

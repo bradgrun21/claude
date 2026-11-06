@@ -147,7 +147,7 @@ export function createWalkers(scene) {
     }
   }
   function setCounts(people, cars) {
-    const have = { p: walkers.filter((w) => !w.isCar && !w.family).length, c: walkers.filter((w) => w.isCar).length };
+    const have = { p: walkers.filter((w) => !w.isCar && !w.family).length, c: walkers.filter((w) => w.isCar && !w.familyCar).length };
     for (let k = have.p; k < people; k++) { const o = bakeGroup(models.person(['#2B3A50', '#B97F62', '#4E7FA0', '#E8643F', '#4CAF6A', '#9A72D6', '#F2B54A'][k % 7], k % 3 ? HAIR[k % 6] : null)); o.userData.surprise = 'neighbor'; o.userData.nb = k; spawn(o, false, 0.35 + rand() * 0.25); }
     for (let k = have.c; k < cars; k++) spawn(bakeGroup(models.car(CAR_COLORS[k % 6])), true, 0.9 + rand() * 0.5);
   }
@@ -160,12 +160,26 @@ export function createWalkers(scene) {
         obj.userData.surprise = 'pets';
       } else {
         obj = bakeGroup(models.person(m.color, HAIR[k % 6]));
-        obj.scale.setScalar(m.kind === 'kid' ? 1.05 : 1.45);
+        obj.scale.setScalar(m.kind === 'kid' ? 1.25 : 1.7);
         obj.userData.surprise = 'family';
       }
+      /* Family stands out: a glowing ring in their color at their feet (name tags are added by main.js). */
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.1, 20), new THREE.MeshBasicMaterial({ color: m.color, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.y = 0.006; ring.renderOrder = 2;
+      obj.add(ring);
       obj.userData.member = m;
       spawn(obj, false, 0.32, { family: true, isPet: m.kind === 'pet' });
     });
   }
-  return { setRoads, setCounts, addFamily, tick, familyObjs: () => walkers.filter((w) => w.family).map((w) => w.obj), peopleObjs: () => walkers.filter((w) => !w.isCar && !w.family).map((w) => w.obj), pause(obj, ms) { const w = walkers.find((x) => x.obj === obj); if (w) { const sp = w.speed; w.speed = 0; setTimeout(() => { w.speed = sp; }, ms); } } };
+  /* The family's own cars (from Car & Home Care), in their type and color, bigger than town traffic. */
+  function setFamilyCars(cars) {
+    for (let k = walkers.length - 1; k >= 0; k--) if (walkers[k].familyCar) { root.remove(walkers[k].obj); walkers.splice(k, 1); }
+    for (const c of cars.slice(0, 4)) {
+      const obj = bakeGroup(models.vehicle(c.color, c.type));
+      obj.scale.setScalar(1.35);
+      obj.userData.surprise = 'familycar'; obj.userData.car = c;
+      spawn(obj, true, 0.8, { familyCar: true });
+    }
+  }
+  return { setRoads, setCounts, addFamily, setFamilyCars, tick, carObjs: () => walkers.filter((w) => w.familyCar).map((w) => w.obj), familyObjs: () => walkers.filter((w) => w.family).map((w) => w.obj), peopleObjs: () => walkers.filter((w) => !w.isCar && !w.family).map((w) => w.obj), pause(obj, ms) { const w = walkers.find((x) => x.obj === obj); if (w) { const sp = w.speed; w.speed = 0; setTimeout(() => { w.speed = sp; }, ms); } } };
 }

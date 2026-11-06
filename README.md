@@ -100,8 +100,8 @@ Every tile is open, New (grand opening), ready to Build, or greyed out with a lo
   that pays a bonus, and small capped rewards for using it (fixed amounts, never based on dollars):
   | Building | Tool |
   |---|---|
-  | Grocery Store | Meal Planner: recipe box (with starter favorites), dinners for the week, grocery list built from the plan |
-  | Gas Station | Car & Home Care: oil, tires, filters, smoke detectors… log it once and it comes around again |
+  | Grocery Store | Meal Planner: recipe box (with starter favorites), a week grid of breakfast / lunch / dinner with sides, grocery list built from the plan |
+  | Gas Station | Car & Home Care: a log per car or home: what was done, the date, and the odometer. Quick picks plus anything you type. Cars have a type (car, SUV, crossover, truck) and a color, and drive around town |
   | News Station | Subscriptions: monthly total, a check-in every 6 months, celebrate what you cancel |
   | Post Office | Birthdays & Cards: heads-up a week ahead, ages, “card sent”, thank-you notes; birthdays on the calendar |
   | Coffee House | Date Night Jar: draw an idea, put it on the calendar |
@@ -132,6 +132,12 @@ Every tile is open, New (grand opening), ready to Build, or greyed out with a lo
   fireworks when the last one is gone, and a plaque of debts paid (names and dates, never amounts).
 - **More filler:** Bungalow and Farmhouse homes (all 1-tile homes are drawn a bit larger), plus Flower Planter, Hedge
   Row, Street Lamp, Bunting, Picnic Table, Birdbath and Windmill decorations.
+- **Your family stands out** in town: a ring in each person's color, a name tag that follows them (hidden when zoomed
+  far out), and the family's cars driving around in their own colors and types.
+- **Map:** nature inside the town (Pine Peak, Lake Glimmer, Rocky Knoll) that you build around, a railway that runs
+  tunnel to tunnel through the mountains, and mountains kept on the island. Roads and Oak Trees are free.
+- **To-Do has no task limit.** The Bank's list gets "Daily upload transactions" and, from the Debts step, "Update debt
+  and savings balances" (weekly) automatically; both check themselves off when you do the real thing.
 - **A living town.** Ducks on the ponds, boats on the river, flowers along the roads that spread with the streak,
   windows that glow brighter with it, real-clock day and night (or pick Day/Night in the menu), and neighbors you can
   tap who notice the family's real week.

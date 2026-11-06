@@ -64,7 +64,7 @@ export function renderLog(state, id, tab, ui, day) {
     ${ui.addsub ? `<span class="te-row inline"><input class="field small" data-uf="newsub" maxlength="30" value="${v(ui, 'newsub')}" placeholder="Name" autocomplete="off">${btn('laddsub', 'Add', { cls: 'go-btn small' })}</span>` : `<button type="button" class="pickchip add" data-ta="laddsubopen">+ ${esc(def.addLabel)}</button>`}</div>` : '';
   const editing = ui.eid ? state.logs[id].find((e) => e.id === ui.eid) : null;
   let quick = null;
-  if (id === 'repair') { const th = (state.care?.things || []).find((t) => t.kind === 'car' && t.name === (ui.f_subject || sel)); quick = th ? state.care.items.filter((i) => i.thingId === th.id).map((i) => i.name) : ['Oil change', 'Tire rotation', 'Brakes', 'Battery', 'Wipers']; }
+  if (id === 'repair') { const th = (state.care?.things || []).find((t) => t.kind === 'car' && t.name === (ui.f_subject || sel)); quick = th ? [...new Set(['Oil change', 'Tire rotation', 'New tires', 'Car battery', 'Fluids', 'Brakes', ...(th.custom || [])])] : ['Oil change', 'Tire rotation', 'New tires', 'Car battery', 'Fluids', 'Brakes']; }
   const form = ui.form ? `<div class="card2 lg-form"><b>${editing ? 'Edit entry' : 'New entry'}</b>
       ${def.subjects ? `<div class="lg-f"><label class="q">${esc(def.subjectLabel)}</label><select class="freq" data-uf="f_subject">${subs.length ? '' : '<option value="">(add one above)</option>'}${subs.map((n) => `<option${(ui.f_subject ?? sel) === n ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : ''}
       <div class="lg-grid">${def.fields.map((f) => field(f, ui, day, quick)).join('')}</div>

@@ -71,7 +71,7 @@ export function renderTrackersHub(state, day) {
   const wk = weekStart(day);
   const home = [
     buildingTile(state, 'grocery', '🥕', 'Meal Planner', () => `${TL.plannedCount(state, day)} meals planned this week`, 'meals'),
-    buildingTile(state, 'gasstation', '🔧', 'Car & Home Care', () => { const n = TL.careDueCount(state, day); return n ? `${n} ready when you are` : `${(state.care?.items || []).length} things tracked`; }, 'care'),
+    buildingTile(state, 'gasstation', '🔧', 'Car & Home Care', () => `${(state.care?.log || []).length} jobs logged · ${(state.care?.things || []).length} ${(state.care?.things || []).length === 1 ? 'car or home' : 'cars and homes'}`, 'care'),
     buildingTile(state, 'repairshop', '🧰', 'Repair Log', () => `${state.logs?.repair?.length || 0} repairs logged`, 'repair')
   ];
   const family = [

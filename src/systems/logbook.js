@@ -71,15 +71,11 @@ export function addLogEntry(state, id, data, day) {
   const e = { id: uid(), subject: def.subjects ? (data.subject || null) : null, created: day, ...vals };
   state.logs[id].push(e);
   if (state.logs[id].length > 500) state.logs[id].shift();
-  /* Repair log ↔ Car & Home Care: logging "Oil change" for a car resets that reminder. */
+  /* Repair Log → Car & Home Care: the repair also shows up in that car's history (date + odometer). */
   const linked = [];
   if (id === 'repair' && e.subject && state.care) {
     const th = state.care.things.find((t) => t.kind === 'car' && t.name === e.subject);
-    const w = (e.what || '').toLowerCase();
-    if (th) for (const it of state.care.items.filter((i) => i.thingId === th.id)) {
-      const n = it.name.toLowerCase();
-      if (w.includes(n) || n.includes(w) || (n.includes('tire') && w.includes('tire')) || (n.includes('oil') && w.includes('oil'))) { if (!it.last || it.last < e.date) it.last = e.date; linked.push(it.name); }
-    }
+    if (th) { state.care.log.push({ id: `cl${uid()}`, thingId: th.id, what: e.what, date: e.date, odometer: e.miles || null, note: e.shop ? `At ${e.shop}` : '', from: 'repair' }); linked.push(th.name); }
   }
   return { entry: e, linked, reward: capReward(state, id, day) };
 }

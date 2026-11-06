@@ -25,8 +25,8 @@ export const PATHS = {
   ],
   care: [
     { id: 'thing', title: 'Add your car or home', desc: 'We’ll fill in the usual upkeep.', need: 1, have: (s) => s.care.things.length },
-    { id: 'dates', title: 'When was it last done?', desc: 'Set the last-done date for 3 things.', need: 3, have: (s) => s.care.items.filter((i) => i.last).length },
-    { id: 'log', title: 'Log upkeep', desc: 'Tap “Done today” the next time you take care of something.', need: 1, have: (s) => s.care.log.length }
+    { id: 'log', title: 'Log what you’ve done', desc: 'Pick or type what was done and the date.', need: 1, have: (s) => s.care.log.length },
+    { id: 'odo', title: 'Add the odometer', desc: 'Log car work with the odometer reading.', need: 1, have: (s) => s.care.log.filter((e) => e.odometer).length }
   ],
   subs: [
     { id: 'list', title: 'List your subscriptions', desc: 'Streaming, apps, phone plans, memberships.', need: 3, have: (s) => s.subs.length },
