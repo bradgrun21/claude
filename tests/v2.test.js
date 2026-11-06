@@ -151,15 +151,17 @@ describe('lists and tasks', () => {
     expect(isAvailable(shoes, '2026-12-01')).toBe(false);
     expect(s.stats.tasksDone).toBe(4);
   });
-  it('coins come from tasks and goals', () => {
+  it('coins come from tasks and goals (plus the daily visit bonus)', () => {
     const { s, l } = withList();
     const c0 = s.coins, x0 = s.xp;
     completeTask(s, l.id, l.tasks[1].id, T);
-    achieveGoal(s, l.id, T);
-    expect(s.coins).toBe(c0 + 10 + 100);
-    expect(s.xp).toBe(x0 + 5 + 60);
-    expect(l.goal).toBe('');
+    const r = achieveGoal(s, l.id, l.goals[0].id, T);
+    expect(r.reward).toEqual({ coins: 100, xp: 60 });
+    expect(s.coins).toBe(c0 + 10 + 10 + 100);
+    expect(s.xp).toBe(x0 + 5 + 10 + 60);
+    expect(l.goals[0].achievedOn).toBe(T);
     expect(l.achieved[0].goal).toBe('Run a 5K');
+    expect(achieveGoal(s, l.id, l.goals[0].id, T)).toBe(null);
   });
   it('streak counts consecutive logged days', () => {
     const s = city();

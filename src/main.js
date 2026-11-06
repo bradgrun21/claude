@@ -24,11 +24,14 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderListCard, renderBuild, renderLists, renderBuilding, renderGoalForm, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
-import { createList, completeTask, achieveGoal, listFor, dueCount, totalDue, makeTask, MAX_TASKS, streak } from './systems/lists.js';
+import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
+import { sectionUnlocked, unlockHint, nextSection } from './systems/progression.js';
+import { IDEAS } from './data/ideas.js';
+import { createLiving } from './world/living.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
@@ -78,6 +81,7 @@ function boot(state, opts) {
   const persist = () => save(state);
   for (const b of state.buildings) bld.add(b);
   walkers.addFamily(state.family);
+  const living = createLiving(scene, { state, fx, bld, sound, today: () => today, onRebuilt: (id) => { const t = bubbles.get(id); if (t) { tags.remove(t.tag, false); bubbles.delete(id); } refreshBubbles(); } });
 
   /* ---------- Static HUD art ---------- */
   $('icoPop').innerHTML = ART.people; $('icoCoin').innerHTML = ART.coin; $('menuBtn').innerHTML = svgI('menu', '#fff', 24, 3);
@@ -93,6 +97,7 @@ function boot(state, opts) {
     terrain.sync(blocked);
     walkers.setRoads(state.roads);
     walkers.setCounts(Math.min(16, 2 + Math.floor(population(state) / 4)), Math.min(8, Math.floor(state.roads.length / 7)));
+    living.refresh();
   }
   syncWorld();
   const th = state.buildings.find((b) => b.type === 'townhall');
@@ -228,9 +233,13 @@ function boot(state, opts) {
     const p = panel;
     $('win').dataset.kind = p.kind;
     if (p.kind === 'build') { if (!p.tab) { title = 'Store'; body = renderStore(state); } else { title = STORE.find((c) => c.id === p.tab).label; tabs = `<button type="button" class="wtab back" data-back="1">‹ Store</button>`; body = renderBuild(state, p.tab); } }
-    else if (p.kind === 'lists') { title = p.due ? 'Due today' : 'Your lists'; tabs = `<button type="button" class="wtab${p.due ? ' on' : ''}" data-due="1">Due today</button><button type="button" class="wtab${p.due ? '' : ' on'}" data-due="0">All lists</button>`; body = renderLists(state, today, p.due); }
+    else if (p.kind === 'lists') { title = p.due ? 'Due today' : 'Your lists'; tabs = `<button type="button" class="wtab${p.due ? ' on' : ''}" data-due="1">Due today</button><button type="button" class="wtab${p.due ? '' : ' on'}" data-due="0">All lists</button><button type="button" class="wtab${canReviewWeek(state, today) && state.lists.length ? ' glow' : ''}" data-reviewopen="1">Week in review</button>`; body = renderLists(state, today, p.due); }
     else if (p.kind === 'building') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBuilding(state, b, today); }
-    else if (p.kind === 'goal') { title = p.draft.title; body = renderGoalForm(p.draft); }
+    else if (p.kind === 'goal') { title = p.draft.title; body = renderBuilder(p.draft); }
+    else if (p.kind === 'taskEdit') { const l = state.lists.find((x) => x.id === p.listId); const t = l?.tasks.find((x) => x.id === p.taskId); if (!t) { closePanel(); return; } title = 'Edit task'; body = renderTaskEdit(l, t); }
+    else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
+    else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
+    else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
     else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
     else if (p.kind === 'calendar') { title = 'Calendar'; body = renderCalendar(state, today, p.ym, p.sel); }
@@ -259,32 +268,48 @@ function boot(state, opts) {
   $('panelClose').onclick = closePanel;
   $('panel').addEventListener('click', (e) => { if (e.target.id === 'panel') closePanel(); });
 
-  /* ---------- Goal form ---------- */
-  function openGoalForm(o) {
-    const draft = { mode: o.mode, type: o.type, buildingId: o.buildingId, listId: o.listId, goal: '', tasks: [] };
+  /* ---------- Task & goal builder ----------
+   * mode 'unlock': the free first building of an area (placed after saving)
+   * mode 'add':    add tasks or a goal to a building (creates its list if needed)
+   * mode 'step':   add steps under an existing goal
+   */
+  const blankRows = (n, freq = 'daily') => Array.from({ length: n }, () => ({ title: '', freq }));
+  function openBuilder(o) {
+    const draft = { mode: o.mode, type: o.type, buildingId: o.buildingId, listId: o.listId, goalId: o.goalId || null, kind: o.kind || 'task', lockKind: !!o.lockKind, goal: '', tasks: blankRows(2) };
     if (o.mode === 'unlock') {
       const def = byId[o.type];
-      Object.assign(draft, { section: def.section, title: `Open ${SECTIONS[def.section].name}`, intro: `Set one big ${SECTIONS[def.section].name.toLowerCase()} goal. Your ${def.name} is free.`, saveLabel: `Save & place the ${def.name}` });
-    } else if (o.mode === 'new') {
-      const b = state.buildings.find((x) => x.id === o.buildingId); const def = byId[b.type];
-      Object.assign(draft, { section: def.section, title: `${def.name} list`, intro: `A new ${SECTIONS[def.section].name.toLowerCase()} goal. Tasks here pay ${[1, 1.5, 2, 3][def.tier - 1]}× coins.`, saveLabel: 'Save list' });
+      Object.assign(draft, { section: def.section, title: `Open ${SECTIONS[def.section].name}`, intro: `Add a few simple tasks, or one goal. Your ${def.name} is free.`, saveLabel: `Save & place the ${def.name}` });
+    } else if (o.mode === 'step') {
+      const l = state.lists.find((x) => x.id === o.listId); const g = l?.goals.find((x) => x.id === o.goalId);
+      Object.assign(draft, { section: l.section, buildingId: l.buildingId, title: 'Add steps', intro: `Small steps toward “${g?.title || 'your goal'}”.`, saveLabel: 'Save steps', kind: 'task', lockKind: true, tasks: blankRows(1, 'once') });
     } else {
-      const l = state.lists.find((x) => x.id === o.listId);
-      Object.assign(draft, { section: l.section, title: 'Edit list', intro: 'Change the goal or the tasks. Progress on tasks you keep is saved.', saveLabel: 'Save', goal: l.goal, tasks: l.tasks.map((t) => ({ id: t.id, title: t.title, kind: t.kind, per: t.per })) });
+      const l = o.listId ? state.lists.find((x) => x.id === o.listId) : null;
+      const b = state.buildings.find((x) => x.id === (l ? l.buildingId : o.buildingId)); const def = byId[b.type];
+      Object.assign(draft, { section: def.section, buildingId: b.id, listId: l?.id || null, title: draft.kind === 'goal' && draft.lockKind ? 'New goal' : draft.lockKind ? 'New tasks' : def.name, intro: draft.kind === 'goal' ? 'A bigger thing. Break it into small steps if you like.' : 'Simple things you do, like chores or habits.', saveLabel: 'Save' });
+      if (draft.kind === 'goal') draft.tasks = blankRows(1, 'once');
     }
-    if (!draft.tasks.length) draft.tasks = [{ title: '', kind: 'daily', per: 3 }, { title: '', kind: 'weekly', per: 3 }];
-    draft.placeholder = { spiritual: 'like “Read through the Psalms”', physical: 'like “Walk a 5K by spring”', financial: 'like “Save a $1,000 cushion”', relational: 'like “Weekly date night”', todo: 'like “Clean out the garage”' }[draft.section];
-    openPanel('goal', { draft });
+    if (o.idea) applyIdeaToDraft(draft, o.idea);
+    openPanel('goal', { draft, prev: o.prev || null });
     emit('goalform');
   }
   function readGoalForm() {
-    const d = panel?.draft; if (!d) return;
+    const d = panel?.draft; if (!d || panel.kind !== 'goal') return;
     const g = $('gfGoal'); if (g) d.goal = g.value;
     $('panelBody').querySelectorAll('[data-tt]').forEach((i) => { d.tasks[+i.dataset.tt].title = i.value; });
+    $('panelBody').querySelectorAll('[data-tf]').forEach((i) => { d.tasks[+i.dataset.tf].freq = i.value; });
+  }
+  /* Put the draft's tasks/goal onto a list. Returns how many things were added. */
+  function applyDraft(list, d) {
+    const rows = d.tasks.filter((t) => t.title.trim());
+    let goalId = d.goalId || null, n = 0;
+    if (d.kind === 'goal') { const g = addGoal(state, list.id, d.goal, today); if (!g) return 0; goalId = g.id; n++; }
+    for (const t of rows) if (addTask(state, list.id, { title: t.title, ...fromFreq(t.freq), goalId })) n++;
+    return n;
   }
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
-    if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory') readJournalForm(); });
+    if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
+  $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal' && e.target.dataset.tf !== undefined) readGoalForm(); });
   function readJournalForm() {
     const d = panel?.draft; if (!d) return;
     const v = (id) => $(id)?.value;
@@ -292,7 +317,7 @@ function boot(state, opts) {
     else { d.text = v('memText') ?? d.text; d.date = v('memDate') || d.date; if ($('memSpent')) d.spent = v('memSpent'); }
   }
   $('panelBody').addEventListener('change', async (e) => {
-    if (e.target.id !== 'memPhoto' || !e.target.files?.[0] || panel?.kind !== 'memory') return;
+    if (e.target.id !== 'memPhoto' || !e.target.files?.[0] || (panel?.kind !== 'memory' && panel?.kind !== 'goalDone')) return;
     readJournalForm();
     try {
       const blob = await compressImage(e.target.files[0]);
@@ -484,45 +509,127 @@ function boot(state, opts) {
   function saveGoalForm() {
     readGoalForm();
     const d = panel.draft;
-    const tasks = d.tasks.filter((t) => t.title.trim());
-    if (!d.goal.trim()) { toast('Add your big goal first', 'One sentence is plenty'); $('gfGoal')?.focus(); return; }
-    if (!tasks.length) { toast('Add at least one small task', 'Something you can check off this week'); return; }
+    const rows = d.tasks.filter((t) => t.title.trim());
+    if (d.kind === 'goal' && !d.goal.trim()) { toast('Name the goal first', 'Like “Run a 5K” or “Host friends for dinner”'); $('gfGoal')?.focus(); return; }
+    if (d.kind !== 'goal' && !rows.length) { toast('Add at least one task', 'Something simple, like “Do the dishes”'); $('panelBody').querySelector('[data-tt]')?.focus(); return; }
     if (d.mode === 'unlock') {
       closePanel();
-      win('goal');
-      const pending = { goal: d.goal, tasks };
+      if (d.kind === 'goal') win('goal');
+      const pending = { ...d, tasks: d.tasks.map((t) => ({ ...t })) };
+      const sec = byId[d.type].section;
       startPlacement({
         type: d.type,
         onPlace: (rec) => {
-          if (byId[d.type].section === 'spiritual') state.spiritualStyle = d.type === 'garden' ? 'garden' : 'church';
-          rec.story = `your first ${SECTIONS[byId[d.type].section].name.toLowerCase()} goal: “${pending.goal}”`;
-          createList(state, rec, pending.goal, pending.tasks, today);
-          note(state, today, 'opened', { section: byId[d.type].section });
+          if (sec === 'spiritual') state.spiritualStyle = d.type === 'garden' ? 'garden' : 'church';
+          rec.story = pending.kind === 'goal' ? `your first ${SECTIONS[sec].name.toLowerCase()} goal: “${pending.goal.trim()}”` : `your first ${SECTIONS[sec].name.toLowerCase()} list`;
+          const list = createList(state, rec, '', [], today);
+          applyDraft(list, pending);
+          note(state, today, 'opened', { section: sec });
           win('place', screenOf(bld.views.get(rec.id).top));
-          if (d.type === 'bank') { later(900, () => openBudgetSetup()); return; }
-          toast(`${SECTIONS[byId[d.type].section].name} is open!`, 'Tap the bubble to check off a task');
+          if (d.type === 'bank') { later(3800, () => { toast('Next: set up your budget', 'Relational opens once your budget is set'); openBudgetSetup(); }); return; }
+          const nx = nextSection(state);
+          toast(`${SECTIONS[sec].name} is open!`, nx && sectionUnlocked(state, nx) ? `${SECTIONS[nx].name} is ready to open next` : 'Tap the bubble to check off a task');
         }
       });
       return;
     }
-    if (d.mode === 'new') {
-      const b = state.buildings.find((x) => x.id === d.buildingId);
-      createList(state, b, d.goal, tasks, today);
-      win('goal');
-      closePanel(); toast('List saved', 'Tap the bubble when you check something off');
-    } else {
-      const l = state.lists.find((x) => x.id === d.listId);
-      l.goal = d.goal.trim();
-      l.tasks = tasks.slice(0, MAX_TASKS).map((t) => { const old = l.tasks.find((x) => x.id === t.id); if (old) { old.title = t.title.trim(); old.kind = t.kind; old.per = t.kind === 'weekly' ? t.per : 1; return old; } return makeTask(t.title, t.kind, t.per); });
-      closePanel(); toast('List updated');
-    }
+    const wasUnlocked = new Set(SECTION_LIST.filter((s) => sectionUnlocked(state, s)));
+    let list = d.listId ? state.lists.find((x) => x.id === d.listId) : listFor(state, d.buildingId);
+    if (!list) list = createList(state, state.buildings.find((x) => x.id === d.buildingId), '', [], today);
+    const n = applyDraft(list, d);
+    if (d.kind === 'goal') win('goal');
+    const opened = SECTION_LIST.find((s) => !wasUnlocked.has(s) && sectionUnlocked(state, s));
+    toast(d.kind === 'goal' ? 'Goal added' : n === 1 ? 'Task added' : `${n} added`, opened ? `${SECTIONS[opened].name} is ready to open in the Store!` : 'Fewer, finished beats more, half-done');
+    back(panel.prev, d.buildingId);
     afterProgress();
+  }
+  const SECTION_LIST = ['todo', 'financial', 'relational', 'physical', 'spiritual'];
+  /* Go back to the panel we came from (a building, the Lists, the Bank), or to the building. */
+  function back(prev, buildingId) {
+    if (prev) openPanel(prev.kind, { ...prev });
+    else if (buildingId) { closePanel(); openBuilding(buildingId); }
+    else closePanel();
+  }
+  const snapshot = () => (panel ? { ...panel } : null);
+
+  /* ---------- Ideas (💡) ---------- */
+  const ideaSource = (section, code) => {
+    const [k, n] = code.split(':'); const I = IDEAS[section];
+    if (k === 't') return { kind: 't', title: I.tasks[+n][0], freq: I.tasks[+n][1] };
+    const src = k === 'g' ? I.goals[+n] : [I.plans[+n].title, I.plans[+n].tasks];
+    return { kind: k, title: src[0], steps: src[1] };
+  };
+  function applyIdeaToDraft(d, code) {
+    const it = ideaSource(d.section, code);
+    const filled = d.tasks.filter((t) => t.title.trim());
+    if (it.kind === 't') d.tasks = [...filled, { title: it.title, freq: it.freq }];
+    else { d.kind = 'goal'; d.lockKind = false; d.goal = it.title; d.tasks = it.steps.map(([t, f]) => ({ title: t, freq: f })); }
+    if (!d.tasks.length) d.tasks = blankRows(1);
+  }
+  function addIdea(code, el) {
+    const p = panel;
+    if (p.draft) { applyIdeaToDraft(p.draft, code); openPanel('goal', { draft: p.draft, prev: p.builderPrev }); return; }
+    const list = state.lists.find((x) => x.id === p.listId); if (!list) return;
+    const it = ideaSource(p.section, code);
+    if (it.kind === 't') addTask(state, list.id, { title: it.title, ...fromFreq(it.freq) });
+    else {
+      const g = addGoal(state, list.id, it.title, today);
+      for (const [t, f] of it.steps) addTask(state, list.id, { title: t, ...fromFreq(f), goalId: g.id });
+      win('goal');
+    }
+    p.added.add(code);
+    sound.pop(); bump(el);
+    toast(it.kind === 't' ? 'Task added' : it.kind === 'g' ? 'Goal added' : 'Plan joined', 'It’s on the building’s list now');
+    afterProgress(); renderPanel();
+  }
+
+  /* ---------- Finishing a goal: confirm, recap, memory, parade ---------- */
+  function openGoalDone(listId, goalId) {
+    const l = state.lists.find((x) => x.id === listId); const g = l?.goals.find((x) => x.id === goalId);
+    if (!g) return;
+    openPanel('goalDone', { draft: { listId, goalId, title: g.title, section: l.section, text: '' }, prev: snapshot() });
+  }
+  async function goalReached(el) {
+    readJournalForm();
+    const d = panel.draft;
+    const r = achieveGoal(state, d.listId, d.goalId, today);
+    if (!r) return;
+    let photoId = null;
+    if (d.blob) { photoId = `p${Date.now().toString(36)}`; try { await putPhoto(photoId, d.blob); } catch (e) { photoId = null; } }
+    const m = addMemory(state, { section: d.section, date: today, text: d.text?.trim() || `We completed “${d.title}”!`, photoId, taskTitle: `🎯 ${d.title}` }, today);
+    if (d.preview) URL.revokeObjectURL(d.preview);
+    note(state, today, 'goal', { goal: r.goal.title, section: r.list.section });
+    sound.chime(); flyRewards(centerOf(el), { coins: r.reward.coins, xp: r.reward.xp + (m?.reward?.xp || 0) });
+    closePanel();
+    const top = bld.views.get(r.list.buildingId)?.top || controls.target;
+    fx.fireworks(top, 5, () => sound.firework());
+    fx.confetti(top);
+    const pp = living.parade(r.goal.title);
+    if (pp) later(600, () => stage.flyTo(pp, tween, easeInOut, 11));
+    toast(`Goal complete: ${r.goal.title}`, `+${r.reward.coins} coins · +${r.reward.xp} XP · saved to Memories`);
+    win('memory');
+    afterProgress();
+  }
+
+  /* ---------- Weekly review ---------- */
+  function renderReview() {
+    const w = weekSummary(state, today);
+    const can = canReviewWeek(state, today);
+    const secs = Object.entries(w.bySection).sort((a, b) => b[1] - a[1]);
+    return `<div class="gdone"><span class="gbig">📅</span><b class="ttl">Your last 7 days</b>
+      <p class="hint">${w.total ? `${w.total} check-offs over ${w.days} ${w.days === 1 ? 'day' : 'days'}.` : 'A quiet week. Rest counts too. One check mark starts the next streak.'}</p></div>
+      ${secs.length ? `<div class="rev-secs">${secs.map(([s, n]) => `<span class="schip" style="--c:${SECTIONS[s].color}">${SECTIONS[s].name} · ${n}</span>`).join('')}</div>` : ''}
+      ${w.goals.length ? `<p class="hint">🏆 Goals finished: ${w.goals.map((g) => `“${esc(g)}”`).join(', ')}</p>` : ''}
+      <p class="hint">${streak(state, today)}-day streak. One rest day a week never breaks it.</p>
+      <p class="hint">Anything feel like too much? Tap a task to change how often it repeats, or remove it. Keep only what fits this season.</p>
+      <div class="actions">${can ? `<button type="button" class="btn go-btn" data-review="1">Done reviewing · +${WEEKLY_REVIEW.coins} coins</button>` : '<span class="cost done">Reviewed this week ✓</span>'}</div>`;
   }
 
   /* ---------- Building things ---------- */
   function pickBuilding(id) {
     const def = byId[id];
-    if (def.kind === 'section' && def.tier === 1) { openGoalForm({ mode: 'unlock', type: id }); return; }
+    if (def.section && !sectionUnlocked(state, def.section)) { toast(`${SECTIONS[def.section].name} isn’t open yet`, `${unlockHint(state, def.section)}. One area at a time keeps it doable.`); return; }
+    if (def.kind === 'section' && def.tier === 1) { openBuilder({ mode: 'unlock', type: id }); return; }
     const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
     if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
     if (def.money && state.budget.level < def.money) { toast(`${def.name} unlocks at money level ${def.money}`, 'Log transactions and update balances at the Bank'); return; }
@@ -533,9 +640,10 @@ function boot(state, opts) {
       type: id,
       onPlace: (rec) => {
         spend(state, def.cost);
+        if (def.kind === 'section') rec.story = 'a new list for your family';
         flyRewards(screenOf(bld.views.get(rec.id).top), { pop: def.pop || 0 });
         if (def.kind === 'home') { win('home'); toast(`${def.name} built`, `+${def.pop} people moved in`); emit('home'); }
-        else if (def.kind === 'section') later(700, () => openGoalForm({ mode: 'new', buildingId: rec.id }));
+        else if (def.kind === 'section') later(3600, () => { if (!panel && !mode) openBuilder({ mode: 'add', buildingId: rec.id }); });
         else toast(`${def.name} placed`);
       }
     });
@@ -609,7 +717,9 @@ function boot(state, opts) {
     }
     const rec = { id: `b${state.buildSeq++}`, type: o.type, i, j, rot, level: 1, builtOn: today, story: '' };
     state.buildings.push(rec);
-    bld.add(rec, true);
+    const big = byId[o.type].kind !== 'decor';
+    bld.add(rec, !big);
+    if (big) living.construct(rec, () => { syncWorld(); });
     sound.thud(); noteBuild(state, today);
     note(state, today, 'built', { name: byId[o.type].name });
     syncWorld();
@@ -708,10 +818,11 @@ function boot(state, opts) {
     if (mode?.kind === 'place') { if (p && !mode.pan) { const [w, d] = byId[mode.type].size; const t = tileUnder(p, ghost.rot % 2 ? d : w, ghost.rot % 2 ? w : d); ghost.move(t.i, t.j); validate(); } return; }
     if (mode) return;
     ray.setFromCamera(ndc.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
-    const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
+    const sh = ray.intersectObjects([...sur.targets, ...walkers.familyObjs(), ...walkers.peopleObjs()], true).find((h) => { let o = h.object; while (o && !o.userData.surprise) o = o.parent; return o && o.visible; });
     if (sh) {
       let o = sh.object; while (o && !o.userData.surprise) o = o.parent;
       const kind = o.userData.surprise;
+      if (kind === 'neighbor') { const n = living.neighborSays(o.userData.nb); walkers.pause(o, 2600); toast(`${n.name}: “${n.line}”`); fx.heartPop(o.position); sound.pop(); return; }
       if (kind === 'family') { const m = o.userData.member; toast(`${m.name} says hi!`, pick(['Nice work today.', 'This town feels like home.', 'What should we build next?', 'Let’s check something off together.'])); fx.heartPop(o.position); return; }
       fx.heartPop(o.position); sound.pop();
       if (spotSticker(state, kind)) { toast(`You spotted ${STICKERS[kind]}!`, `Sticker book ${state.stickers.length} of ${Object.keys(STICKERS).length} · just for fun`); persist(); }
@@ -738,15 +849,26 @@ function boot(state, opts) {
     if (d.road) { startRoads(); return; }
     if (d.thup) { upgradeTownHall(); return; }
     if (d.done) { const [l, t] = d.done.split(':'); doTask(l, t, b); return; }
-    if (d.goaldone) { goalReached(d.goaldone, b); return; }
-    if (d.editlist) { openGoalForm({ mode: 'edit', listId: d.editlist }); return; }
-    if (d.newlist) { openGoalForm({ mode: 'new', buildingId: d.newlist }); return; }
+    if (d.gdone) { const [l, g] = d.gdone.split(':'); openGoalDone(l, g); return; }
+    if (d.gconfirm) { goalReached(b); return; }
+    if (d.addt) { openBuilder({ mode: 'add', listId: d.addt, kind: 'task', lockKind: true, prev: snapshot() }); return; }
+    if (d.addg) { openBuilder({ mode: 'add', listId: d.addg, kind: 'goal', lockKind: true, prev: snapshot() }); return; }
+    if (d.addsub) { const [l, g] = d.addsub.split(':'); openBuilder({ mode: 'step', listId: l, goalId: g, prev: snapshot() }); return; }
+    if (d.newlist) { openBuilder({ mode: 'add', buildingId: d.newlist, prev: snapshot() }); return; }
+    if (d.bkind) { readGoalForm(); const dr = panel.draft; dr.kind = d.bkind; if (d.bkind === 'goal' && dr.tasks.every((t) => !t.title.trim())) dr.tasks = blankRows(1, 'once'); renderPanel(); (d.bkind === 'goal' ? $('gfGoal') : $('panelBody').querySelector('[data-tt]'))?.focus(); return; }
+    if (d.trm !== undefined && panel?.kind === 'goal') { readGoalForm(); panel.draft.tasks.splice(+d.trm, 1); renderPanel(); return; }
+    if (d.tedit) { const [l, t] = d.tedit.split(':'); openPanel('taskEdit', { listId: l, taskId: t, prev: snapshot() }); return; }
+    if (d.tsave) { const [l, t] = d.tsave.split(':'); updateTask(state, l, t, { title: $('teTitle').value, freq: $('teFreq').value }); persist(); hud(); toast('Task updated'); back(panel.prev); return; }
+    if (d.tdel) { const [l, t] = d.tdel.split(':'); removeTask(state, l, t); persist(); hud(); toast('Task removed', 'Progress you made still counts'); back(panel.prev); return; }
+    if (d.ideas) { const [sec, src] = d.ideas.split(':'); if (src === 'draft') { readGoalForm(); openPanel('ideas', { section: sec, draft: panel.draft, builderPrev: panel.prev, added: new Set() }); } else openPanel('ideas', { section: sec, listId: src, added: new Set(), prev: snapshot() }); return; }
+    if (d.idea) { addIdea(d.idea, b); return; }
+    if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
+    if (d.reviewopen) { openPanel('review', { prev: snapshot() }); return; }
+    if (d.review) { const r = reviewWeek(state, today); if (r) { flyRewards(centerOf(b), r.reward); sound.chime(); toast('Week reviewed', 'See you next week'); afterProgress(); renderPanel(); } return; }
     if (d.upgrade) { upgradeHome(d.upgrade); return; }
     if (d.move) { const r = state.buildings.find((x) => x.id === d.move); startPlacement({ type: r.type, ignoreId: r.id, start: { i: r.i, j: r.j }, rot: r.rot, level: r.level }); return; }
     if (d.remove) { const r = state.buildings.find((x) => x.id === d.remove); state.buildings.splice(state.buildings.indexOf(r), 1); bld.remove(r.id); syncWorld(); closePanel(); persist(); hud(); return; }
-    if (d.kind) { readGoalForm(); const [i, k] = d.kind.split(':'); panel.draft.tasks[+i].kind = k; renderPanel(); return; }
-    if (d.per) { readGoalForm(); const [i, n] = d.per.split(':').map(Number); const t = panel.draft.tasks[i]; t.per = Math.max(1, Math.min(7, t.per + n)); renderPanel(); return; }
-    if (d.addtask) { readGoalForm(); panel.draft.tasks.push({ title: '', kind: 'daily', per: 3 }); renderPanel(); $('panelBody').querySelector(`[data-tt="${panel.draft.tasks.length - 1}"]`)?.focus(); return; }
+    if (d.addtask) { readGoalForm(); const dr = panel.draft; dr.tasks.push(...blankRows(1, dr.kind === 'goal' || dr.mode === 'step' ? 'once' : 'daily')); renderPanel(); $('panelBody').querySelector(`[data-tt="${dr.tasks.length - 1}"]`)?.focus(); return; }
     if (d.savegoal) { saveGoalForm(); return; }
     if (d.btab) { panel.tab = d.btab; renderPanel(); $('panelBody').scrollTop = 0; return; }
     if (d.bank) { bankAction(d.bank, b); return; }
@@ -793,32 +915,36 @@ function boot(state, opts) {
     if (d.ttab) { panel.tab = d.ttab; renderPanel(); return; }
     if (d.claimc) { const c = claimChallenge(state, d.claimc, today); if (c) { flyRewards(centerOf(b), c); sound.chime(); afterProgress(); renderPanel(); } return; }
     if (d.claimm) { const m = claimMilestone(state, d.claimm); if (m) { flyRewards(centerOf(b), m); sound.chime(); afterProgress(); renderPanel(); } return; }
-    if (d.close) { closePanel(); return; }
+    if (d.close) { if (panel?.kind === 'goalDone' && panel.prev) back(panel.prev); else closePanel(); return; }
     if (d.menu) { menuAction(d.menu, b); }
   });
   function doTask(listId, taskId, el) {
+    const before = state.lists.find((l) => l.id === listId);
+    const lv0 = before ? useLevel(before) : 1;
     const r = completeTask(state, listId, taskId, today);
     if (!r) return;
     sound.pop(); later(120, () => sound.coin());
-    flyRewards(centerOf(el), r.reward);
+    const extra = { coins: (r.visit?.coins || 0) + (r.streakBonus?.coins || 0), xp: (r.visit?.xp || 0) + (r.streakBonus?.xp || 0) };
+    flyRewards(centerOf(el), { coins: r.reward.coins + extra.coins, xp: r.reward.xp + extra.xp });
     bld.bounce(r.list.buildingId);
     const v = bld.views.get(r.list.buildingId);
     if (v) fx.coinBurst(v.top.clone().add(new THREE.Vector3(0, -0.2, 0)));
     win('task', centerOf(el));
+    if (r.streakBonus) { later(500, () => { sound.chime(); fx.confetti(v?.top || controls.target); toast(`${r.streakBonus.days}-day streak!`, `+${r.streakBonus.coins} coins · +${r.streakBonus.xp} XP bonus`); }); }
+    else if (r.visit) toast('Welcome back!', `Daily visit +${r.visit.coins} coins${r.streakDays > 1 ? ` · ${r.streakDays}-day streak` : ''}`);
+    else if (!r.full && !state.stats.tokenNoted) { state.stats.tokenNoted = true; toast('Over-achiever!', 'After 6 check-offs a day, extras earn a small bonus. Steady beats more.'); }
+    /* Steady use grows the building. */
+    const lv1 = useLevel(r.list);
+    const rec = state.buildings.find((x) => x.id === r.list.buildingId);
+    if (rec && lv1 > lv0 && lv1 > (rec.level || 1)) {
+      rec.level = lv1;
+      later(1200, () => { toast(`${byId[rec.type].name} is growing!`, `${lv1 === 2 ? 10 : 30} days of steady use`); living.construct(rec, () => { syncWorld(); persist(); }); });
+    }
+    living.refresh();
     if (totalDue(state, today) === 0) later(900, () => { fx.fireworks(controls.target, 4, () => sound.firework()); toast('Everything due today is done!', 'The town is celebrating'); });
     emit('task');
     afterProgress(); renderPanel();
   }
-  function goalReached(listId, el) {
-    const r = achieveGoal(state, listId, today);
-    if (!r) return;
-    note(state, today, 'goal', { goal: r.list.achieved.at(-1).goal, section: r.list.section });
-    sound.chime(); flyRewards(centerOf(el), r.reward);
-    fx.fireworks(bld.views.get(r.list.buildingId)?.top || controls.target, 5, () => sound.firework());
-    toast('Big goal reached!', `+${r.reward.coins} coins · +${r.reward.xp} XP · set the next one when you're ready`);
-    afterProgress(); renderPanel();
-  }
-
   /* ---------- Menu + paper ---------- */
   function renderMenu(confirm) {
     const q = state.settings.quality;
@@ -826,7 +952,7 @@ function boot(state, opts) {
     return `<p class="hint"><b>${esc(state.cityName)}</b> · started ${shortDate(state.startDate)} · ${streak(state, today)}-day streak</p>
       <div class="set-row"><span>Town paper</span><button type="button" class="btn soft small" data-menu="paper">Read it</button></div>
       <div class="set-row"><span>Sound and haptics</span><button type="button" class="btn soft small" data-menu="sound">${state.settings.sound ? 'On' : 'Off'}</button></div>
-      <div class="set-row"><span>Night</span><button type="button" class="btn soft small" data-menu="night">${state.settings.night ? 'On' : 'Off'}</button></div>
+      <div class="set-row"><span>Day and night<br><small>Auto follows your clock</small></span><div class="seg">${['auto', 'day', 'night'].map((v) => `<button type="button" data-menu="sky:${v}" aria-pressed="${skyMode() === v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div></div>
       <div class="set-row"><span>Quality<br><small>Now: ${stage.quality === 'high' ? 'High' : 'Battery saver'}</small></span><div class="seg">${seg('auto', 'Auto')}${seg('high', 'High')}${seg('saver', 'Battery saver')}</div></div>
       <div class="set-row"><span>Guided tour</span><button type="button" class="btn soft small" data-menu="tour">Replay</button></div>
       <div class="set-row"><span>Start over<br><small>Clears this town from this device</small></span>${confirm ? '<button type="button" class="btn go-btn small" data-menu="reset">Yes, start over</button>' : '<button type="button" class="btn soft small" data-menu="ask">Start over</button>'}</div>
@@ -835,7 +961,7 @@ function boot(state, opts) {
   function menuAction(a) {
     if (a === 'paper') { openPanel('paper'); return; }
     if (a === 'sound') { sound.setEnabled(!state.settings.sound); if (state.settings.sound) sound.pop(); }
-    if (a === 'night') { state.settings.night = !state.settings.night; const n0 = stage.night, n1 = state.settings.night ? 1 : 0; tween(1400, (k) => { stage.night = n0 + (n1 - n0) * easeInOut(k); }); }
+    if (a.startsWith('sky:')) { state.settings.sky = a.slice(4); state.settings.night = state.settings.sky === 'night'; easeSky(); }
     if (a.startsWith('q:')) { const v = a.slice(2); state.settings.quality = v; stage.setQuality(v === 'auto' ? detectQuality() : v); autoChecked = true; }
     if (a === 'tour') { closePanel(); state.tour = { step: 0, done: false }; runTour(); return; }
     if (a === 'ask') { panel.confirm = true; }
@@ -872,7 +998,7 @@ function boot(state, opts) {
   function goAction(code) {
     const [kind, id] = code.split(':');
     closePanel();
-    const unopened = ['todo', 'physical', 'financial', 'relational', 'spiritual'].find((s) => !state.lists.some((l) => l.section === s));
+    const nx = nextSection(state); const unopened = nx && sectionUnlocked(state, nx) ? nx : null;
     if (kind === 'win') {
       if (id === 'task') return openPanel('lists', { due: true });
       if (id === 'home') return openPanel('build', { tab: 'homes' });
@@ -899,11 +1025,11 @@ function boot(state, opts) {
     { title: `Welcome to ${state.cityName}!`, text: 'I’m Rosie, your town planner. In this town, real-life goals are what build things. Let’s set up your first one.', button: 'Let’s go', cardAt: 'mid' },
     { title: 'Open the Build menu', text: 'Every part of life has its own building. Tap Build.', target: rectOf('#btnBuild'), until: 'panel:build', cardAt: 'mid' },
     { title: 'Start with To-Do', text: 'Tap the Community Job Board. It holds everyday chores and projects.', target: rectOf('[data-pick="jobboard"]'), until: 'goalform', cardAt: 'top', enter: () => { if (panel?.kind === 'build') { panel.tab = 'todo'; renderPanel(); } } },
-    { title: 'Set your goal', text: 'Write one thing you want to get done, add a task or two that move it forward, then tap Save.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
+    { title: 'Add a task or two', text: 'Something simple, like “Do the dishes”. Pick how often on the right. Want something bigger? Tap + Goal. Then tap Save.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
     { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
     { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
     { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Housing, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : panel.tab ? $('panelTabs').querySelector('[data-back]') : $('panelBody').querySelector('[data-cat="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
-    { title: 'You’re on your way!', text: 'Open Spiritual, Physical, Financial and Relational by setting a goal in each. Quick wins have more rewards, and leveling up unlocks new buildings with new lists.', target: rectOf('#btnWins'), button: 'Finish tour', cardAt: 'mid' }
+    { title: 'You’re on your way!', text: 'Areas open one at a time: Financial next, then Relational once your budget is set, then Physical and Spiritual. Tap 💡 on any list for easy ideas. Showing up daily matters more than adding more.', target: rectOf('#btnWins'), button: 'Finish tour', cardAt: 'mid' }
   ];
   function runTour() {
     const s = TOUR[state.tour.step];
@@ -930,7 +1056,20 @@ function boot(state, opts) {
   stage.renderer.info.autoReset = false;
   const fpsEl = DEBUG ? Object.assign(document.createElement('div'), { className: 'dbg' }) : null;
   if (fpsEl) document.body.appendChild(fpsEl);
-  stage.night = state.settings.night ? 1 : 0;
+  /* Real-clock day and night: dusk from 7pm, night 8:30pm–5:30am, dawn until 7am. */
+  function skyMode() { return state.settings.sky || (state.settings.night ? 'night' : 'auto'); }
+  function nightTarget() {
+    const m = skyMode();
+    if (m === 'day') return 0;
+    if (m === 'night') return 1;
+    const d = new Date(); const h = d.getHours() + d.getMinutes() / 60;
+    if (h < 5.5 || h >= 20.5) return 1;
+    if (h >= 7 && h < 19) return 0;
+    return h < 7 ? 1 - (h - 5.5) / 1.5 : (h - 19) / 1.5;
+  }
+  function easeSky() { const n0 = stage.night, n1 = nightTarget(); if (Math.abs(n1 - n0) < 0.005) return; tween(1400, (k) => { stage.night = n0 + (n1 - n0) * easeInOut(k); }); }
+  stage.night = nightTarget();
+  setInterval(easeSky, 60000);
   waterUniforms.uStorm.value = 0.05;
   function frame(now) {
     stage.renderer.info.reset();
@@ -940,6 +1079,7 @@ function boot(state, opts) {
     waterUniforms.uTime.value = REDUCED ? 0 : t;
     swayUniforms.uTime.value = REDUCED ? 0 : t; swayUniforms.uSway.value = REDUCED ? 0 : 0.05;
     stage.applyMood(stage.night);
+    living.tick(dt, t, stage.night);
     walkers.tick(dt, t);
     rail.tick(dt, t);
     sur.tick(dt, t);
@@ -973,7 +1113,7 @@ function boot(state, opts) {
   if (opts.tour || (!state.tour.done && state.tour.step > 0)) later(2200, runTour);
   later(3500, () => { if (state.tour.done && !panel && !mode && paydayDue(state.budget, today)) startPayday(); });
   persist();
-  if (DEBUG) window.__lc = { state, stage, bld, meter, actions: { openBuilding, openPanel, pickBuilding, startPlacement, confirmPlace, doTask, startRoads, paintRoad, endMode, upgradeTownHall } };
+  if (DEBUG) window.__lc = { state, stage, bld, meter, living, actions: { openBuilding, openPanel, pickBuilding, startPlacement, confirmPlace, doTask, startRoads, paintRoad, endMode, upgradeTownHall } };
 }
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {

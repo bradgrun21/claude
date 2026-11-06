@@ -1,6 +1,7 @@
 import { TOWNHALL_AT, STATION_AT, starterRoads, stationRoad, key } from './map.js';
 import { emptyBudget } from '../systems/budget.js';
 import { occupancy } from '../systems/placement.js';
+import { migrateList } from '../systems/lists.js';
 
 /*
  * One state object that every system reads, saved in this browser only (Phase 1: no real user data leaves the device).
@@ -74,6 +75,7 @@ export function load() {
     for (const k of Object.keys(base)) if (s[k] === undefined) s[k] = base[k];
     s.settings = { ...base.settings, ...s.settings };
     s.budget = { ...base.budget, ...s.budget };
+    s.lists.forEach(migrateList);
     addStation(s, s.stats?.lastDay || s.startDate);
     return s;
   } catch (e) {

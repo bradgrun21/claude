@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { M, mat, mesh } from './palette.js';
 import * as m from './models.js';
+import { byId } from '../data/catalog.js';
 
 /*
  * One model per catalog type, built at 1-tile scale and grown to the footprint.
@@ -255,10 +256,29 @@ const BUILDERS = {
   cottage, house: familyHouse, townhouse, apartments, ...decor
 };
 
+/* Section buildings grow with steady use: level 2 adds pennants and flower boxes, level 3 a gold star on top. */
+const PENNANT = [M('#F28CA0'), M('#F6C443'), M('#7FC6EE')];
+function grown(g, level) {
+  for (const [x, k] of [[-0.43, 0], [0.43, 1]]) {
+    const pole = box(0.02, 0.42, 0.02, C.white, x, 0, 0.43); g.add(pole);
+    const fl = mesh(new THREE.ConeGeometry(0.05, 0.13, 3), PENNANT[k]); fl.rotation.z = -Math.PI / 2; fl.position.set(x + 0.07, 0.37, 0.43); fl.scale.set(1, 1, 0.3); g.add(fl);
+    const fb = m.flowers(4, 0.06); fb.position.set(x * 0.72, 0.03, 0.46); g.add(fb);
+  }
+  if (level >= 3) {
+    g.updateMatrixWorld(true);
+    const top = new THREE.Box3().setFromObject(g).max.y;
+    const sh = new THREE.Shape();
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.045 : 0.1, a = (i / 10) * Math.PI * 2 + Math.PI / 2; const x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
+    const star = mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.03, bevelEnabled: false }), mat.gold); star.position.set(0, top + 0.16, -0.015); g.add(star);
+    g.add(box(0.015, 0.08, 0.015, mat.gold, 0, top, 0));
+  }
+}
+
 /* Returns a group already scaled to the footprint (w tiles wide). */
 export function buildModel(type, w = 1, level = 1, variant = 0) {
   const fn = BUILDERS[type] || cottage;
   const inner = fn(level, variant);
+  if (byId[type]?.kind === 'section' && level >= 2) grown(inner, level);
   const g = new THREE.Group();
   inner.scale.multiplyScalar(w * 0.98);
   g.add(inner);

@@ -1,6 +1,8 @@
 import { SECTIONS, SECTION_KEYS, BUILDINGS, byId, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from '../data/catalog.js';
 import { levelNeed, population, TOWNHALL, taskReward, goalReward, canUpgradeTownHall, unlockedAt } from '../systems/economy.js';
-import { isAvailable, progressLabel, listFor, dueCount, MAX_TASKS, KIND_LABEL } from '../systems/lists.js';
+import { isAvailable, isLive, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS } from '../systems/lists.js';
+import { sectionUnlocked, unlockHint, unlockShort } from '../systems/progression.js';
+import { IDEAS } from '../data/ideas.js';
 import { dailyChallenges, challengeProgress, milestoneState, QUICK_WINS } from '../systems/challenges.js';
 import { STICKER_NAMES } from '../systems/surprises.js';
 import { shortDate } from '../systems/time.js';
@@ -29,9 +31,10 @@ export function renderBuild(state, tab) {
     const mains = tab === 'spiritual' && !state.spiritualStyle ? [byId.church, byId.garden] : [mainBuildingFor(tab, state.spiritualStyle || 'church')];
     const rest = BUILDINGS.filter((b) => b.section === tab && b.tier > 1);
     const cards = [];
+    const areaLocked = !sectionUnlocked(state, tab);
     for (const d of mains) {
-      if (has(d.id)) cards.push(card(d, state, { note: 'Built · opens your first list', disabled: true, action: 'built', price: '<span class="cost done">Built</span>' }));
-      else cards.push(card(d, state, { note: tab === 'spiritual' && !state.spiritualStyle ? (d.id === 'garden' ? 'Open to any faith, or none' : 'For a family of faith') : 'Free when you set your first goal here', price: '<span class="cost free">Set a goal</span>' }));
+      if (has(d.id)) cards.push(card(d, state, { note: 'Built · holds your first list', disabled: true, action: 'built', price: '<span class="cost done">Built</span>' }));
+      else cards.push(card(d, state, { locked: areaLocked, lockText: unlockHint(state, tab), note: tab === 'spiritual' && !state.spiritualStyle ? (d.id === 'garden' ? 'Open to any faith, or none' : 'For a family of faith') : 'Free. Add your first task or goal', price: areaLocked ? '<span class="cost done">Coming soon</span>' : '<span class="cost free">Start here</span>' }));
     }
     for (const d of rest) {
       const built = has(d.id);
@@ -40,7 +43,7 @@ export function renderBuild(state, tab) {
       cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : moneyLocked ? `Money level ${d.money}` : `Level ${d.level}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
     }
     return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(tab)}<span>${esc(sec.blurb)}</span></div><div class="grid">${cards.join('')}</div>
-      <p class="foot">${open ? 'Each new building here adds another list, and higher buildings pay more for every task.' : 'Set your first goal in this area to open it. The first building is free.'}</p>`;
+      <p class="foot">${open ? 'Each new building here adds another list, and higher buildings pay more for every task.' : sectionUnlocked(state, tab) ? 'Add your first task or goal to open this area. The first building is free.' : `${unlockHint(state, tab)}. Areas open one at a time so it never feels like too much.`}</p>`;
   }
   if (tab === 'shops') {
     const bank = has('bank');
@@ -71,30 +74,41 @@ export function renderTownHall(state) {
       <button type="button" class="btn go-btn" data-thup="1"${check.ok ? '' : ' disabled'}>${check.ok ? `Upgrade for ${next.coins} coins` : check.reason === 'pop' ? 'Build more homes first' : 'Save up more coins'}</button></div>` : '<p class="hint">Your Town Hall is fully upgraded.</p>'}`;
 }
 
-/* ---------- One building's list ---------- */
+/* ---------- One building's list: tasks + goals (with steps) ---------- */
+const FREQS = [['daily', 'Daily'], ['w1', '1×/wk'], ['w2', '2×/wk'], ['w3', '3×/wk'], ['w4', '4×/wk'], ['w5', '5×/wk'], ['w6', '6×/wk'], ['once', 'Once']];
+export const freqSelect = (attr, code) => `<select class="freq" ${attr} aria-label="How often">${FREQS.map(([v, l]) => `<option value="${v}"${code === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+function taskRow(state, list, t, day, r) {
+  const avail = isAvailable(t, day, list);
+  const prog = progressLabel(t, day);
+  return `<div class="task${avail ? '' : ' done'}${t.goalId ? ' sub' : ''}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : 'Done'} ${esc(t.title)}">${avail ? '' : svgI('check', '#fff', 18, 3)}</button>
+    <button type="button" class="tx" data-tedit="${list.id}:${t.id}"><b>${esc(t.title)}</b>${prog ? `<small>${prog}</small>` : ''}</button>
+    ${!avail && t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 15)}</button>` : ''}
+    <span class="fpill">${freqLabel(t)}</span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
+}
 export function renderListCard(state, list, day, { compact = false } = {}) {
   const b = state.buildings.find((x) => x.id === list.buildingId);
   const def = byId[b.type];
   const r = taskReward(list.tier, state.tcLevel);
-  const rows = list.tasks.map((t) => {
-    const avail = isAvailable(t, day);
-    return `<div class="task${avail ? '' : ' done'}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : 'Done'} ${esc(t.title)}">${avail ? '' : svgI('check', '#fff', 18, 3)}</button>
-      <span class="tx"><b>${esc(t.title)}</b><small>${progressLabel(t, day)}</small></span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 16)}<span>Recap</span></button>` : ''}</div>`;
-  }).join('');
+  const lv = useLevel(list), used = useDays(list);
+  const loose = list.tasks.filter((t) => !t.goalId);
+  const goals = list.goals.filter((g) => !g.achievedOn);
   const g = goalReward(list.tier);
+  const nextAt = USE_LEVELS[lv];
   return `<div class="listcard" style="--c:${SECTIONS[list.section].color}">
-    <div class="lhead">${compact ? `<span class="limg">${img(b.type)}</span>` : ''}<div><span class="lname">${esc(def.name)}</span>
-    <b class="goal">${list.goal ? esc(list.goal) : '<span class="muted">No big goal right now</span>'}</b></div></div>
-    ${rows || '<p class="hint">No tasks yet.</p>'}
-    <div class="lbtns">${list.goal ? `<button type="button" class="btn go-btn small" data-goaldone="${list.id}">Goal reached! +${g.coins}</button>` : `<button type="button" class="btn go-btn small" data-editlist="${list.id}">Set a new goal</button>`}
-    <button type="button" class="btn soft small" data-editlist="${list.id}">${svgI('edit', 'currentColor', 14)} Edit</button></div>
-    ${list.achieved.length ? `<small class="ach">Reached: ${list.achieved.slice(-3).map((a) => `${esc(a.goal)} (${shortDate(a.on)})`).join(' · ')}</small>` : ''}</div>`;
+    <div class="lhead">${compact ? `<span class="limg">${img(b.type)}</span>` : ''}<div class="lt"><span class="lname">${esc(def.name)}</span><small>${lv > 1 ? `Grown to level ${lv} · ` : ''}${used} ${used === 1 ? 'day' : 'days'} of use${nextAt ? ` · grows at ${nextAt}` : ''}</small></div>
+    <div class="ladd"><button type="button" class="btn soft small" data-addt="${list.id}">+ Task</button><button type="button" class="btn soft small" data-addg="${list.id}">+ Goal</button><button type="button" class="btn soft small idea" data-ideas="${list.section}:${list.id}" aria-label="Ideas">💡</button></div></div>
+    ${loose.map((t) => taskRow(state, list, t, day, r)).join('')}
+    ${goals.map((gl) => `<div class="goalblk"><div class="ghead"><span class="gico">🎯</span><b>${esc(gl.title)}</b><button type="button" class="btn go-btn small" data-gdone="${list.id}:${gl.id}">Completed the goal?</button></div>
+      ${list.tasks.filter((t) => t.goalId === gl.id).map((t) => taskRow(state, list, t, day, r)).join('')}
+      <button type="button" class="btn link small" data-addsub="${list.id}:${gl.id}">+ Add a step</button></div>`).join('')}
+    ${!loose.length && !goals.length ? '<p class="hint">Nothing here yet. Add a task or a goal, or tap 💡 for easy ideas.</p>' : ''}
+    ${list.achieved.length ? `<small class="lach">🏆 ${list.achieved.slice(-3).map((a) => `${esc(a.goal)} (${shortDate(a.on)})`).join(' · ')}</small>` : ''}</div>`;
 }
 
 export function renderLists(state, day, filterDue) {
   const lists = state.lists.filter((l) => !filterDue || dueCount(l, day) > 0);
-  if (!state.lists.length) return '<p class="hint">No lists yet. Tap Build, pick an area, and set your first goal.</p>';
-  if (!lists.length) return '<div class="empty">' + svgI('check', '#3E8E57', 34, 3) + '<b>Everything due today is done.</b><p class="hint">Come back tomorrow, or set a new goal in any area.</p></div>';
+  if (!state.lists.length) return '<p class="hint">No lists yet. Tap Build, pick an area, and add your first task.</p>';
+  if (!lists.length) return '<div class="empty">' + svgI('check', '#3E8E57', 34, 3) + '<b>Everything due today is done.</b><p class="hint">Come back tomorrow. Rest is part of the plan too.</p></div>';
   return SECTION_KEYS.map((s) => {
     const ls = lists.filter((l) => l.section === s);
     if (!ls.length) return '';
@@ -108,7 +122,7 @@ export function renderBuilding(state, b, day) {
   let body = '';
   if (def.kind === 'section') {
     const list = listFor(state, b.id);
-    body = list ? renderListCard(state, list, day) : `<div class="card2"><b>No list here yet</b><p class="hint">Give this building a goal and a few tasks. Tasks here pay ${taskReward(def.tier, state.tcLevel).coins} coins each.</p><button type="button" class="btn go-btn" data-newlist="${b.id}">Add a list</button></div>`;
+    body = list ? renderListCard(state, list, day) : `<div class="card2"><b>Nothing here yet</b><p class="hint">Add a task or a goal. Tasks here pay ${taskReward(def.tier, state.tcLevel).coins} coins each.</p><button type="button" class="btn go-btn" data-newlist="${b.id}">Add a task or goal</button></div>`;
   } else if (def.kind === 'home') {
     const lv = b.level || 1;
     body = `<div class="th"><span class="bimg bigimg">${img(b.type)}</span><div><b class="ttl">${esc(def.name)} · level ${lv}</b><p>${homePop(b.type, lv)} people live here.</p></div></div>`;
@@ -125,18 +139,41 @@ export function renderBuilding(state, b, day) {
   return `${body}<p class="story">${story}</p><div class="actions">${actions.join('')}</div>`;
 }
 
-/* ---------- Goal + tasks form ---------- */
-export function renderGoalForm(draft) {
-  const sec = SECTIONS[draft.section];
-  return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(draft.section)}<span>${esc(draft.intro)}</span></div>
-    <label class="q" for="gfGoal">Your big goal</label>
-    <input class="field" id="gfGoal" maxlength="60" value="${esc(draft.goal)}" autocomplete="off" placeholder="${esc(draft.placeholder || '')}">
-    <label class="q">Small tasks that move it forward <small>(up to ${MAX_TASKS})</small></label>
-    ${draft.tasks.map((t, i) => `<div class="trow"><input class="field" data-tt="${i}" maxlength="50" value="${esc(t.title)}" placeholder="Task ${i + 1}" autocomplete="off">
-      <div class="seg kind">${Object.entries(KIND_LABEL).map(([k, l]) => `<button type="button" data-kind="${i}:${k}" aria-pressed="${t.kind === k}">${k === 'weekly' ? `${t.per}× a week` : l}</button>`).join('')}</div>
-      ${t.kind === 'weekly' ? `<div class="stepper"><button type="button" data-per="${i}:-1" aria-label="Fewer">−</button><button type="button" data-per="${i}:1" aria-label="More">+</button></div>` : ''}</div>`).join('')}
-    ${draft.tasks.length < MAX_TASKS ? '<button type="button" class="btn link" data-addtask="1">+ Add another task</button>' : ''}
-    <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(draft.saveLabel)}</button></div>`;
+/* ---------- Builder: add tasks or a goal (with optional steps) ---------- */
+export function renderBuilder(d) {
+  const sec = SECTIONS[d.section];
+  const rows = d.tasks.map((t, i) => `<div class="trow2"><input class="field" data-tt="${i}" maxlength="60" value="${esc(t.title)}" placeholder="${d.kind === 'goal' ? `Step ${i + 1} (optional)` : i ? 'Another task' : 'Like “Do the dishes”'}" autocomplete="off">${freqSelect(`data-tf="${i}"`, t.freq)}${d.tasks.length > 1 ? `<button type="button" class="trm" data-trm="${i}" aria-label="Remove">–</button>` : ''}</div>`).join('');
+  return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(d.section)}<span>${esc(d.intro)}</span></div>
+    ${d.lockKind ? '' : `<div class="seg wide"><button type="button" data-bkind="task" aria-pressed="${d.kind === 'task'}">+ Task</button><button type="button" data-bkind="goal" aria-pressed="${d.kind === 'goal'}">+ Goal</button></div>`}
+    ${d.kind === 'goal' ? `<label class="q" for="gfGoal">Goal <small>(something bigger, like “Run a 5K” or “Host friends for dinner”)</small></label><input class="field" id="gfGoal" maxlength="60" value="${esc(d.goal)}" autocomplete="off"><label class="q">Steps <small>(optional small tasks that move it forward)</small></label>` : '<label class="q">Tasks <small>(simple things, like chores or habits)</small></label>'}
+    ${rows}
+    <div class="brow">${d.tasks.length < MAX_TASKS ? `<button type="button" class="btn link" data-addtask="1">+ Add another</button>` : ''}<button type="button" class="btn soft small" data-ideas="${d.section}:draft">💡 Ideas</button></div>
+    <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(d.saveLabel)}</button></div>`;
+}
+
+export function renderTaskEdit(list, t) {
+  return `<label class="q" for="teTitle">Task</label><input class="field" id="teTitle" maxlength="60" value="${esc(t.title)}" autocomplete="off">
+    <label class="q">How often</label>${freqSelect('id="teFreq"', freqCode(t))}
+    <div class="actions"><button type="button" class="btn go-btn" data-tsave="${list.id}:${t.id}">Save</button><button type="button" class="btn soft" data-tdel="${list.id}:${t.id}">Remove task</button></div>
+    <p class="foot">Removing a task never takes away progress you've already made.</p>`;
+}
+
+export function renderGoalDone(d) {
+  return `<div class="gdone"><span class="gbig">🎯</span><b class="ttl">Completed “${esc(d.title)}”?</b>
+    <p class="hint">Amazing. Before it goes in the trophy case, write a line to remember it by, like who was there, how it felt, or what you learned. Add a photo if you have one.</p></div>
+    <div class="mem-form"><div class="photo-pick">${d.preview ? `<img src="${d.preview}" alt="Your photo">` : `<span>${svgI('camera', '#8A5A30', 34, 2)}<small>Add a photo</small></span>`}<input type="file" id="memPhoto" accept="image/*" aria-label="Choose a photo"></div>
+    <div class="mem-fields"><label class="q" for="memText">Recap</label><textarea class="field" id="memText" rows="4" maxlength="280" placeholder="We did it! …">${esc(d.text || '')}</textarea></div></div>
+    <div class="actions"><button type="button" class="btn go-btn" data-gconfirm="1">Yes! Save it and celebrate</button><button type="button" class="btn soft" data-close="1">Not yet</button></div>`;
+}
+
+export function renderIdeas(state, section, added) {
+  const I = IDEAS[section];
+  const plus = (key, done) => done ? '<span class="added">✓ Added</span>' : `<button type="button" class="btn go-btn small" data-idea="${key}">+ Add</button>`;
+  const fl = (code) => FREQS.find(([v]) => v === code)?.[1] || 'Daily';
+  return `<div class="sec-head" style="--c:${SECTIONS[section].color}">${sectionChip(section)}<span>Easy wins to start with. Add only what fits your life right now. Fewer, finished beats more, half-done.</span></div>
+    <div class="h3">Quick tasks</div>${I.tasks.map(([t, f], k) => `<div class="idea-row"><span><b>${esc(t)}</b></span><span class="fpill">${fl(f)}</span>${plus(`t:${k}`, added.has(`t:${k}`))}</div>`).join('')}
+    <div class="h3">Goals</div>${I.goals.map(([t, steps], k) => `<div class="idea-row"><span><b>🎯 ${esc(t)}</b><small>${steps.map(([x]) => esc(x)).join(' · ')}</small></span>${plus(`g:${k}`, added.has(`g:${k}`))}</div>`).join('')}
+    <div class="h3">Ready-made plans</div>${I.plans.map((p, k) => `<div class="idea-row plan"><span><b>${esc(p.title)}</b><small>${esc(p.desc)}</small></span>${added.has(`p:${k}`) ? '<span class="added">✓ Joined</span>' : `<button type="button" class="btn go-btn small" data-idea="p:${k}">Join</button>`}</div>`).join('')}`;
 }
 
 export function renderLevelInfo(state) {
@@ -173,6 +210,7 @@ export const STORE = [
 /* How many things in a category are ready right now (unlocked, not built, affordable). */
 export function readyCount(state, cat) {
   const built = (id) => state.buildings.some((b) => b.type === id);
+  if (SECTIONS[cat] && !sectionUnlocked(state, cat)) return 0;
   if (SECTIONS[cat]) {
     const open = state.lists.some((l) => l.section === cat);
     if (!open) return 1;
@@ -184,8 +222,8 @@ export function readyCount(state, cat) {
   return 0;
 }
 export function renderStore(state) {
-  return `<div class="store">${STORE.map((c) => { const n = readyCount(state, c.id); return `<button type="button" class="stile" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>
-    <span class="stitle">${esc(c.label)}</span><span class="sart">${img(c.rep(state))}</span>${n ? `<span class="badge">${SECTIONS[c.id] && !state.lists.some((l) => l.section === c.id) ? 'New' : n}</span>` : ''}</button>`; }).join('')}</div>`;
+  return `<div class="store">${STORE.map((c) => { const n = readyCount(state, c.id); const locked = SECTIONS[c.id] && !sectionUnlocked(state, c.id); return `<button type="button" class="stile${locked ? ' locked' : ''}" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>
+    <span class="stitle">${esc(c.label)}</span><span class="sart">${img(c.rep(state))}${locked ? `<span class="lock">${svgI('lock', '#fff', 14, 2.6)}${esc(unlockShort(state, c.id))}</span>` : ''}</span>${n ? `<span class="badge">${SECTIONS[c.id] && !state.lists.some((l) => l.section === c.id) ? 'New' : n}</span>` : ''}</button>`; }).join('')}</div>`;
 }
 
 /* ---------- Available tasks (quick wins + daily challenges, given by characters) ---------- */

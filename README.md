@@ -19,16 +19,28 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   | Relational | Park | Coffee House · Family Diner · Event Hall |
   | To-Do | Community Job Board | Workshop · Post Office · Library |
 
-  An area's main building unlocks the moment the family **sets that area's first big goal**. Every building is one
-  **list**: a big goal plus up to 6 small tasks (every day, N times a week, or one time). More buildings mean more lists,
-  and higher-tier buildings pay more per task (1×, 1.5×, 2×, 3×), so earning grows as you progress.
+  **Areas open one at a time** so nobody gets five lists on day one: To-Do → Financial → Relational (once the
+  budget is set up) → Physical → Spiritual. An area opens when the one before it is built and has something on it.
+  Each building holds one **list** with two kinds of things, added with **+ Task** and **+ Goal**:
+  - **Tasks**: simple things like "Do the dishes". How often (Daily, 1–6×/week, Once) sits on the right of each row.
+  - **Goals**: something bigger ("Run a 5K") with optional steps under it. **Completed the goal?** asks for a recap
+    (and a photo if you like), saves it to Memories, and throws a parade down Main Street.
+  - **💡 Ideas** on every list and in the builder: easy tasks, goals and ready-made plans, added only with a tap.
+  Higher-tier buildings pay more per task (1×, 1.5×, 2×, 3×).
+- **Consistency, not volume.** The first 6 check-offs a day pay in full, then a small token. The first check-off of
+  the day earns a daily-visit bonus, streaks pay at 3/7/14/30/60/100 days (one rest day a week never breaks one),
+  and a weekly **Week in review** pays for looking back. Buildings **grow** (pennants, then a gold star) after 10 and
+  30 days of use, with scaffolding and a crane while they build.
+- **A living town.** Ducks on the ponds, boats on the river, flowers along the roads that spread with the streak,
+  windows that glow brighter with it, real-clock day and night (or pick Day/Night in the menu), and neighbors you can
+  tap who notice the family's real week.
 - **Three currencies**
   - **XP** comes from checking off tasks, 3 daily challenges, milestones and quick wins. It fills the level bar.
   - **Coins** come from checking off tasks and reaching big goals. They pay for buildings, homes, upgrades and roads.
   - **Population** comes from homes (Cottage, Family House, Townhouse, Apartments) and home upgrades.
   - **Leveling up needs XP and population.** Levels 5, 9 and 13 also need a bigger **Town Hall**, and its upgrade needs population and coins.
     Each Town Hall level adds +10% coins to every task.
-- **Guided tour + quick wins.** A friendly town planner walks a new family through their first goal, placing the
+- **Guided tour + quick wins.** A friendly town planner walks a new family through their first tasks, placing the
   building by a road, checking off a task, and building a home (level 2 arrives during the tour). A "Quick wins"
   checklist pays out for the next first steps.
 - **Never sold:** progress, levels, coins, unlocks. No paid currency, timers, energy, or countdown sales.
@@ -96,6 +108,9 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | XP/population level table, Town Hall gates, task + goal rewards | `src/systems/economy.js` |
 | Grid, overlap, water, road connection to the Town Hall | `src/systems/placement.js`, `src/data/map.js` |
 | Lists and tasks (daily / weekly / one-time), goals reached, streak | `src/systems/lists.js` |
+| Which areas are open (progressive unlock) | `src/systems/progression.js` |
+| 💡 Idea lists | `src/data/ideas.js` |
+| Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
 | Daily challenges, milestones, quick wins | `src/systems/challenges.js` |
 | Saved state (one object, localStorage) | `src/data/state.js` |
 

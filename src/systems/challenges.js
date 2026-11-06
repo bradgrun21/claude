@@ -75,7 +75,7 @@ export function claimMilestone(state, id) {
 
 /* Quick wins: the getting-started checklist. Done flags are set by the game as things happen. */
 export const QUICK_WINS = [
-  { id: 'goal', text: 'Set your first big goal', coins: 30, xp: 20 },
+  { id: 'goal', text: 'Add your first goal', coins: 30, xp: 20 },
   { id: 'place', text: 'Place your first area building', coins: 20, xp: 15 },
   { id: 'task', text: 'Check off a task', coins: 20, xp: 15 },
   { id: 'home', text: 'Build a home', coins: 30, xp: 20 },

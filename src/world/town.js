@@ -148,7 +148,7 @@ export function createWalkers(scene) {
   }
   function setCounts(people, cars) {
     const have = { p: walkers.filter((w) => !w.isCar && !w.family).length, c: walkers.filter((w) => w.isCar).length };
-    for (let k = have.p; k < people; k++) spawn(bakeGroup(models.person(['#2B3A50', '#B97F62', '#4E7FA0', '#E8643F', '#4CAF6A', '#9A72D6', '#F2B54A'][k % 7], k % 3 ? HAIR[k % 6] : null)), false, 0.35 + rand() * 0.25);
+    for (let k = have.p; k < people; k++) { const o = bakeGroup(models.person(['#2B3A50', '#B97F62', '#4E7FA0', '#E8643F', '#4CAF6A', '#9A72D6', '#F2B54A'][k % 7], k % 3 ? HAIR[k % 6] : null)); o.userData.surprise = 'neighbor'; o.userData.nb = k; spawn(o, false, 0.35 + rand() * 0.25); }
     for (let k = have.c; k < cars; k++) spawn(bakeGroup(models.car(CAR_COLORS[k % 6])), true, 0.9 + rand() * 0.5);
   }
   function addFamily(family) {
@@ -167,5 +167,5 @@ export function createWalkers(scene) {
       spawn(obj, false, 0.32, { family: true, isPet: m.kind === 'pet' });
     });
   }
-  return { setRoads, setCounts, addFamily, tick, familyObjs: () => walkers.filter((w) => w.family).map((w) => w.obj) };
+  return { setRoads, setCounts, addFamily, tick, familyObjs: () => walkers.filter((w) => w.family).map((w) => w.obj), peopleObjs: () => walkers.filter((w) => !w.isCar && !w.family).map((w) => w.obj), pause(obj, ms) { const w = walkers.find((x) => x.obj === obj); if (w) { const sp = w.speed; w.speed = 0; setTimeout(() => { w.speed = sp; }, ms); } } };
 }
