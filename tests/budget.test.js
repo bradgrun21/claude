@@ -22,8 +22,19 @@ describe('budget setup', () => {
 });
 
 describe('money levels', () => {
-  it('Budget → Savings at 10 points → Debt snowball at 25', () => {
-    expect([0, 9, 10, 24, 25, 99].map(moneyLevelFor)).toEqual([1, 1, 2, 2, 3, 3]);
+  it('money levels follow the path: income & bills → budget → debts → savings', () => {
+    const s = withBudget();
+    const b = s.budget;
+    expect(moneyLevelFor(b)).toBe(2);
+    for (const d of ['2026-11-01', '2026-11-02', '2026-11-03']) addTransaction(s, { amount: 5, cat: 'other' }, d);
+    expect(moneyLevelFor(b)).toBe(3);
+    ensureEmergencyFund(s);
+    expect(moneyLevelFor(b)).toBe(3);
+    addDebt(s, { name: 'Card', balance: 100, min: 25 });
+    expect(moneyLevelFor(b)).toBe(4);
+    updateBalance(s, 'fund', b.funds[0].id, 50);
+    addFund(s, { name: 'Christmas', target: 600, monthly: 50 });
+    expect(moneyLevelFor(b)).toBe(5);
   });
   it('logging transactions levels the money area; rewards are capped per day and never depend on amount', () => {
     const s = withBudget();
@@ -35,7 +46,7 @@ describe('money levels', () => {
     expect(s.coins - c0).toBe(5 * 5);
     let up = null;
     for (let d = 7; d < 20 && !up; d++) up = addTransaction(s, { amount: 5, cat: 'other' }, `2026-11-${d}`).levelUp;
-    expect(up).toBe(2);
+    expect(up).toBe(3);
     expect(addTransaction(s, { amount: 0 }, T)).toBe(null);
   });
 });

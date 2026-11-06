@@ -1,4 +1,4 @@
-import { CATEGORIES, catById, MONEY_LEVELS, nextMoneyLevel, monthlyIncome, monthlyExpenses, monthSpending, snowballOrder, snowballMonths, nextPayday, paydayDue, STARTER_EF, REWARD } from '../systems/budget.js';
+import { CATEGORIES, catById, MONEY_LEVELS, MONEY_STEPS, nextMoneyLevel, monthlyIncome, monthlyExpenses, monthSpending, snowballOrder, snowballMonths, nextPayday, paydayDue, STARTER_EF, REWARD } from '../systems/budget.js';
 import { FREQ_LABEL, shortDate, weekday } from '../systems/time.js';
 import { svgI, esc } from './icons.js';
 import { ART } from './art.js';
@@ -36,16 +36,17 @@ export function renderBudgetSetup(d) {
 /* ---------- Bank hub ---------- */
 export function moneyHeader(state) {
   const b = state.budget;
-  const cur = MONEY_LEVELS.find((l) => l.level === b.level), nxt = nextMoneyLevel(b);
-  const pct = nxt ? Math.min(100, ((b.points - cur.at) / (nxt.at - cur.at)) * 100) : 100;
+  const cur = MONEY_LEVELS.find((l) => l.level === b.level) || MONEY_LEVELS[0];
+  const st = MONEY_STEPS[b.level - 1];
+  const have = st ? st.progress(b) : 1, need = st ? st.need : 1;
   return `<div class="mhead"><span class="mlv">${ART.coin}<b>${b.level}</b></span><div class="mhd"><b>Money level ${b.level} · ${cur.name}</b>
-    <div class="pbar"><i style="width:${pct.toFixed(0)}%"></i><em>${nxt ? `${b.points} / ${nxt.at}` : 'Top level'}</em></div>
-    <small>${nxt ? `Next: <b>${nxt.name}</b>. Earn money points by logging transactions, updating balances and showing up on payday.` : 'Every money tool is open.'}</small></div></div>`;
+    <div class="pbar"><i style="width:${((have / need) * 100).toFixed(0)}%"></i><em>${st ? `${have} of ${need}` : 'All steps done'}</em></div>
+    <small>${st ? `Step ${b.level}: ${st.desc}` : 'Every money tool is open. Keep the habit going.'}</small></div></div>`;
 }
 
 export function renderBank(state, today, tab, ui = {}) {
   const b = state.budget;
-  const tabs = [['budget', 'Budget'], ['tx', 'Transactions'], ['savings', b.level >= 2 ? 'Savings' : '🔒 Savings'], ['debts', b.level >= 3 ? 'Debts' : '🔒 Debts'], ['list', 'List']];
+  const tabs = [['budget', 'Budget'], ['tx', 'Transactions'], ['debts', b.level >= 3 ? 'Debts' : '🔒 Debts'], ['savings', b.level >= 4 ? 'Savings' : '🔒 Savings'], ['list', 'List']];
   const seg = `<div class="seg wide">${tabs.map(([k, l]) => `<button type="button" data-btab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
   let body = '';
   if (!b.setup) return moneyHeader(state) + guide('Your bank is open!', 'Set up your budget first. It takes about two minutes.') + '<div class="actions"><button type="button" class="btn go-btn" data-bank="setup">Set up my budget</button></div>';
@@ -69,19 +70,19 @@ export function renderBank(state, today, tab, ui = {}) {
       <div class="actions"><button type="button" class="btn go-btn" data-bank="savetx">Log it +${REWARD.transaction.coins}</button></div></div>
       <div class="h3">Recent</div>${b.transactions.slice(0, 25).map((x) => `<div class="txrow"><i style="background:${x.type === 'income' ? '#3E8E57' : catById(x.cat).color}"></i><span><b>${esc(x.note || (x.type === 'income' ? 'Income' : catById(x.cat).short))}</b><small>${shortDate(x.date)} · ${x.type === 'income' ? 'Came in' : catById(x.cat).short}</small></span><b class="${x.type === 'income' ? 'inc' : ''}">${x.type === 'income' ? '+' : ''}${usd(x.amount)}</b></div>`).join('') || '<p class="hint">Nothing logged yet. Every transaction you log levels up your money skills.</p>'}`;
   } else if (tab === 'savings') {
-    if (b.level < 2) body = lockCard(2, 'Savings', 'Log transactions and show up on payday to reach money level 2. Then you’ll set up your $1,000 starter emergency fund and sinking funds.');
+    if (b.level < 4) body = lockCard(4, 'Savings', 'Savings opens after your debts are listed (step 3). Then you’ll set up your $1,000 starter emergency fund and sinking funds.');
     else body = guide('Savings, explained', '<b>Starter emergency fund ($1,000):</b> a cushion for true surprises like a car repair or a doctor visit, so a bad day doesn’t become new debt. Keep it separate. Use it only for real emergencies.<br><b>Sinking funds:</b> money you set aside a little each month for things you <i>know</i> are coming, like Christmas, car registration or a vacation. When the bill comes, the money is already there.') +
       b.funds.map((f) => fundCard(f)).join('') +
       `<div class="card2"><b>Add a sinking fund</b><div class="mrow"><input class="field" id="fName" maxlength="30" placeholder="What is it for? (Christmas, car, vacation)"><span class="dollar"><input class="field" id="fTarget" inputmode="decimal" placeholder="Goal"></span><span class="dollar"><input class="field" id="fMonthly" inputmode="decimal" placeholder="Per month"></span><button type="button" class="btn go-btn small" data-bank="addfund">Add</button></div></div>`;
   } else if (tab === 'debts') {
-    if (b.level < 3) body = lockCard(3, 'Debt snowball', 'Keep logging and updating your savings balances to reach money level 3. Then you’ll list every debt and pay them off with the snowball method.');
+    if (b.level < 3) body = lockCard(3, 'Debt snowball', b.setup ? 'Log purchases on 3 different days to finish building your budget. Then you’ll list every debt and pay them off with the snowball method.' : 'Set up your income and bills first.');
     else {
       const order = snowballOrder(b.debts);
       const extra = ui.extra ?? 100;
       const months = snowballMonths(b.debts, Number(extra) || 0);
       body = guide('The debt snowball', 'List every debt from <b>smallest balance to largest</b> (ignore interest rates for now). Pay the minimum on all of them, and put every extra dollar on the <b>smallest</b> one. When it’s paid off, roll its whole payment onto the next one. The payment grows like a snowball rolling downhill, and the quick wins keep you going.') +
         order.map((d, n) => debtCard(d, n === 0 && d.balance > 0)).join('') +
-        `<div class="card2"><b>Add a debt</b><div class="mrow"><input class="field" id="dName" maxlength="30" placeholder="Name (Visa, car, student loan)"><span class="dollar"><input class="field" id="dBal" inputmode="decimal" placeholder="Balance"></span><span class="dollar"><input class="field" id="dMin" inputmode="decimal" placeholder="Minimum/mo"></span><button type="button" class="btn go-btn small" data-bank="adddebt">Add</button></div></div>` +
+        `<div class="card2"><b>Add a debt</b><div class="mrow"><input class="field" id="dName" maxlength="30" placeholder="Name (Visa, car, student loan)"><span class="dollar"><input class="field" id="dBal" inputmode="decimal" placeholder="Balance"></span><span class="dollar"><input class="field" id="dMin" inputmode="decimal" placeholder="Minimum/mo"></span><button type="button" class="btn go-btn small" data-bank="adddebt">Add</button></div>${!b.debts.length && !b.noDebts ? '<p class="foot">No debts at all? <button type="button" class="btn link small" data-bank="nodebts">We don’t have any debts 🎉</button></p>' : ''}</div>` +
         (b.debts.some((d) => d.balance > 0) ? `<div class="card2"><b>Snowball plan</b><div class="money-row"><label for="dExtra">Extra each month</label><span class="dollar"><input class="field small" id="dExtra" inputmode="decimal" value="${extra}"></span><button type="button" class="btn soft small" data-bank="calc">Update</button></div><p class="hint">${months == null ? 'Add the minimum payments to see a debt-free date.' : `Debt-free in about <b>${months} months</b> with the snowball${Number(extra) ? ` and ${usd(Number(extra))} extra a month` : ''}.`}</p></div>` : '');
     }
   }
@@ -120,7 +121,8 @@ export function renderPaydayBreakdown(bd) {
 
 export function renderMoneyLevelUp(level) {
   const L = MONEY_LEVELS.find((l) => l.level === level);
-  const text = level === 2 ? 'You’ve been tracking your money. Now you can save on purpose. Set up your <b>$1,000 starter emergency fund</b> and <b>sinking funds</b> for the things you know are coming. The <b>Savings Tower</b> is unlocked to build.' : 'Time to take on debt. List every debt and start the <b>snowball</b>: smallest balance first, rolling each payment into the next. The <b>Debt Payoff Center</b> is unlocked to build.';
+  const text = { 2: 'Your income and bills are in. Next, <b>build the budget</b>: log purchases on 3 different days so the plan meets real life.', 3: 'Your budget is working. Now <b>list your debts</b>, smallest balance first, and start the <b>snowball</b>. The <b>Debt Payoff Center</b> is unlocked to build.', 4: 'Debts are on the table. Now <b>save on purpose</b>: put something in the <b>$1,000 starter emergency fund</b> and start a <b>sinking fund</b>. The <b>Savings Tower</b> is unlocked to build.', 5: 'Every money step is done. The <b>Nest Egg Tower</b> and the <b>Debt Freedom Monument</b> are yours to grow.' }[level] || '';
+  const go = { 2: ['logtx', 'Log a purchase'], 3: ['opendebts', 'List my debts'], 4: ['opensavings', 'Set up savings'] }[level];
   return `<div class="lvlup"><span class="burst">${ART.coin}<b>${level}</b></span><b class="ttl">Money level ${level}: ${L.name}!</b><p>${text}</p>
-    <button type="button" class="btn go-btn" data-bank="${level === 2 ? 'opensavings' : 'opendebts'}">Let’s set it up</button></div>`;
+    ${go ? `<button type="button" class="btn go-btn" data-bank="${go[0]}">${go[1]}</button>` : '<button type="button" class="btn go-btn" data-close="1">Keep going</button>'}</div>`;
 }

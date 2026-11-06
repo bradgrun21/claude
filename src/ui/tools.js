@@ -7,6 +7,8 @@ import { weekStart } from '../systems/lists.js';
 import { svgI, esc, fmt$ } from './icons.js';
 import { ART } from './art.js';
 import { renderLog, LOG_TABS } from './logbook.js';
+import { renderPath } from './paths.js';
+import { pathStatus } from '../systems/paths.js';
 
 /*
  * Screens for the building tools. Every input carries data-uf="key" so main.js can keep what's been typed
@@ -30,13 +32,15 @@ export const TOOL_TABS = {
 };
 
 /* ---------- Ribbon cutting ---------- */
-export function renderRibbon(tool, buildingName) {
+export function renderRibbon(tool, buildingName, state) {
   const t = T.toolById[tool];
+  const first = state && pathStatus(state, tool)?.steps[0];
   return `<div class="ribbon-wrap"><div class="rb-band"><span class="rb-l"></span><span class="rb-bow">🎀</span><span class="rb-r"></span></div>
     <b class="ttl">Grand opening at the ${esc(buildingName)}!</b>
     <div class="rb-tool"><span class="rb-emoji">${t.emoji}</span><span><b>New: ${esc(t.name)}</b><small>${esc(t.blurb)}</small></span></div>
     <p class="rb-keeper"><b>${esc(t.keeper)}:</b> “Welcome! Cut the ribbon and I’ll show you around.”</p>
-    <div class="rb-quest"><span>First step: <b>${esc(t.quest.text)}</b></span>${reward(t.reward)}<span class="cost xp"><i class="ci">${ART.xp}</i>${t.reward.xp}</span></div>
+    <div class="rb-quest"><span>First step: <b>${esc(first ? first.title : t.quest.text)}</b>${first ? ` · ${esc(first.desc)}` : ''}</span>${reward(first ? first.reward : t.reward)}</div>
+    <p class="foot">Each step opens the next one, so it never gets to be too much at once.</p>
     <div class="actions"><button type="button" class="btn go-btn big" data-ribbon="${tool}">✂️ Cut the ribbon</button></div></div>`;
 }
 
@@ -52,7 +56,7 @@ function questStrip(state, id) {
 export function renderTool(state, p, day) {
   const id = p.tool, ui = p.ui || {};
   const body = T.toolById[id].log ? renderLog(state, id, p.tab, ui, day) : { meals, care, subs, cards, dates, kids, meeting }[id](state, p.tab, ui, day);
-  return questStrip(state, id) + body;
+  return (pathStatus(state, id) ? renderPath(state, id) : questStrip(state, id)) + body;
 }
 
 /* ================= Meal Planner ================= */

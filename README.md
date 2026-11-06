@@ -44,6 +44,23 @@ Every tile is open, New (grand opening), ready to Build, or greyed out with a lo
   - **Pause** a task, a goal, or a whole list ("Rest this list for a while"). Nothing resting is ever due, and no progress is lost.
   - **💡 Ideas** on every list and in the builder: easy tasks, goals and ready-made plans, added only with a tap.
   Higher-tier buildings pay more per task (1×, 1.5×, 2×, 3×).
+- **Step-by-step paths.** Anything with a natural order unlocks one step at a time; a step counts only when every
+  step before it is done, opens the next one (and often a tab), and pays a small reward once. Locked steps and tabs
+  are greyed out with a lock and say what to finish first.
+  | Path | Steps |
+  |---|---|
+  | Money (= money level) | Income & bills (incl. debt payments) → Build the budget (log purchases on 3 days) → List debts (or "we have none") → Savings & funds (emergency fund + one sinking fund) → Money master |
+  | Meals | Add a meal → Plan the week (3 nights) → Make the grocery list → Plan 3 different weeks |
+  | Car & Home Care | Add a car or home → Set 3 last-done dates → Log upkeep |
+  | Subscriptions | List 3 → Check in on each → Cancel one you don't use |
+  | Birthdays & Cards | Add 3 birthdays → Send a card → Send a thank-you |
+  | Date Night Jar | Draw a date → Put it on the calendar → Go, then save a memory |
+  | Kids' Corner | Add a child → Give 3 stars → Cash in a reward → Log a book |
+  | Family Meeting | First meeting → Pick a weekly focus → 4 meetings |
+  | Repair Log | Add your car → Log a repair → Track mileage |
+  | Pet Records | Add your pet → Log a visit → Set a next-due date |
+  | Gifts & Sizes | Save a gift idea → Log a size → Log a gift given |
+  The Debt Payoff Center is now the 2nd Financial building and the Savings Tower the 3rd, matching the money path.
 - **Habits pace each area.** An area starts with one task slot. Checking a task off on 3 different days forms a
   habit (a finished goal counts too), which unlocks that area's next building and opens one more slot. A goal is one
   slot and its steps ride along; paused or finished items free their slot; habits stay counted even if a task is
@@ -174,6 +191,7 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Building tools (meals, care, subscriptions, cards, dates, kids, meeting) | `src/systems/tools.js`, `src/ui/tools.js` |
 | Logbooks (repair, vet, gifts) | `src/systems/logbook.js`, `src/ui/logbook.js` |
 | Earned decorations (steady use) | `src/systems/earned.js` |
+| Step-by-step paths (money, meals, every tracker) | `src/systems/paths.js`, `src/ui/paths.js` |
 | Businesses, Nest Egg, Debt Freedom Monument | `src/systems/business.js`, `src/ui/business.js` |
 | Budget District (a building per budget category) | `src/systems/district.js`, `src/ui/district.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |

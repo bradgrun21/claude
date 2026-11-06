@@ -31,8 +31,8 @@ export const BUILDINGS = [
   { id: 'clinic', name: 'Wellness Clinic', section: 'physical', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 11, desc: 'A fourth Physical list.' },
 
   { id: 'bank', name: 'Bank', section: 'financial', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Financial list.' },
-  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 1, money: 2, desc: 'Emergency fund and sinking funds live here.' },
-  { id: 'payoff', name: 'Debt Payoff Center', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 1, money: 3, desc: 'Home of your debt snowball.' },
+  { id: 'payoff', name: 'Debt Payoff Center', section: 'financial', tier: 2, kind: 'section', size: [2, 2], cost: 150, level: 1, money: 3, desc: 'Home of your debt snowball.' },
+  { id: 'savings', name: 'Savings Tower', section: 'financial', tier: 3, kind: 'section', size: [2, 2], cost: 400, level: 1, money: 4, desc: 'Emergency fund and sinking funds live here.' },
   { id: 'office', name: 'Office Tower', section: 'financial', tier: 4, kind: 'section', size: [2, 2], cost: 900, level: 10, desc: 'A fourth Financial list.' },
 
   { id: 'park', name: 'Park', section: 'relational', tier: 1, kind: 'section', size: [2, 2], cost: 0, level: 1, desc: 'Your first Relational list.' },

@@ -8,6 +8,7 @@ import { catById, nextPayday, paydayDue, money as toMoney } from '../systems/bud
 import { weekStart } from '../systems/lists.js';
 import { shortDate } from '../systems/time.js';
 import { esc, fmt$, svgI } from './icons.js';
+import { renderPath } from './paths.js';
 
 /*
  * Hub menus: everything of one kind in one place, grouped into sections.
@@ -43,10 +44,10 @@ export function renderMoneyHub(state, day) {
   const bankR = reqFor(state, 'bank');
   const basics = bank ? [
     tile({ emoji: '📋', name: 'Budget', line: b.setup ? 'Your monthly plan' : 'Set it up (about 2 minutes)', status: b.setup ? 'open' : 'new', attrs: 'data-bankgo="budget"' }),
-    tile({ emoji: '🧾', name: 'Log a purchase', line: `${b.transactions.filter((t) => t.date.startsWith(day.slice(0, 7))).length} logged this month`, attrs: 'data-bankgo="tx"', status: b.setup ? 'open' : 'locked' }),
+    tile({ emoji: '🧾', name: 'Log a purchase', line: b.setup ? `${b.transactions.filter((t) => t.date.startsWith(day.slice(0, 7))).length} logged this month` : 'Step 1: income & bills first', attrs: 'data-bankgo="tx"', status: b.setup ? 'open' : 'locked' }),
     tile({ emoji: '🚂', name: 'Payday', line: !b.setup ? 'Set up your budget first' : paydayDue(b, day) ? 'Payday is here!' : nextPayday(b, day) ? `Next: ${shortDate(nextPayday(b, day))}` : 'Add a paycheck', status: !b.setup ? 'locked' : paydayDue(b, day) ? 'new' : 'open', attrs: 'data-hubpay="1"' }),
-    tile({ emoji: '🐷', name: 'Savings & emergency fund', line: ml >= 2 ? `${b.funds.length} ${b.funds.length === 1 ? 'fund' : 'funds'}` : 'Reach money level 2', status: ml >= 2 ? 'open' : 'locked', attrs: 'data-bankgo="savings"' }),
-    tile({ emoji: '⛄', name: 'Debt snowball', line: ml >= 3 ? `${BZ.debtStatus(state).paid} of ${b.debts.length} paid off` : 'Reach money level 3', status: ml >= 3 ? 'open' : 'locked', attrs: 'data-bankgo="debts"' })
+    tile({ emoji: '⛄', name: 'Debt snowball', line: ml >= 3 ? (b.debts.length ? `${BZ.debtStatus(state).paid} of ${b.debts.length} paid off` : b.noDebts ? 'No debts 🎉' : 'List your debts') : 'Step 2: build the budget first', status: ml >= 3 ? (b.debts.length || b.noDebts ? 'open' : 'new') : 'locked', attrs: 'data-bankgo="debts"' }),
+    tile({ emoji: '🐷', name: 'Savings & emergency fund', line: ml >= 4 ? `${b.funds.length} ${b.funds.length === 1 ? 'fund' : 'funds'}` : 'Step 3: list your debts first', status: ml >= 4 ? 'open' : 'locked', attrs: 'data-bankgo="savings"' })
   ] : [tile({ emoji: '🏦', name: 'Bank', line: bankR.ok ? 'Build the Bank to open Money' : bankR.why, status: bankR.ok ? 'build' : 'locked', attrs: 'data-pick="bank"' })];
   const district = DI.DISTRICT.map((d) => {
     const def = byId[d.building], id = bid(state, d.building), c = catById(d.cat);
@@ -60,7 +61,7 @@ export function renderMoneyHub(state, day) {
     buildingTile(state, 'nestegg', '🥚', 'Nest Egg', () => `${Math.floor(inv?.bal || 0).toLocaleString('en-US')} coins growing`),
     buildingTile(state, 'monument', '🏛️', 'Debt Freedom Monument', () => { const s = BZ.debtStatus(state); return s.free ? 'Debt free!' : `${s.paid} of ${s.total} paid off`; })
   ];
-  return `${bank ? '' : '<p class="hint">Money opens with the Bank. It’s the second area, right after To-Do.</p>'}
+  return `${bank ? renderPath(state, 'money', 'Money path') : '<p class="hint">Money opens with the Bank. It’s the second area, right after To-Do.</p>'}
     ${section('Budget', basics, bank ? `Money level ${ml}` : '')}
     ${section('Budget District', district, 'A building for each category you budget')}
     ${section('Grow & celebrate', grow)}`;

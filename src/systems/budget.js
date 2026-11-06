@@ -24,10 +24,23 @@ export const CATEGORIES = [
 export const SAVED = { id: 'saved', short: 'Left over (saved)', color: '#2FA7A0', dest: 'saved' };
 export const catById = (id) => (id === 'saved' ? SAVED : CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1));
 
+/*
+ * Money levels follow the money path, one step at a time (each opens the next):
+ *   1 Income & bills → 2 Build the budget → 3 Debts → 4 Savings & funds → 5 Money master
+ */
 export const MONEY_LEVELS = [
-  { level: 1, name: 'Budget', at: 0 },
-  { level: 2, name: 'Savings', at: 10 },
-  { level: 3, name: 'Debt snowball', at: 25 }
+  { level: 1, name: 'Income & bills' },
+  { level: 2, name: 'Build the budget' },
+  { level: 3, name: 'Debts' },
+  { level: 4, name: 'Savings & funds' },
+  { level: 5, name: 'Money master' }
+];
+const loggedDays = (b) => new Set(b.transactions.filter((t) => t.type === 'expense').map((t) => t.date)).size;
+export const MONEY_STEPS = [
+  { id: 'setup', title: 'Income & bills', desc: 'Enter your paychecks and monthly bills, including debt payments.', done: (b) => !!b.setup, progress: (b) => (b.setup ? 1 : 0), need: 1 },
+  { id: 'track', title: 'Build the budget', desc: 'Log purchases on 3 different days, so the plan meets real life.', done: (b) => loggedDays(b) >= 3, progress: (b) => Math.min(3, loggedDays(b)), need: 3 },
+  { id: 'debts', title: 'List your debts', desc: 'Add every debt, smallest balance first, or tell us you have none.', done: (b) => b.debts.length > 0 || !!b.noDebts, progress: (b) => (b.debts.length > 0 || b.noDebts ? 1 : 0), need: 1 },
+  { id: 'savings', title: 'Savings & funds', desc: 'Put something in the $1,000 emergency fund and start one sinking fund.', done: (b) => b.funds.some((f) => f.kind === 'emergency' && f.balance > 0) && b.funds.some((f) => f.kind !== 'emergency'), progress: (b) => (b.funds.some((f) => f.kind === 'emergency' && f.balance > 0) ? 1 : 0) + (b.funds.some((f) => f.kind !== 'emergency') ? 1 : 0), need: 2 }
 ];
 export const POINTS = { setup: 3, transaction: 1, review: 2, balance: 1, fund: 1, payment: 1, payday: 2 };
 export const REWARD = { transaction: { coins: 5, xp: 3 }, payday: { coins: 20, xp: 15 }, setup: { coins: 40, xp: 25 }, balance: { coins: 5, xp: 3 } };
@@ -42,16 +55,17 @@ export function emptyBudget() {
 }
 
 /* ---------- Money level ---------- */
-export function moneyLevelFor(points) {
+/* Level = 1 + the number of money steps finished in order. It never goes down. */
+export function moneyLevelFor(b) {
   let lv = 1;
-  for (const l of MONEY_LEVELS) if (points >= l.at) lv = l.level;
+  for (const st of MONEY_STEPS) { if (!st.done(b)) break; lv++; }
   return lv;
 }
-/* Adds money points; returns the new level if it went up. */
-export function addPoints(state, n) {
+/* Adds money points (kept for stats) and moves the level up when a step is finished; returns the new level. */
+export function addPoints(state, n = 0) {
   const b = state.budget;
   b.points += n;
-  const lv = moneyLevelFor(b.points);
+  const lv = moneyLevelFor(b);
   if (lv > b.level) { b.level = lv; return lv; }
   return null;
 }

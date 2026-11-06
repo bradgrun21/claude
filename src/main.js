@@ -26,6 +26,7 @@ import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
 import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall, renderEarnedWin, profileBody } from './ui/panels.js';
 import { renderMoneyHub, renderTrackersHub, renderHowItWorks } from './ui/hubs.js';
+import { checkPaths, tabLocked, currentTab, pathStatus, PATHS } from './systems/paths.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
@@ -48,7 +49,7 @@ import { addEvent, updateEvent, removeEvent, completeEvent, toIcs, eventsOn } fr
 import { addMemory, removeMemory } from './systems/memories.js';
 import { putPhoto, deletePhoto, clearPhotos, compressImage, hydratePhotos } from './data/photos.js';
 import { renderCalendar, renderEventForm, renderMemoryForm, renderMemories, renderMemoryView } from './ui/journal.js';
-import { CATEGORIES, catById, setupBudget, addTransaction, ensureEmergencyFund, addFund, updateBalance, addDebt, payDebt, paydayDue, paydayBreakdown, recordPayday, paycheckDueAmount, money as toMoney } from './systems/budget.js';
+import { CATEGORIES, catById, setupBudget, addTransaction, addPoints, ensureEmergencyFund, addFund, updateBalance, addDebt, payDebt, paydayDue, paydayBreakdown, recordPayday, paycheckDueAmount, money as toMoney } from './systems/budget.js';
 import { renderBudgetSetup, renderBank, renderPaydayIn, renderPaydayBreakdown, renderMoneyLevelUp } from './ui/money.js';
 import { createRailway } from './world/railway.js';
 import { createScenery } from './world/scenery.js';
@@ -236,6 +237,14 @@ function boot(state, opts) {
       });
     }
     if (new Set(state.lists.map((l) => l.section)).size >= 2) win('area2');
+    const steps = checkPaths(state);
+    if (steps.length) later(levels.length ? 2200 : 700, () => {
+      const s0 = steps.at(-1);
+      const r = steps.reduce((a, x) => ({ coins: a.coins + x.step.reward.coins, xp: a.xp + x.step.reward.xp }), { coins: 0, xp: 0 });
+      flyRewards({ x: innerWidth / 2, y: innerHeight / 2 }, r); sound.chime();
+      toast(`✓ ${s0.step.title}`, s0.next ? `Next step unlocked: ${s0.next.title}` : 'Every step here is done!');
+      hud(); renderPanel();
+    });
     const fresh = checkEarned(state, today);
     if (fresh.length) later(levels.length ? 2600 : 900, () => {
       const e = fresh[0];
@@ -282,13 +291,13 @@ function boot(state, opts) {
     else if (p.kind === 'districtNew') { title = 'New in town!'; body = renderDistrictWin(p.entries.map((c) => DI.districtForCat(c))); }
     else if (p.kind === 'monument') { title = 'Debt Freedom Monument'; body = renderMonument(state); }
     else if (p.kind === 'earned') { const e = earnedById[p.id]; title = 'Earned!'; body = renderEarnedWin(e); }
-    else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : ''); }
+    else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : '', state); }
     else if (p.kind === 'tool') {
       const t = TL.toolById[p.tool]; const b = state.buildings.find((x) => x.id === p.buildingId);
       const dd = b && DI.districtForBuilding(b.type);
       const tl = [...(b && byId[b.type].kind === 'section' ? [['list', 'List']] : []), ...TOOL_TABS[p.tool], ...(dd && state.budget.setup ? [['budget', 'Budget']] : []), ...(p.tool === 'meeting' ? [['upgrade', 'Upgrade']] : [])];
       title = `${t.emoji} ${t.name}`;
-      tabs = tl.map(([k, l]) => `<button type="button" class="wtab${p.tab === k || (p.tab === 'recipe' && k === 'recipes') ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
+      tabs = tl.map(([k, l]) => tabLocked(state, p.tool, k) ? `<button type="button" class="wtab locked" data-tlock="${k}">🔒 ${l}</button>` : `<button type="button" class="wtab${p.tab === k || (p.tab === 'recipe' && k === 'recipes') ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
       body = p.tab === 'list' && b && byId[b.type].kind === 'section' ? renderBuilding(state, b, today) : p.tab === 'upgrade' ? renderTownHall(state) : p.tab === 'budget' && dd ? renderCatHub(state, dd.cat, p.ui, today) : renderTool(state, p, today);
     }
     else if (p.kind === 'requests' || p.kind === 'rewards') {
@@ -445,7 +454,7 @@ function boot(state, opts) {
     if (tool && TL.toolAvailable(state, tool.id)) {
       if (!TL.toolOpened(state, tool.id)) return openPanel('ribbon', { tool: tool.id, buildingId: id });
       const l = byId[b.type].kind === 'section' && listFor(state, id);
-      const tab = (l && dueCount(l, today)) ? 'list' : tool.id === 'meeting' && canUpgradeTownHall(state).ok ? 'upgrade' : TOOL_TABS[tool.id][0][0];
+      const tab = (l && dueCount(l, today)) ? 'list' : tool.id === 'meeting' && canUpgradeTownHall(state).ok ? 'upgrade' : (currentTab(state, tool.id) || TOOL_TABS[tool.id][0][0]);
       return openPanel('tool', { tool: tool.id, buildingId: id, tab, ui: {} });
     }
     openPanel('building', { id });
@@ -463,7 +472,7 @@ function boot(state, opts) {
   }
   function moneyUp(lv) {
     if (!lv) return;
-    if (lv >= 2) ensureEmergencyFund(state);
+    if (lv >= 4) ensureEmergencyFund(state);
     later(500, () => { sound.chime(); fx.fireworks(controls.target, 4, () => sound.firework()); openPanel('moneyup', { level: lv }); });
   }
   function readTx() {
@@ -500,6 +509,7 @@ function boot(state, opts) {
       if (state.budget.debts.length === 1 && !state.buildings.some((x) => x.type === 'monument')) later(1200, () => toast('New: Debt Freedom Monument', 'Build → Financial. It grows a tier with every debt you pay off.'));
       monumentUpdate(false);
     }
+    if (a === 'nodebts') { state.budget.noDebts = true; toast('No debts. That’s huge! 🎉', 'On to savings'); moneyUp(addPoints(state, 0)); }
     if (a === 'calc') panel.ui.extra = $('dExtra').value;
     afterProgress(); renderPanel();
   }
@@ -1003,6 +1013,7 @@ function boot(state, opts) {
     if (d.idea) { addIdea(d.idea, b); return; }
     if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
     if (d.ribbon) { cutRibbon(d.ribbon, b); return; }
+    if (d.tlock) { const p = pathStatus(state, panel.tool); const s = p?.steps.find((x) => x.tab === d.tlock); const idx = p ? p.steps.indexOf(s) : -1; toast('Not yet', idx > 0 ? `Finish “${p.steps[idx - 1].title}” first` : 'Finish the step before it first'); return; }
     if (d.open) { const prev = snapshot(); openBuilding(d.open); if (panel && prev) panel.hubPrev = prev; return; }
     if (d.distopen) { openBuilding(d.distopen); return; }
     if (d.hubpay) { startPayday(); return; }
@@ -1183,7 +1194,7 @@ function boot(state, opts) {
     state.xp += 10;
     note(state, today, 'built', { name: `${t.name} at the ${byId[state.buildings.find((x) => x.id === p.buildingId)?.type]?.name || 'town'}` });
     toast(`${t.name} is open!`, `${t.keeper} says welcome`);
-    openPanel('tool', { tool: id, buildingId: p.buildingId, tab: TOOL_TABS[id][0][0], ui: {} });
+    openPanel('tool', { tool: id, buildingId: p.buildingId, tab: currentTab(state, id) || TOOL_TABS[id][0][0], ui: {} });
     afterProgress();
   }
   function toolReward(el, r, main, sub) { if (r) { flyRewards(centerOf(el), r); sound.coin(); } else sound.pop(); if (main) toast(main, sub); }
@@ -1202,7 +1213,7 @@ function boot(state, opts) {
       case 'rdel': TL.removeRecipe(state, id); toast('Recipe removed'); p.tab = 'recipes'; break;
       case 'rstarter': { const [n, ing, notes] = TL.STARTER_RECIPES[+id]; TL.addRecipe(state, { name: n, ingredients: ing, notes }); toolReward(el, null, `${n} added`, 'Edit it any time to match how your family makes it'); break; }
       case 'mweek': ui.week = id; break;
-      case 'gbuild': { const n = TL.buildGroceryList(state, ui.week || today); p.tab = 'list'; toast(n ? `${n} items added to the list` : 'Nothing new to add', n ? 'Check them off at the store' : 'Plan some dinners with recipes first'); break; }
+      case 'gbuild': { const n = TL.buildGroceryList(state, ui.week || today); if (n || state.meals.list.length) (state.tools.meals = state.tools.meals || {}).listMade = true; p.tab = 'list'; toast(n ? `${n} items added to the list` : 'Nothing new to add', n ? 'Check them off at the store' : 'Plan some dinners with recipes first'); break; }
       case 'gadd': if (!need(ui.gitem, 'Type an item first')) return; TL.addGroceryItem(state, ui.gitem); clear('gitem'); sound.pop(); break;
       case 'gtoggle': TL.toggleGroceryItem(state, id); sound.pop(); break;
       case 'gclear': TL.clearGroceryDone(state); toast('Cart cleared', 'Nice shopping trip'); break;
@@ -1475,6 +1486,8 @@ function boot(state, opts) {
   stage.resetView();
   noteStreak(state, today);
   noteFormed(state);
+  if (state.budget) { const lv = addPoints(state, 0); if (lv && lv >= 4) ensureEmergencyFund(state); }
+  checkPaths(state, true);
   if (state.invest) BZ.accrue(state, today);
   later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
   later(4200, () => { if (state.tour.done) checkDistrict(); });

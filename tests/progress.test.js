@@ -195,3 +195,48 @@ describe('habits pace each area', () => {
     expect(taskSlots(s, 'physical')).toBe(2);
   });
 });
+
+import { pathStatus, checkPaths, tabLocked, currentTab, PATHS } from '../src/systems/paths.js';
+import { addRecipe, setMeal, buildGroceryList, ensureTools } from '../src/systems/tools.js';
+describe('step-by-step paths', () => {
+  const D = '2026-11-05';
+  const town = () => { const s = newCity({ cityName: 'T', family: [{ name: 'Pat', color: '#4E7FA0', kind: 'adult' }] }, D); ensureTools(s); return s; };
+  it('meals: add a meal → plan the week → grocery list, each opening the next', () => {
+    const s = town();
+    let p = pathStatus(s, 'meals');
+    expect(p.steps.map((x) => x.status)).toEqual(['current', 'locked', 'locked', 'locked']);
+    expect(tabLocked(s, 'meals', 'week')).toBe(true);
+    expect(currentTab(s, 'meals')).toBe('recipes');
+    const r = addRecipe(s, { name: 'Tacos', ingredients: 'Shells' });
+    expect(tabLocked(s, 'meals', 'week')).toBe(false);
+    expect(currentTab(s, 'meals')).toBe('week');
+    for (const d of ['2026-11-02', '2026-11-03', '2026-11-04']) setMeal(s, d, r.id);
+    expect(pathStatus(s, 'meals').steps[2].status).toBe('current');
+    buildGroceryList(s, D);
+    expect(pathStatus(s, 'meals').steps.map((x) => x.status)).toEqual(['done', 'done', 'done', 'current']);
+  });
+  it('a later step never counts before the earlier ones are done', () => {
+    const s = town();
+    s.meals.list.push({ id: 'x', text: 'Milk', done: false });
+    expect(pathStatus(s, 'meals').steps[2].status).toBe('locked');
+  });
+  it('pays each finished step once, and older towns are recorded quietly', () => {
+    const s = town();
+    addRecipe(s, { name: 'Tacos', ingredients: 'Shells' });
+    const c0 = s.coins;
+    const fresh = checkPaths(s);
+    expect(fresh.map((f) => f.step.id)).toContain('recipe');
+    expect(s.coins).toBeGreaterThan(c0);
+    const c1 = s.coins;
+    expect(checkPaths(s)).toEqual([]);
+    expect(s.coins).toBe(c1);
+    const old = town(); addRecipe(old, { name: 'Pizza', ingredients: 'Dough' });
+    const c2 = old.coins;
+    checkPaths(old, true);
+    expect(old.coins).toBe(c2);
+    expect(checkPaths(old)).toEqual([]);
+  });
+  it('every tracker and money has a path', () => {
+    for (const id of ['money', 'meals', 'care', 'subs', 'cards', 'dates', 'kids', 'meeting', 'repair', 'vet', 'gifts']) expect(PATHS[id].length).toBeGreaterThan(2);
+  });
+});
