@@ -2,6 +2,7 @@ import { grant } from './economy.js';
 import { addDays, daysBetween, fromKey, dateKey } from './time.js';
 import { weekStart, weekSummary } from './lists.js';
 import { addEvent } from './calendar.js';
+import { ensureLogs } from './logbook.js';
 
 /*
  * Tools: practical helpers that open with certain buildings.
@@ -19,6 +20,10 @@ export const TOOLS = [
   { id: 'cards', building: 'postoffice', name: 'Birthdays & Cards', emoji: '💌', keeper: 'Postmaster Pearl', blurb: 'Never miss a birthday or anniversary. A heads-up a week ahead, plus a thank-you note list.', quest: { text: 'Add 5 birthdays', need: 5 }, reward: { coins: 50, xp: 30 } },
   { id: 'dates', building: 'cafe', name: 'Date Night Jar', emoji: '☕', keeper: 'Barista Bea', blurb: 'A jar of date ideas. Draw one, put it on the calendar, and make a memory.', quest: { text: 'Draw a date and plan it', need: 1 }, reward: { coins: 40, xp: 25 } },
   { id: 'kids', building: 'school', name: 'Kids’ Corner', emoji: '⭐', keeper: 'Ms. Rivera the teacher', blurb: 'A chore chart with stars, rewards the kids can earn, and a reading log.', quest: { text: 'Give out 5 stars', need: 5 }, reward: { coins: 50, xp: 30 } },
+  { id: 'repair', building: 'repairshop', name: 'Repair Log', emoji: '🧰', keeper: 'Gus the mechanic', log: true, blurb: 'Every repair and service on each car: date, mileage, cost, shop and a receipt photo. Logging an oil change resets the Car Care reminder too.', quest: { text: 'Log your first repair', need: 1 }, reward: { coins: 40, xp: 25 } },
+  { id: 'vet', building: 'vet', name: 'Pet Records', emoji: '🐾', keeper: 'Dr. Paws', log: true, blurb: 'Checkups, vaccines, medicines and grooming for every pet, with a heads-up when the next one is due.', quest: { text: 'Log your first pet record', need: 1 }, reward: { coins: 40, xp: 25 } },
+  { id: 'gifts', building: 'giftshop', name: 'Gifts & Sizes', emoji: '🎁', keeper: 'Gwen at the gift shop', log: true, blurb: 'Gift ideas for each person as you think of them, what you’ve given (so no repeats), and everyone’s sizes.', quest: { text: 'Save your first gift idea or size', need: 1 }, reward: { coins: 40, xp: 25 } },
+  { id: 'records', building: 'records', name: 'Important Records', emoji: '🗂️', keeper: 'Clerk Clara', log: true, blurb: 'Where the passports, policies, wills and titles are, and when things expire. Kept on this device only.', quest: { text: 'Add your first record', need: 1 }, reward: { coins: 40, xp: 25 } },
   { id: 'meeting', building: 'townhall', level: 3, name: 'Family Meeting', emoji: '🏛️', keeper: 'Mayor Rosie', blurb: 'Fifteen minutes a week: celebrate wins, check in with everyone, look at the week ahead, pick one focus.', quest: { text: 'Hold your first family meeting', need: 1 }, reward: { coins: 60, xp: 40 } }
 ];
 export const toolById = Object.fromEntries(TOOLS.map((t) => [t.id, t]));
@@ -34,6 +39,8 @@ export function ensureTools(state) {
   state.dates = state.dates || { ideas: null, drawn: [] };
   state.kids = state.kids || { stars: {}, log: [], rewards: null, redeemed: [], reading: [] };
   state.meetings = state.meetings || [];
+  state.earned = state.earned || [];
+  ensureLogs(state);
   return state;
 }
 
@@ -67,7 +74,7 @@ export function questProgress(state, id) {
     dates: () => s.dates.drawn.length,
     kids: () => s.kids.log.length,
     meeting: () => s.meetings.length
-  }[id]?.() || 0;
+  }[id]?.() ?? (s.logs?.[id]?.length || 0);
   const need = toolById[id].quest.need;
   return { have: Math.min(have, need), need, ready: have >= need && s.tools[id]?.quest !== 'claimed', claimed: s.tools[id]?.quest === 'claimed' };
 }

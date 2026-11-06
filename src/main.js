@@ -24,7 +24,7 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall, renderEarnedWin } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
@@ -34,6 +34,8 @@ import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
 import * as TL from './systems/tools.js';
 import { renderTool, renderRibbon, TOOL_TABS } from './ui/tools.js';
+import * as LB from './systems/logbook.js';
+import { markUse, checkEarned, noteStreak, isEarned, earnedById } from './systems/earned.js';
 import { dailyChallenges, challengeProgress, claimChallenge, milestoneState, claimMilestone, markQuickWin, claimQuickWin, QUICK_WINS, noteBuild } from './systems/challenges.js';
 import { spotSticker, STICKERS } from './systems/surprises.js';
 import { note, since } from './systems/journal.js';
@@ -121,7 +123,7 @@ function boot(state, opts) {
     $('btnToday').classList.toggle('quiet', !due);
     const badge = (id, n) => { const el = $(id); el.hidden = !n; el.textContent = n; };
     badge('bdgLists', due);
-    badge('bdgTrophy', milestoneState(state).filter((m) => m.ready).length);
+    badge('bdgTrophy', milestoneState(state).filter((m) => m.ready).length + (state.earned || []).filter((e) => !state.buildings.some((b) => b.type === e.id)).length);
     badge('bdgCal', state.events.filter((e) => !e.done && e.date <= today).length);
     const winsLeft = QUICK_WINS.filter((q) => state.quickWins[q.id] !== 'claimed').length;
     $('lblWins').textContent = winsLeft ? 'Quick wins' : 'Challenges';
@@ -140,7 +142,7 @@ function boot(state, opts) {
       const tool = TL.toolForBuilding(b.type);
       if (tool && TL.toolAvailable(state, tool.id) && !TL.toolOpened(state, tool.id)) { want.set(b.id, { sig: 'new', html: bubbleHtml(`<span class="bub-emoji">${tool.emoji}</span>`, `New: ${tool.name}`, b.id, def.section || null) }); continue; }
       if (tool && TL.toolOpened(state, tool.id)) {
-        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
+        const tb = tool.id === 'care' && TL.careDueCount(state, today) ? ['🔧', 'Upkeep ready'] : tool.id === 'cards' && TL.cardsDueSoon(state, today) ? ['💌', 'Birthday soon'] : tool.id === 'subs' && TL.subsToReview(state, today).length ? ['📰', 'Check-in'] : tool.log && LB.LOGS[tool.id].reminder && LB.logDueSoon(state, tool.id, today) ? [tool.emoji, tool.id === 'records' ? 'Expiring soon' : 'Due soon'] : tool.id === 'meeting' && TL.canHoldMeeting(state, today) && (dow === 0 || dow >= 5) && !canUpgradeTownHall(state).ok ? ['🏛️', 'Family meeting'] : null;
         if (tb && !(def.kind === 'section' && listFor(state, b.id) && dueCount(listFor(state, b.id), today))) { want.set(b.id, { sig: `t${tb[1]}`, html: bubbleHtml(`<span class="bub-emoji">${tb[0]}</span>`, tb[1], b.id, def.section || null) }); continue; }
       }
       if (def.kind === 'section') {
@@ -222,6 +224,14 @@ function boot(state, opts) {
       });
     }
     if (new Set(state.lists.map((l) => l.section)).size >= 2) win('area2');
+    const fresh = checkEarned(state, today);
+    if (fresh.length) later(levels.length ? 2600 : 900, () => {
+      const e = fresh[0];
+      sound.chime(); fx.fireworks(controls.target, 3, () => sound.firework());
+      note(state, today, 'built', { name: `Earned: ${e.name}` });
+      if (!panel && !mode) showEarned(); else toast(`You earned the ${e.name}!`, 'Close this to celebrate');
+      hud();
+    });
     persist(); hud();
   }
 
@@ -236,7 +246,10 @@ function boot(state, opts) {
     $('panelBody').scrollTop = 0;
     emit('panel:' + kind);
   }
-  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); }
+  function closePanel() { $('panel').hidden = true; const k = panel?.kind; panel = null; if (k) emit('closed:' + k); if (k && k !== 'earned' && unseenEarned()) later(350, () => { if (!panel && !mode) showEarned(); }); }
+  /* Earned decorations get their celebration the next time nothing else is on screen. */
+  const unseenEarned = () => (state.earned || []).find((e) => !e.seen);
+  function showEarned() { const e = unseenEarned(); if (!e) return; e.seen = true; persist(); openPanel('earned', { id: e.id }); }
   function renderPanel() {
     if (!panel) return;
     let title = '', tabs = '', body = '';
@@ -251,6 +264,7 @@ function boot(state, opts) {
     else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
     else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
+    else if (p.kind === 'earned') { const e = earnedById[p.id]; title = 'Earned!'; body = renderEarnedWin(e); }
     else if (p.kind === 'ribbon') { const b = state.buildings.find((x) => x.id === p.buildingId); title = 'Grand opening'; body = renderRibbon(p.tool, b ? byId[b.type].name : ''); }
     else if (p.kind === 'tool') {
       const t = TL.toolById[p.tool]; const b = state.buildings.find((x) => x.id === p.buildingId);
@@ -341,7 +355,7 @@ function boot(state, opts) {
   $('panelBody').addEventListener('change', (e) => {
     if (panel?.kind !== 'tool') return;
     if (e.target.dataset.uf) panel.ui[e.target.dataset.uf] = e.target.value;
-    if (e.target.dataset.meal) { TL.setMeal(state, e.target.dataset.meal, e.target.value); persist(); renderPanel(); }
+    if (e.target.dataset.meal) { TL.setMeal(state, e.target.dataset.meal, e.target.value); markUse(state, 'meals', today); persist(); afterProgress(); renderPanel(); }
   });
   $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); });
   function readJournalForm() {
@@ -351,6 +365,10 @@ function boot(state, opts) {
     else { d.text = v('memText') ?? d.text; d.date = v('memDate') || d.date; if ($('memSpent')) d.spent = v('memSpent'); }
   }
   $('panelBody').addEventListener('change', async (e) => {
+    if (e.target.id === 'logPhoto' && e.target.files?.[0] && panel?.kind === 'tool') {
+      try { const blob = await compressImage(e.target.files[0]); if (panel.ui.photoPreview) URL.revokeObjectURL(panel.ui.photoPreview); panel.ui.photoBlob = blob; panel.ui.photoPreview = URL.createObjectURL(blob); renderPanel(); } catch (err) { toast('Couldn’t use that photo', 'Try another one'); }
+      return;
+    }
     if (e.target.id !== 'memPhoto' || !e.target.files?.[0] || (panel?.kind !== 'memory' && panel?.kind !== 'goalDone')) return;
     readJournalForm();
     try {
@@ -669,6 +687,10 @@ function boot(state, opts) {
   /* ---------- Building things ---------- */
   function pickBuilding(id) {
     const def = byId[id];
+    if (def.earned) {
+      if (!isEarned(state, id)) { toast(`${def.name} is earned, not bought`, earnedById[id].text); return; }
+      if (state.buildings.some((b) => b.type === id)) { toast(`${def.name} is already in town`, 'Tap it to move it'); return; }
+    }
     if (def.section && !sectionUnlocked(state, def.section)) { toast(`${SECTIONS[def.section].name} isn’t open yet`, `${unlockHint(state, def.section)}. One area at a time keeps it doable.`); return; }
     if (def.kind === 'section' && def.tier === 1) { openBuilder({ mode: 'unlock', type: id }); return; }
     const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
@@ -993,7 +1015,8 @@ function boot(state, opts) {
       rec.level = lv1;
       later(1200, () => { toast(`${byId[rec.type].name} is growing!`, `${lv1 === 2 ? 10 : 30} days of steady use`); living.construct(rec, () => { syncWorld(); persist(); }); });
     }
-    if (r.task.who && state.family.some((m) => m.name === r.task.who && m.kind === 'kid')) { TL.ensureTools(state); const st = TL.giveStar(state, r.task.who, 'Chore done', today); if (st) later(700, () => toast(`⭐ for ${r.task.who}!`, `${st.stars} stars · spend them in Kids’ Corner`)); }
+    noteStreak(state, today);
+    if (r.task.who && state.family.some((m) => m.name === r.task.who && m.kind === 'kid')) { TL.ensureTools(state); markUse(state, 'kids', today); const st = TL.giveStar(state, r.task.who, 'Chore done', today); if (st) later(700, () => toast(`⭐ for ${r.task.who}!`, `${st.stars} stars · spend them in Kids’ Corner`)); }
     living.refresh();
     if (totalDue(state, today) === 0) later(900, () => { fx.fireworks(controls.target, 4, () => sound.firework()); toast('Everything due today is done!', 'The town is celebrating'); });
     emit('task');
@@ -1080,8 +1103,64 @@ function boot(state, opts) {
         p.ui = {};
         break;
       }
+      /* logbooks */
+      case 'lsub': ui.subject = id; break;
+      case 'laddsubopen': ui.addsub = true; break;
+      case 'laddsub': {
+        const n = (ui.newsub || '').trim(); if (!need(n, 'Type a name')) return;
+        if (p.tool === 'repair') TL.addThing(state, n, 'car');
+        else if (p.tool === 'vet') { const m = LB.addPet(state, n, ['#C9A06A', '#3A2A1E', '#F2E2CF', '#8A5A30'][state.family.length % 4]); if (!m) { toast('That name is already in the family'); return; } walkers.addFamily([m]); }
+        else LB.addLogPerson(state, n);
+        Object.assign(ui, { subject: n, addsub: false, newsub: '' }); toast(`${n} added`); break;
+      }
+      case 'lnew': {
+        for (const k of Object.keys(ui)) if (k.startsWith('f_')) delete ui[k];
+        if (ui.photoPreview) URL.revokeObjectURL(ui.photoPreview);
+        Object.assign(ui, { form: true, eid: null, photoBlob: null, photoPreview: null, photoId: null, f_subject: ui.subject || LB.logSubjects(state, p.tool)[0] || '' });
+        if (id) ui.f_kind = id;
+        p.tab = 'log'; break;
+      }
+      case 'ledit': {
+        const e = state.logs[p.tool].find((x) => x.id === id); if (!e) return;
+        for (const k of Object.keys(ui)) if (k.startsWith('f_')) delete ui[k];
+        for (const f of LB.LOGS[p.tool].fields) if (f.type !== 'photo' && e[f.k] != null) ui[`f_${f.k}`] = String(e[f.k]);
+        Object.assign(ui, { form: true, eid: e.id, f_subject: e.subject || '', photoBlob: null, photoPreview: null, photoId: e.photoId || null, confirm: null });
+        p.tab = 'log'; $('panelBody').scrollTop = 0; break;
+      }
+      case 'lquick': ui.f_what = id; break;
+      case 'lcancel': ui.form = false; ui.eid = null; break;
+      case 'lsave': saveLog(el); return;
+      case 'ldel': { if (ui.confirm !== id) { ui.confirm = id; el.textContent = 'Tap again to remove'; return; } const e = LB.removeLogEntry(state, p.tool, id); if (e?.photoId) deletePhoto(e.photoId); Object.assign(ui, { form: false, eid: null, confirm: null }); toast('Entry removed'); break; }
+      case 'lhandled': {
+        const e = LB.markHandled(state, p.tool, id); if (!e) return;
+        if (p.tool === 'vet') { for (const k of Object.keys(ui)) if (k.startsWith('f_')) delete ui[k]; Object.assign(ui, { form: true, eid: null, f_subject: e.subject || '', f_what: e.what, f_type: e.type, photoBlob: null, photoPreview: null, photoId: null }); p.tab = 'log'; toast('Nice! Log the visit', 'Add the next due date if there is one'); }
+        else { toast('Marked renewed', 'Edit the record to set the new expiration date'); ui.form = false; }
+        break;
+      }
       default: return;
     }
+    const USE = { rsave: 'meals', rstarter: 'meals', mclaim: 'meals', gbuild: 'meals', clog: 'care', clast: 'care', sadd: 'subs', skeep: 'subs', scancel: 'subs', padd: 'cards', csent: 'cards', tyadd: 'cards', tysent: 'cards', dplan: 'dates', kstar: 'kids', kbook: 'kids', kredeem: 'kids', mfinish: 'meeting' };
+    if (USE[a]) markUse(state, USE[a], today);
+    persist(); hud(); afterProgress(); renderPanel();
+  }
+  async function saveLog(el) {
+    const p = panel, ui = p.ui, def = LB.LOGS[p.tool];
+    const data = { subject: def.subjects ? (ui.f_subject || ui.subject || LB.logSubjects(state, p.tool)[0] || null) : null };
+    for (const f of def.fields) if (f.type !== 'photo') data[f.k] = ui[`f_${f.k}`] ?? '';
+    const missing = def.fields.find((f) => f.req && !String(data[f.k] || '').trim());
+    if (missing) { toast(`Fill in “${missing.label}”`); return; }
+    if (def.subjects && !data.subject) { toast(`Add a ${def.subjectLabel.toLowerCase()} first`, `Tap “+ ${def.addLabel}” above`); return; }
+    data.photoId = ui.photoId || null;
+    if (ui.photoBlob) { const pid = `p${Date.now().toString(36)}`; try { await putPhoto(pid, ui.photoBlob); if (ui.photoId) deletePhoto(ui.photoId); data.photoId = pid; } catch (e) { /* keep going without the photo */ } }
+    if (ui.photoPreview) URL.revokeObjectURL(ui.photoPreview);
+    if (ui.eid) { LB.updateLogEntry(state, p.tool, ui.eid, data); toast('Entry updated'); }
+    else {
+      const r = LB.addLogEntry(state, p.tool, data, today);
+      if (!r) { toast('Something’s missing'); return; }
+      toolReward(el, r.reward, 'Logged', r.linked.length ? `Car Care updated too: ${r.linked.join(', ')}` : 'It’s in the history now');
+      markUse(state, p.tool, today);
+    }
+    Object.assign(ui, { form: false, eid: null, photoBlob: null, photoPreview: null, photoId: null });
     persist(); hud(); afterProgress(); renderPanel();
   }
 
@@ -1240,6 +1319,7 @@ function boot(state, opts) {
 
   stage.resize();
   stage.resetView();
+  noteStreak(state, today);
   hud();
   if (!REDUCED) {
     const end = camera.position.clone();

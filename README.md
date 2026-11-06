@@ -45,6 +45,14 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   | Coffee House | Date Night Jar: draw an idea, put it on the calendar |
   | School (new) | Kids’ Corner: stars for chores and kindness (kid-assigned tasks give stars), rewards to spend them on, reading log |
   | Town Hall (level 3) | Family Meeting: celebrate, high/low check-ins, the week ahead, money minute, one focus. Counts as the weekly review |
+- **Logbook buildings** keep track of things, one engine for all of them: **Repair Shop** (every service per car, with
+  mileage, cost, shop and receipt photo; logging an oil change resets the Car Care reminder), **Vet Clinic** (pet
+  checkups, vaccines, medicines, next-due heads-ups), **Gift Shop** (gift ideas, gifts given, everyone's sizes) and
+  **Records Hall** (where important documents are kept and when they expire). Entries and photos stay on the device.
+- **Earned by steady use.** 14 decorations can't be bought, only earned: use a tool in N different weeks (Farmers'
+  Market Stall, Classic Car, Big Red Mailbox, Playground, Bandstand, Dog Park…), keep a 7- or 30-day best streak
+  (Lantern Row, Golden Fountain), or check things off on 30 or 100 different days (Rose Arch, Town Clock Tower).
+  Progress shows in Profile → Earned and in Build → Decor & roads.
 - **A living town.** Ducks on the ponds, boats on the river, flowers along the roads that spread with the streak,
   windows that glow brighter with it, real-clock day and night (or pick Day/Night in the menu), and neighbors you can
   tap who notice the family's real week.
@@ -125,6 +133,8 @@ Add `?debug` to the URL for an fps / draw-call counter. Node 20+.
 | Which areas are open (progressive unlock) | `src/systems/progression.js` |
 | 💡 Idea lists | `src/data/ideas.js` |
 | Building tools (meals, care, subscriptions, cards, dates, kids, meeting) | `src/systems/tools.js`, `src/ui/tools.js` |
+| Logbooks (repair, vet, gifts, records) | `src/systems/logbook.js`, `src/ui/logbook.js` |
+| Earned decorations (steady use) | `src/systems/earned.js` |
 | Living town: construction, parade, ducks, boats, flowers, neighbors | `src/world/living.js` |
 | Daily challenges, milestones, quick wins | `src/systems/challenges.js` |
 | Saved state (one object, localStorage) | `src/data/state.js` |

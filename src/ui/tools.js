@@ -6,6 +6,7 @@ import { addDays, shortDate, weekday, daysBetween } from '../systems/time.js';
 import { weekStart } from '../systems/lists.js';
 import { svgI, esc, fmt$ } from './icons.js';
 import { ART } from './art.js';
+import { renderLog, LOG_TABS } from './logbook.js';
 
 /*
  * Screens for the building tools. Every input carries data-uf="key" so main.js can keep what's been typed
@@ -24,7 +25,8 @@ export const TOOL_TABS = {
   cards: [['up', 'Coming up'], ['people', 'Everyone'], ['thanks', 'Thank-yous']],
   dates: [['jar', 'The jar'], ['ideas', 'All ideas']],
   kids: [['kids', 'Stars'], ['rewards', 'Rewards'], ['reading', 'Reading']],
-  meeting: [['meet', 'This week'], ['past', 'Past meetings']]
+  meeting: [['meet', 'This week'], ['past', 'Past meetings']],
+  ...LOG_TABS
 };
 
 /* ---------- Ribbon cutting ---------- */
@@ -49,7 +51,7 @@ function questStrip(state, id) {
 
 export function renderTool(state, p, day) {
   const id = p.tool, ui = p.ui || {};
-  const body = { meals, care, subs, cards, dates, kids, meeting }[id](state, p.tab, ui, day);
+  const body = T.toolById[id].log ? renderLog(state, id, p.tab, ui, day) : { meals, care, subs, cards, dates, kids, meeting }[id](state, p.tab, ui, day);
   return questStrip(state, id) + body;
 }
 

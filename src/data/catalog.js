@@ -49,6 +49,10 @@ export const BUILDINGS = [
   { id: 'gasstation', name: 'Gas Station', kind: 'shop', size: [2, 2], cost: 60, level: 1, needsBank: true, desc: 'Gas and car money goes here on payday.' },
   { id: 'newsstation', name: 'News Station', kind: 'shop', size: [1, 1], cost: 40, level: 1, needsBank: true, desc: 'Subscriptions and phone bills go here on payday.' },
   { id: 'school', name: 'School', kind: 'shop', size: [2, 2], cost: 120, level: 3, desc: 'Kids’ Corner: chore stars, rewards and a reading log.' },
+  { id: 'repairshop', name: 'Repair Shop', kind: 'shop', size: [2, 2], cost: 80, level: 2, desc: 'Repair Log: every service and repair on your cars.' },
+  { id: 'vet', name: 'Vet Clinic', kind: 'shop', size: [2, 2], cost: 80, level: 2, desc: 'Pet Records: checkups, vaccines and medicines.' },
+  { id: 'giftshop', name: 'Gift Shop', kind: 'shop', size: [1, 1], cost: 60, level: 3, desc: 'Gifts & Sizes: ideas, gifts given and everyone’s sizes.' },
+  { id: 'records', name: 'Records Hall', kind: 'shop', size: [2, 2], cost: 120, level: 4, desc: 'Important Records: where things are and when they expire.' },
   { id: 'station', name: 'Train Station', kind: 'civic', size: [2, 2], cost: 0, level: 0, unique: true, desc: 'The payday train stops here.' },
 
   { id: 'cottage', name: 'Cottage', kind: 'home', size: [1, 1], cost: 50, level: 1, pop: 5, desc: '+5 population' },
@@ -61,7 +65,10 @@ export const BUILDINGS = [
   { id: 'bench', name: 'Bench & Lamp', kind: 'decor', size: [1, 1], cost: 20, level: 2, desc: 'Just for looks' },
   { id: 'fountain', name: 'Fountain', kind: 'decor', size: [1, 1], cost: 60, level: 4, desc: 'Just for looks' },
   { id: 'gazebo', name: 'Gazebo', kind: 'decor', size: [1, 1], cost: 80, level: 6, desc: 'Just for looks' },
-  { id: 'statue', name: 'Founder Statue', kind: 'decor', size: [1, 1], cost: 120, level: 8, desc: 'Just for looks' }
+  { id: 'statue', name: 'Founder Statue', kind: 'decor', size: [1, 1], cost: 120, level: 8, desc: 'Just for looks' },
+  /* Earned only, by steady use (see systems/earned.js). Free to place once earned. */
+  ...[['lanterns', 'Lantern Row'], ['arch', 'Rose Arch'], ['goldfountain', 'Golden Fountain'], ['clocktower', 'Town Clock Tower'], ['market', 'Farmers’ Market Stall'], ['classiccar', 'Classic Car'], ['kiosk', 'Newsstand Kiosk'], ['mailbox', 'Big Red Mailbox'], ['patio', 'Café Patio'], ['playground', 'Playground'], ['bandstand', 'Bandstand'], ['dogpark', 'Dog Park'], ['giftbox', 'Giant Gift Box'], ['capsule', 'Time Capsule']]
+    .map(([id, name]) => ({ id, name, kind: 'decor', earned: true, unique: true, size: [1, 1], cost: 0, level: 1, desc: 'Earned by steady use' }))
 ];
 export const byId = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
 export const ROAD_COST = 5;

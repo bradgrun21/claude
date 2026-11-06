@@ -4,6 +4,7 @@ import { isAvailable, isLive, isPaused, progressLabel, listFor, dueCount, freqCo
 import { sectionUnlocked, unlockHint, unlockShort } from '../systems/progression.js';
 import { IDEAS } from '../data/ideas.js';
 import { toolForBuilding } from '../systems/tools.js';
+import { EARNED, earnedProgress, isEarned } from '../systems/earned.js';
 import { dailyChallenges, challengeProgress, milestoneState, QUICK_WINS } from '../systems/challenges.js';
 import { STICKER_NAMES } from '../systems/surprises.js';
 import { shortDate } from '../systems/time.js';
@@ -56,7 +57,7 @@ export function renderBuild(state, tab) {
   }
   if (tab === 'roads') {
     const road = `<button type="button" class="bcard" data-road="1"><span class="bimg road-img">${svgI('road', '#5A6370', 40, 2)}</span><b>Road</b><span class="bnote">Every building needs a road that leads to the Town Hall</span><span class="bprice">${coin(ROAD_COST)}<small>/tile</small></span></button>`;
-    return `<div class="grid">${road}${BUILDINGS.filter((b) => b.kind === 'decor').map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost })).join('')}</div><p class="foot">Decorations don't need a road.</p>`;
+    return `<div class="grid">${road}${BUILDINGS.filter((b) => b.kind === 'decor' && !b.earned).map((d) => card(d, state, { locked: state.level < d.level, lockText: `Level ${d.level}`, disabled: state.coins < d.cost })).join('')}</div><p class="foot">Decorations don't need a road.</p><div class="h3">Earned by steady use</div>${renderEarnedGrid(state)}`;
   }
   if (tab === 'townhall') return renderTownHall(state);
   return '';
@@ -241,6 +242,7 @@ export function readyCount(state, cat) {
   if (cat === 'shops') return BUILDINGS.filter((b) => b.kind === 'shop' && !built(b.id) && state.coins >= b.cost && state.level >= b.level && (!b.needsBank || built('bank'))).length;
   if (cat === 'homes') return BUILDINGS.filter((b) => b.kind === 'home' && state.level >= b.level && state.coins >= b.cost).length ? 1 : 0;
   if (cat === 'townhall') return canUpgradeTownHall(state).ok ? 1 : 0;
+  if (cat === 'roads') return BUILDINGS.filter((b) => b.earned && isEarned(state, b.id) && !built(b.id)).length;
   return 0;
 }
 export function renderStore(state) {
@@ -280,6 +282,20 @@ export function renderRequests(state, day) {
   }).join('')}</div>`;
 }
 
+/* ---------- Earned decorations (steady use) ---------- */
+export function renderEarnedWin(e) {
+  return `<div class="lvlup"><span class="earn-big">${img(e.id)}</span><b class="ttl">You earned the ${esc(e.name)}!</b>
+    <p>For: ${esc(e.text)}. It can’t be bought, only earned. Place it anywhere, free.</p>
+    <div class="actions"><button type="button" class="btn go-btn" data-pick="${e.id}">Place it now</button><button type="button" class="btn soft" data-close="1">Later</button></div>
+    <p class="foot">Find it any time under Build → Decor &amp; roads, or Profile → Earned.</p></div>`;
+}
+export function renderEarnedGrid(state) {
+  const placed = (id) => state.buildings.some((b) => b.type === id);
+  return `<div class="earned-grid">${EARNED.map((e) => { const got = isEarned(state, e.id); const p = earnedProgress(state, e);
+    return `<div class="earn${got ? ' got' : ''}"><span class="bimg">${img(e.id)}${got ? '' : `<span class="lock">${svgI('lock', '#fff', 12, 3)}</span>`}</span><b>${esc(e.name)}</b><small>${esc(e.text)}</small>
+      ${got ? (placed(e.id) ? '<small class="ok">Placed in town</small>' : `<button type="button" class="btn go-btn small" data-pick="${e.id}">Place it · free</button>`) : `<div class="pbar"><i style="width:${((p.have / p.need) * 100).toFixed(0)}%"></i><em>${p.have}/${p.need}</em></div>`}</div>`; }).join('')}</div>`;
+}
+
 /* ---------- Profile: player info + achievements ---------- */
 export function renderProfile(state, day, tab, streakNow, editing) {
   const pop = population(state);
@@ -291,12 +307,14 @@ export function renderProfile(state, day, tab, streakNow, editing) {
     ${editing ? `<input class="field" id="cityNameIn" maxlength="32" value="${esc(state.cityName)}"><button type="button" class="btn go-btn small" data-pf="save">Save</button>` : `<b class="pname">${esc(state.cityName)}</b><span class="since">${svgI('clock', '#8A5A30', 15)} ${d.getMonth() + 1}/${d.getFullYear()}</span>
     <span class="fam">${state.family.map((m) => `<i style="background:${m.color}" title="${esc(m.name)}">${esc(m.name[0])}</i>`).join('')}</span>
     <button type="button" class="btn go-btn small" data-pf="edit">${svgI('edit', '#fff', 15)} Edit</button>`}</div>`;
-  const tabs = `<div class="seg wide">${[['info', 'Player info'], ['achievements', 'Achievements'], ['stickers', 'Sticker book']].map(([k, l]) => `<button type="button" data-ptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
+  const tabs = `<div class="seg wide">${[['info', 'Player info'], ['achievements', 'Achievements'], ['earned', 'Earned'], ['stickers', 'Sticker book']].map(([k, l]) => `<button type="button" data-ptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
   let body;
   if (tab === 'achievements') {
     body = `<div class="ach-grid">${milestoneState(state).map((m) => `<div class="ach${m.claimed ? ' got' : m.ready ? ' ready' : ''}"><span class="ach-ic">${m.claimed || m.ready ? ART.trophy : `${ART.trophy}<i class="lk">${svgI('lock', '#fff', 12, 3)}</i>`}</span>
       <b>${esc(m.text)}</b><div class="pbar"><i style="width:${((m.now / m.at) * 100).toFixed(0)}%"></i><em>${m.now}/${m.at}</em></div>
       ${m.ready ? `<button type="button" class="btn go-btn small" data-claimm="${m.id}">Claim ${m.xp} XP</button>` : m.claimed ? '<small class="ok">Earned</small>' : ''}</div>`).join('')}</div>`;
+  } else if (tab === 'earned') {
+    body = `<p class="hint">These can’t be bought. They’re earned by showing up week after week.</p>${renderEarnedGrid(state)}`;
   } else if (tab === 'stickers') {
     const em = { balloon: '🎈', birds: '🐦', fireworks: '🎆', pets: '🐾' };
     body = `<div class="stickers">${Object.entries(STICKER_NAMES).map(([k, n]) => `<div class="sticker${state.stickers.includes(k) ? ' got' : ''}"><span class="em">${em[k]}</span>${state.stickers.includes(k) ? n : 'Keep watching'}</div>`).join('')}</div><p class="foot">Surprises are just for fun. Tap them when you see them.</p>`;

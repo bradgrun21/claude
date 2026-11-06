@@ -262,9 +262,64 @@ const decor = {
   statue: () => { const g = m.DECO_MODEL.statue(); g.scale.setScalar(1.3); return g; }
 };
 
+/* ---------- Tracker buildings ---------- */
+function repairshop() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#CFC8BA'));
+  g.add(box(0.8, 0.42, 0.56, M('#8A949E'), 0, 0.05, -0.12));
+  const roof = box(0.86, 0.05, 0.62, M('#2F4058'), 0, 0.47, -0.12); g.add(roof);
+  for (const x of [-0.2, 0.2]) { g.add(box(0.32, 0.3, 0.02, M('#D8DDE2'), x, 0.05, 0.17)); for (let k = 0; k < 4; k++) g.add(box(0.32, 0.01, 0.025, M('#A9B2BA'), x, 0.1 + k * 0.07, 0.175)); }
+  const sign = box(0.5, 0.1, 0.03, C.yellow, 0, 0.5, 0.19); g.add(sign);
+  const car = m.car('#E8643F'); car.scale.setScalar(1.3); car.position.set(0.18, 0.05, 0.36); g.add(car);
+  const tire = mesh(new THREE.TorusGeometry(0.04, 0.02, 6, 10), mat.navy); tire.rotation.x = Math.PI / 2; tire.position.set(-0.36, 0.07, 0.38); g.add(tire);
+  return g;
+}
+function vet() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0'));
+  const h = m.house({ roof: M('#4FA7A0'), wall: C.cream, w: 0.7, d: 0.5 }); h.position.set(-0.05, 0.05, -0.15); g.add(h);
+  const plaque = mesh(new THREE.CircleGeometry(0.08, 16), C.white); plaque.position.set(-0.05, 0.42, 0.11); g.add(plaque);
+  for (const [x, y, r] of [[-0.05, 0.4, 0.035], [-0.1, 0.46, 0.018], [-0.05, 0.48, 0.018], [0, 0.46, 0.018]]) { const d = mesh(new THREE.CircleGeometry(r, 10), M('#4FA7A0'), false, false); d.position.set(x, y, 0.115); g.add(d); }
+  const dh = new THREE.Group(); dh.add(box(0.16, 0.12, 0.16, C.red, 0, 0, 0)); const rf = roofPrism(0.2, 0.08, 0.18, C.wood); rf.position.y = 0.16; dh.add(rf); dh.position.set(0.3, 0.05, 0.3); g.add(dh);
+  const dog = m.dog('#C9A06A'); dog.position.set(0.1, 0.05, 0.36); g.add(dog);
+  return g;
+}
+function giftshop() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#E6DFD0'));
+  const s = m.shop(C.pink); s.position.y = 0.05; g.add(s);
+  for (const [x, z, c, sz] of [[-0.3, 0.36, C.purple, 0.12], [-0.17, 0.38, C.yellow, 0.09], [0.32, 0.36, C.sky, 0.1]]) { g.add(box(sz, sz, sz, c, x, 0.05, z)); g.add(box(sz + 0.01, 0.015, 0.025, C.red, x, 0.05 + sz, z)); }
+  return g;
+}
+function records() {
+  const g = new THREE.Group(); g.add(pad(0.96, '#DCD5C8'));
+  g.add(box(0.76, 0.06, 0.56, mat.stone, 0, 0.05, -0.06));
+  g.add(box(0.66, 0.36, 0.42, M('#EFE6D6'), 0, 0.11, -0.1));
+  for (let k = 0; k < 4; k++) g.add(cyl(0.03, 0.34, C.white, -0.24 + k * 0.16, 0.11, 0.16, 10));
+  const pd = roofPrism(0.8, 0.14, 0.6, M('#6B7A8A')); pd.position.set(0, 0.54, -0.06); g.add(pd);
+  g.add(box(0.12, 0.2, 0.02, C.dark, 0, 0.11, 0.115));
+  return g;
+}
+
+/* ---------- Earned decorations ---------- */
+const earnedDecor = {
+  lanterns: () => { const g = new THREE.Group(); for (const x of [-0.32, 0.32]) { const l = m.lamp(); l.position.x = x; g.add(l); } const str = box(0.64, 0.008, 0.008, C.dark, 0, 0.42, 0, false); g.add(str); for (let k = 0; k < 5; k++) { const b = mesh(new THREE.SphereGeometry(0.03, 8, 6), mat.lamp, false, false); b.position.set(-0.24 + k * 0.12, 0.38 - Math.sin((k / 4) * Math.PI) * 0.04, 0); g.add(b); } return g; },
+  arch: () => { const g = new THREE.Group(); for (const x of [-0.28, 0.28]) g.add(box(0.05, 0.5, 0.05, C.white, x, 0, 0)); const a = mesh(new THREE.TorusGeometry(0.28, 0.03, 6, 16, Math.PI), C.white); a.position.y = 0.5; g.add(a); for (let k = 0; k < 9; k++) { const t = (k / 8) * Math.PI; const r = mesh(new THREE.IcosahedronGeometry(0.045, 0), k % 2 ? C.pink : C.red); r.position.set(Math.cos(t) * 0.28, 0.5 + Math.sin(t) * 0.28, 0.02); g.add(r); } const f = m.flowers(6, 0.2); g.add(f); return g; },
+  goldfountain: () => { const g = m.DECO_MODEL.fountain(); g.scale.setScalar(1.35); g.traverse((o) => { if (o.isMesh && o.material === mat.stone) o.material = mat.gold; }); return g; },
+  clocktower: () => { const g = m.clockTower(); g.scale.setScalar(0.85); return g; },
+  market: () => { const g = new THREE.Group(); g.add(box(0.7, 0.2, 0.36, C.wood, 0, 0, 0)); for (const x of [-0.32, 0.32]) for (const z of [-0.16, 0.16]) g.add(box(0.025, 0.5, 0.025, C.wood, x, 0, z)); for (let k = 0; k < 6; k++) g.add(box(0.12, 0.02, 0.42, k % 2 ? C.white : C.green, -0.3 + k * 0.12, 0.5, 0)); for (const [x, c] of [[-0.2, mat.carrot], [0, C.red], [0.2, C.green]]) { g.add(box(0.16, 0.06, 0.2, C.dark, x, 0.2, 0)); for (let k = 0; k < 4; k++) { const v = mesh(new THREE.SphereGeometry(0.03, 6, 5), c); v.position.set(x - 0.04 + (k % 2) * 0.08, 0.28, -0.04 + Math.floor(k / 2) * 0.08); g.add(v); } } return g; },
+  classiccar: () => { const g = new THREE.Group(); g.add(box(0.8, 0.02, 0.5, mat.stone, 0, 0, 0)); const c = m.car('#4FA7A0'); c.scale.setScalar(1.9); c.position.y = 0.02; c.rotation.y = 0.5; g.add(c); return g; },
+  kiosk: () => { const g = m.DECO_MODEL.kiosk(); g.scale.setScalar(1.5); return g; },
+  mailbox: () => { const g = new THREE.Group(); g.add(box(0.22, 0.34, 0.2, C.red, 0, 0, 0)); const top = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.2, 12, 1, false, 0, Math.PI), C.red); top.rotation.z = Math.PI / 2; top.rotation.y = Math.PI / 2; top.position.y = 0.34; g.add(top); g.add(box(0.12, 0.015, 0.01, C.dark, 0, 0.26, 0.101)); const b = m.bench(); b.position.set(0.3, 0, 0.1); g.add(b); return g; },
+  patio: () => { const g = new THREE.Group(); g.add(box(0.8, 0.02, 0.8, M('#D9C7A8'), 0, 0, 0)); for (const [x, z, c] of [[-0.18, -0.15, C.red], [0.2, 0.18, C.teal]]) { g.add(cyl(0.12, 0.02, C.white, x, 0.2, z)); g.add(cyl(0.012, 0.2, C.dark, x, 0.02, z, 6)); g.add(cyl(0.01, 0.42, C.white, x, 0.02, z, 6)); const u = mesh(new THREE.ConeGeometry(0.24, 0.1, 8), c); u.position.set(x, 0.46, z); g.add(u); } return g; },
+  playground: () => { const g = new THREE.Group(); g.add(box(0.84, 0.015, 0.84, C.sand, 0, 0, 0)); for (const x of [-0.3, -0.06]) g.add(box(0.03, 0.34, 0.03, C.red, x, 0, -0.2)); g.add(box(0.28, 0.03, 0.03, C.red, -0.18, 0.34, -0.2)); g.add(box(0.07, 0.012, 0.05, C.yellow, -0.18, 0.12, -0.2)); g.add(box(0.16, 0.2, 0.16, C.blue, 0.22, 0, 0.1)); const sl = mesh(new THREE.BoxGeometry(0.08, 0.012, 0.32), C.yellow); sl.position.set(0.22, 0.12, -0.12); sl.rotation.x = -0.6; g.add(sl); return g; },
+  bandstand: () => { const g = m.bandstand(); g.scale.setScalar(1); return g; },
+  dogpark: () => { const g = new THREE.Group(); const f = m.fence(0.84, 0.84); g.add(f); for (const [x, z, c] of [[-0.15, 0.1, '#C9A06A'], [0.18, -0.12, '#3A2A1E']]) { const d = m.dog(c); d.position.set(x, 0, z); d.rotation.y = x * 4; g.add(d); } const h = m.DECO_MODEL.fountain(); h.scale.setScalar(0.3); h.position.set(0.25, 0, 0.25); g.add(h); return g; },
+  giftbox: () => { const g = new THREE.Group(); g.add(box(0.44, 0.4, 0.44, C.purple, 0, 0, 0)); g.add(box(0.48, 0.08, 0.48, C.purple, 0, 0.4, 0)); g.add(box(0.08, 0.49, 0.45, C.yellow, 0, 0, 0)); g.add(box(0.45, 0.49, 0.08, C.yellow, 0, 0, 0)); for (const r of [0.6, -0.6]) { const b = mesh(new THREE.TorusGeometry(0.07, 0.025, 6, 12), C.yellow); b.position.set(r * 0.12, 0.54, 0); b.rotation.y = Math.PI / 2; b.rotation.x = r; g.add(b); } return g; },
+  capsule: () => { const g = new THREE.Group(); g.add(box(0.5, 0.06, 0.5, mat.stone, 0, 0, 0)); const c = mesh(new THREE.CapsuleGeometry(0.1, 0.22, 4, 12), mat.metal); c.position.y = 0.26; g.add(c); g.add(cyl(0.105, 0.03, mat.gold, 0, 0.24, 0)); const plaque = box(0.2, 0.1, 0.02, mat.gold, 0, 0.06, 0.2); g.add(plaque); return g; }
+};
+
 const BUILDERS = {
   townhall, school, church, garden, studyhall, pavilion, retreat, gym, field, pool, clinic, bank, savings, market, payoff, office, grocery: groceryStore, gasstation, newsstation, station, park, cafe, diner, hall, jobboard, workshop, postoffice, library,
-  cottage, house: familyHouse, townhouse, apartments, ...decor
+  repairshop, vet, giftshop, records,
+  cottage, house: familyHouse, townhouse, apartments, ...decor, ...earnedDecor
 };
 
 /* Section buildings grow with steady use: level 2 adds pennants and flower boxes, level 3 a gold star on top. */
