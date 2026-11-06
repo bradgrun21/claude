@@ -104,3 +104,46 @@ describe('areas open in order', () => {
     expect(sectionUnlocked(s, 'spiritual')).toBe(true);
   });
 });
+
+import { updateTask as _ut, updateGoal as _ug, setListPaused as _slp, targetLabel as _tl, isAvailable as _ia, dueCount as _dc, addTask as _at, addGoal as _ag, createList as _cl, completeTask as _ct } from '../src/systems/lists.js';
+describe('pause, who, goal targets', () => {
+  const D = '2026-11-05';
+  const mk = () => {
+    const s = newCity({ cityName: 'T', family: [{ name: 'Pat', color: '#4E7FA0', kind: 'adult' }] }, D);
+    const b = { id: 'jb', type: 'jobboard', i: 12, j: 19, rot: 0, level: 1, builtOn: D }; s.buildings.push(b);
+    const l = _cl(s, b, '', [], D);
+    const t = _at(s, l.id, { title: 'Dishes', kind: 'daily', who: 'Pat' });
+    const g = _ag(s, l.id, 'Run a 5K', D, '2026-11-15');
+    const st = _at(s, l.id, { title: 'Run', kind: 'weekly', per: 3, goalId: g.id });
+    return { s, l, t, g, st };
+  };
+  it('assigns a task to a family member', () => {
+    const { s, l, t } = mk();
+    expect(t.who).toBe('Pat');
+    _ut(s, l.id, t.id, { who: null });
+    expect(t.who).toBe(null);
+  });
+  it('a paused task, goal or list is never due and can’t be checked off', () => {
+    const { s, l, t, g, st } = mk();
+    expect(_dc(l, D)).toBe(2);
+    _ut(s, l.id, t.id, { paused: true });
+    expect(_ia(t, D, l)).toBe(false);
+    expect(_ct(s, l.id, t.id, D)).toBe(null);
+    _ug(s, l.id, g.id, { paused: true });
+    expect(_dc(l, D)).toBe(0);
+    _ut(s, l.id, t.id, { paused: false }); _ug(s, l.id, g.id, { paused: false });
+    _slp(s, l.id, true, D);
+    expect(_dc(l, D)).toBe(0);
+    _slp(s, l.id, false, D);
+    expect(_dc(l, D)).toBe(2);
+    expect(_ct(s, l.id, st.id, D)).toBeTruthy();
+  });
+  it('goal target dates count down gently and never say overdue', () => {
+    const { s, l, g } = mk();
+    expect(_tl(g, D)).toBe('10 days to go');
+    expect(_tl(g, '2026-11-14')).toBe('Target is tomorrow');
+    expect(_tl(g, '2026-11-20')).toBe('Still going strong');
+    _ug(s, l.id, g.id, { target: 'nonsense' });
+    expect(g.target).toBe(null);
+  });
+});

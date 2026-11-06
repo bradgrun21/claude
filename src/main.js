@@ -24,11 +24,11 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE } from './ui/panels.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
-import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
+import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, updateGoal, removeGoal, setListPaused, freqCode, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
 import { sectionUnlocked, unlockHint, nextSection } from './systems/progression.js';
 import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
@@ -236,7 +236,8 @@ function boot(state, opts) {
     else if (p.kind === 'lists') { title = p.due ? 'Due today' : 'Your lists'; tabs = `<button type="button" class="wtab${p.due ? ' on' : ''}" data-due="1">Due today</button><button type="button" class="wtab${p.due ? '' : ' on'}" data-due="0">All lists</button><button type="button" class="wtab${canReviewWeek(state, today) && state.lists.length ? ' glow' : ''}" data-reviewopen="1">Week in review</button>`; body = renderLists(state, today, p.due); }
     else if (p.kind === 'building') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBuilding(state, b, today); }
     else if (p.kind === 'goal') { title = p.draft.title; body = renderBuilder(p.draft); }
-    else if (p.kind === 'taskEdit') { const l = state.lists.find((x) => x.id === p.listId); const t = l?.tasks.find((x) => x.id === p.taskId); if (!t) { closePanel(); return; } title = 'Edit task'; body = renderTaskEdit(l, t); }
+    else if (p.kind === 'taskEdit') { const l = state.lists.find((x) => x.id === p.listId); const t = l?.tasks.find((x) => x.id === p.taskId); if (!t) { closePanel(); return; } title = 'Edit task'; body = renderTaskEdit(state, l, t, p.edit); }
+    else if (p.kind === 'goalEdit') { const l = state.lists.find((x) => x.id === p.listId); const g = l?.goals.find((x) => x.id === p.goalId); if (!g) { closePanel(); return; } title = 'Edit goal'; body = renderGoalEdit(l, g, p.edit, today); }
     else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
     else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
@@ -273,20 +274,21 @@ function boot(state, opts) {
    * mode 'add':    add tasks or a goal to a building (creates its list if needed)
    * mode 'step':   add steps under an existing goal
    */
-  const blankRows = (n, freq = 'daily') => Array.from({ length: n }, () => ({ title: '', freq }));
+  const blankRows = (n, freq = 'daily') => Array.from({ length: n }, () => ({ title: '', freq, who: null }));
+  const people = () => state.family.filter((m) => m.kind !== 'pet');
   function openBuilder(o) {
-    const draft = { mode: o.mode, type: o.type, buildingId: o.buildingId, listId: o.listId, goalId: o.goalId || null, kind: o.kind || 'task', lockKind: !!o.lockKind, goal: '', tasks: blankRows(2) };
+    const draft = { mode: o.mode, type: o.type, buildingId: o.buildingId, listId: o.listId, goalId: o.goalId || null, kind: o.kind || 'task', lockKind: !!o.lockKind, goal: '', target: '', family: people(), tasks: blankRows(2) };
     if (o.mode === 'unlock') {
       const def = byId[o.type];
       Object.assign(draft, { section: def.section, title: `Open ${SECTIONS[def.section].name}`, intro: `Add a few simple tasks, or one goal. Your ${def.name} is free.`, saveLabel: `Save & place the ${def.name}` });
     } else if (o.mode === 'step') {
       const l = state.lists.find((x) => x.id === o.listId); const g = l?.goals.find((x) => x.id === o.goalId);
-      Object.assign(draft, { section: l.section, buildingId: l.buildingId, title: 'Add steps', intro: `Small steps toward “${g?.title || 'your goal'}”.`, saveLabel: 'Save steps', kind: 'task', lockKind: true, tasks: blankRows(1, 'once') });
+      Object.assign(draft, { section: l.section, buildingId: l.buildingId, title: 'Add steps', intro: `Small steps toward “${g?.title || 'your goal'}”.`, saveLabel: 'Save steps', kind: 'task', lockKind: true, tasks: blankRows(1) });
     } else {
       const l = o.listId ? state.lists.find((x) => x.id === o.listId) : null;
       const b = state.buildings.find((x) => x.id === (l ? l.buildingId : o.buildingId)); const def = byId[b.type];
       Object.assign(draft, { section: def.section, buildingId: b.id, listId: l?.id || null, title: draft.kind === 'goal' && draft.lockKind ? 'New goal' : draft.lockKind ? 'New tasks' : def.name, intro: draft.kind === 'goal' ? 'A bigger thing. Break it into small steps if you like.' : 'Simple things you do, like chores or habits.', saveLabel: 'Save' });
-      if (draft.kind === 'goal') draft.tasks = blankRows(1, 'once');
+      if (draft.kind === 'goal') draft.tasks = blankRows(1);
     }
     if (o.idea) applyIdeaToDraft(draft, o.idea);
     openPanel('goal', { draft, prev: o.prev || null });
@@ -295,21 +297,29 @@ function boot(state, opts) {
   function readGoalForm() {
     const d = panel?.draft; if (!d || panel.kind !== 'goal') return;
     const g = $('gfGoal'); if (g) d.goal = g.value;
+    const tg = $('gfTarget'); if (tg) d.target = tg.value;
     $('panelBody').querySelectorAll('[data-tt]').forEach((i) => { d.tasks[+i.dataset.tt].title = i.value; });
     $('panelBody').querySelectorAll('[data-tf]').forEach((i) => { d.tasks[+i.dataset.tf].freq = i.value; });
+  }
+  function readEdit() {
+    const e = panel?.edit; if (!e) return;
+    if ($('teTitle')) e.title = $('teTitle').value;
+    if ($('teFreq')) e.freq = $('teFreq').value;
+    if ($('geTitle')) e.title = $('geTitle').value;
+    if ($('geTarget')) e.target = $('geTarget').value;
   }
   /* Put the draft's tasks/goal onto a list. Returns how many things were added. */
   function applyDraft(list, d) {
     const rows = d.tasks.filter((t) => t.title.trim());
     let goalId = d.goalId || null, n = 0;
-    if (d.kind === 'goal') { const g = addGoal(state, list.id, d.goal, today); if (!g) return 0; goalId = g.id; n++; }
-    for (const t of rows) if (addTask(state, list.id, { title: t.title, ...fromFreq(t.freq), goalId })) n++;
+    if (d.kind === 'goal') { const g = addGoal(state, list.id, d.goal, today, d.target || null); if (!g) return 0; goalId = g.id; n++; }
+    for (const t of rows) if (addTask(state, list.id, { title: t.title, ...fromFreq(t.freq), goalId, who: t.who })) n++;
     return n;
   }
   $('panelBody').addEventListener('input', () => {
     if (panel?.kind === 'budgetSetup') readBudgetSetup();
-    if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
-  $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal' && e.target.dataset.tf !== undefined) readGoalForm(); });
+    if (panel?.kind === 'bank' && panel.tab === 'tx') readTx(); if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); if (panel?.kind === 'event' || panel?.kind === 'memory' || panel?.kind === 'goalDone') readJournalForm(); });
+  $('panelBody').addEventListener('change', (e) => { if (panel?.kind === 'goal') readGoalForm(); if (panel?.kind === 'taskEdit' || panel?.kind === 'goalEdit') readEdit(); });
   function readJournalForm() {
     const d = panel?.draft; if (!d) return;
     const v = (id) => $(id)?.value;
@@ -855,10 +865,19 @@ function boot(state, opts) {
     if (d.addg) { openBuilder({ mode: 'add', listId: d.addg, kind: 'goal', lockKind: true, prev: snapshot() }); return; }
     if (d.addsub) { const [l, g] = d.addsub.split(':'); openBuilder({ mode: 'step', listId: l, goalId: g, prev: snapshot() }); return; }
     if (d.newlist) { openBuilder({ mode: 'add', buildingId: d.newlist, prev: snapshot() }); return; }
-    if (d.bkind) { readGoalForm(); const dr = panel.draft; dr.kind = d.bkind; if (d.bkind === 'goal' && dr.tasks.every((t) => !t.title.trim())) dr.tasks = blankRows(1, 'once'); renderPanel(); (d.bkind === 'goal' ? $('gfGoal') : $('panelBody').querySelector('[data-tt]'))?.focus(); return; }
+    if (d.bkind) { readGoalForm(); const dr = panel.draft; dr.kind = d.bkind; renderPanel(); (d.bkind === 'goal' ? $('gfGoal') : $('panelBody').querySelector('[data-tt]'))?.focus(); return; }
     if (d.trm !== undefined && panel?.kind === 'goal') { readGoalForm(); panel.draft.tasks.splice(+d.trm, 1); renderPanel(); return; }
-    if (d.tedit) { const [l, t] = d.tedit.split(':'); openPanel('taskEdit', { listId: l, taskId: t, prev: snapshot() }); return; }
-    if (d.tsave) { const [l, t] = d.tsave.split(':'); updateTask(state, l, t, { title: $('teTitle').value, freq: $('teFreq').value }); persist(); hud(); toast('Task updated'); back(panel.prev); return; }
+    if (d.tedit) { const [l, t] = d.tedit.split(':'); const task = state.lists.find((x) => x.id === l)?.tasks.find((x) => x.id === t); if (task) openPanel('taskEdit', { listId: l, taskId: t, edit: { title: task.title, freq: freqCode(task), who: task.who || null }, prev: snapshot() }); return; }
+    if (d.twho !== undefined && panel?.kind === 'taskEdit') { readEdit(); panel.edit.who = d.twho || null; renderPanel(); return; }
+    if (d.tsave) { readEdit(); const [l, t] = d.tsave.split(':'); updateTask(state, l, t, { title: panel.edit.title, freq: panel.edit.freq, who: panel.edit.who }); persist(); hud(); toast('Task updated'); back(panel.prev); return; }
+    if (d.tpause) { const [l, t] = d.tpause.split(':'); const task = state.lists.find((x) => x.id === l)?.tasks.find((x) => x.id === t); if (!task) return; readEdit(); updateTask(state, l, t, { title: panel.edit.title, freq: panel.edit.freq, who: panel.edit.who, paused: !task.paused }); persist(); hud(); toast(task.paused ? 'Task is resting' : 'Welcome back!', task.paused ? 'It won’t show as due until you resume it' : 'It’s back on the list'); back(panel.prev); return; }
+    if (d.tw !== undefined && panel?.kind === 'goal') { readGoalForm(); const row = panel.draft.tasks[+d.tw]; const names = [null, ...people().map((m) => m.name)]; row.who = names[(names.indexOf(row.who) + 1) % names.length]; renderPanel(); return; }
+    if (d.gedit) { const [l, g] = d.gedit.split(':'); const goal = state.lists.find((x) => x.id === l)?.goals.find((x) => x.id === g); if (goal) openPanel('goalEdit', { listId: l, goalId: g, edit: { title: goal.title, target: goal.target || '' }, prev: snapshot() }); return; }
+    if (d.gclear) { readEdit(); panel.edit.target = ''; renderPanel(); return; }
+    if (d.gsave) { readEdit(); const [l, g] = d.gsave.split(':'); updateGoal(state, l, g, { title: panel.edit.title, target: panel.edit.target || null }); persist(); toast('Goal updated', panel.edit.target ? 'Target date set. No pressure, it’s just a guide.' : ''); back(panel.prev); return; }
+    if (d.gpause) { const [l, g] = d.gpause.split(':'); const goal = state.lists.find((x) => x.id === l)?.goals.find((x) => x.id === g); if (!goal) return; updateGoal(state, l, g, { paused: !goal.paused }); persist(); hud(); toast(goal.paused ? 'Goal is resting' : 'Goal is back on', goal.paused ? 'Its steps won’t show as due' : 'Pick up right where you left off'); back(panel.prev); return; }
+    if (d.gdel) { if (!panel.edit.confirm) { panel.edit.confirm = true; b.textContent = 'Tap again to remove'; return; } const [l, g] = d.gdel.split(':'); removeGoal(state, l, g); persist(); hud(); toast('Goal removed'); back(panel.prev); return; }
+    if (d.lpause) { const [l, on] = d.lpause.split(':'); setListPaused(state, l, on === '1', today); persist(); hud(); toast(on === '1' ? 'This list is resting' : 'Welcome back!', on === '1' ? 'Nothing here is due. Your streak and progress are safe.' : 'Everything is back on the list'); renderPanel(); return; }
     if (d.tdel) { const [l, t] = d.tdel.split(':'); removeTask(state, l, t); persist(); hud(); toast('Task removed', 'Progress you made still counts'); back(panel.prev); return; }
     if (d.ideas) { const [sec, src] = d.ideas.split(':'); if (src === 'draft') { readGoalForm(); openPanel('ideas', { section: sec, draft: panel.draft, builderPrev: panel.prev, added: new Set() }); } else openPanel('ideas', { section: sec, listId: src, added: new Set(), prev: snapshot() }); return; }
     if (d.idea) { addIdea(d.idea, b); return; }
@@ -868,7 +887,7 @@ function boot(state, opts) {
     if (d.upgrade) { upgradeHome(d.upgrade); return; }
     if (d.move) { const r = state.buildings.find((x) => x.id === d.move); startPlacement({ type: r.type, ignoreId: r.id, start: { i: r.i, j: r.j }, rot: r.rot, level: r.level }); return; }
     if (d.remove) { const r = state.buildings.find((x) => x.id === d.remove); state.buildings.splice(state.buildings.indexOf(r), 1); bld.remove(r.id); syncWorld(); closePanel(); persist(); hud(); return; }
-    if (d.addtask) { readGoalForm(); const dr = panel.draft; dr.tasks.push(...blankRows(1, dr.kind === 'goal' || dr.mode === 'step' ? 'once' : 'daily')); renderPanel(); $('panelBody').querySelector(`[data-tt="${dr.tasks.length - 1}"]`)?.focus(); return; }
+    if (d.addtask) { readGoalForm(); const dr = panel.draft; dr.tasks.push(...blankRows(1)); renderPanel(); $('panelBody').querySelector(`[data-tt="${dr.tasks.length - 1}"]`)?.focus(); return; }
     if (d.savegoal) { saveGoalForm(); return; }
     if (d.btab) { panel.tab = d.btab; renderPanel(); $('panelBody').scrollTop = 0; return; }
     if (d.bank) { bankAction(d.bank, b); return; }

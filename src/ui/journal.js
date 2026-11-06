@@ -10,6 +10,9 @@ const fmtTime = (t) => { if (!t) return ''; const [h, m] = t.split(':').map(Numb
 const money = (n) => (Number.isInteger(n) ? fmt$(n) : `$${n.toFixed(2)}`);
 
 /* ---------- Calendar ---------- */
+/* Goals (not finished) whose target date is this day. */
+export const goalTargetsOn = (state, day) => state.lists.flatMap((l) => (l.goals || []).filter((g) => g.target === day && !g.achievedOn).map((g) => ({ ...g, section: l.section })));
+
 export function renderCalendar(state, today, ym, sel) {
   const [y, mo] = ym.split('-').map(Number);
   const first = new Date(y, mo - 1, 1);
@@ -20,7 +23,8 @@ export function renderCalendar(state, today, ym, sel) {
     const key = addDays(startKey, k);
     if (k >= 35 && !key.startsWith(ym)) break;
     const evs = eventsOn(state, key), mems = memoriesFor(state, { day: key });
-    const dots = [...evs.map((e) => `<i style="background:${SECTIONS[e.section].color}"></i>`), ...(mems.length ? ['<i class="mem"></i>'] : [])].slice(0, 4).join('');
+    const gts = goalTargetsOn(state, key);
+    const dots = [...gts.map((g) => `<i class="gt" style="--c:${SECTIONS[g.section].color}"></i>`), ...evs.map((e) => `<i style="background:${SECTIONS[e.section].color}"></i>`), ...(mems.length ? ['<i class="mem"></i>'] : [])].slice(0, 4).join('');
     cells.push(`<button type="button" class="cday${key.startsWith(ym) ? '' : ' out'}${key === today ? ' today' : ''}${key === sel ? ' sel' : ''}" data-day="${key}"><b>${fromKey(key).getDate()}</b><span class="dots">${dots}</span></button>`);
   }
   const pct = b.limit ? Math.min(100, (b.planned / b.limit) * 100) : 0;
@@ -28,7 +32,9 @@ export function renderCalendar(state, today, ym, sel) {
     ${b.limit ? `<div class="pbar budgetbar"><i style="width:${pct.toFixed(0)}%"></i></div><small>${b.left >= 0 ? `${money(b.left)} still open to plan` : `${money(-b.left)} more planned than budgeted. Move something to next month or adjust the budget.`} · ${money(b.spent)} spent so far</small>` : ''}
     <div class="money-row"><label for="outBudget">Monthly outing budget</label><span class="dollar"><input class="field small" id="outBudget" inputmode="decimal" value="${b.limit || ''}" placeholder="0"></span><button type="button" class="btn soft small" data-cal="budget">Save</button></div></div>`;
   const dayEvents = eventsOn(state, sel), dayMems = memoriesFor(state, { day: sel });
+  const dayGoals = goalTargetsOn(state, sel);
   const day = `<div class="h3">${weekday(sel)}, ${shortDate(sel)}</div>
+    ${dayGoals.map((g) => `<div class="goal-target" style="--c:${SECTIONS[g.section].color}">🎯 <span><b>${esc(g.title)}</b><small>Goal target date</small></span></div>`).join('')}
     ${dayEvents.map((e) => renderEventCard(state, e, today)).join('') || '<p class="hint">Nothing planned this day.</p>'}
     ${dayMems.length ? `<div class="mem-strip">${dayMems.map(memoryThumb).join('')}</div>` : ''}
     <div class="actions"><button type="button" class="btn go-btn" data-cal="new" data-date="${sel}">${svgI('plus', '#fff', 16, 3)} Plan an outing</button><button type="button" class="btn soft" data-mem="new" data-date="${sel}">${svgI('camera', 'currentColor', 16)} Add a memory</button></div>`;

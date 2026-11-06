@@ -25,6 +25,9 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   - **Tasks**: simple things like "Do the dishes". How often (Daily, 1–6×/week, Once) sits on the right of each row.
   - **Goals**: something bigger ("Run a 5K") with optional steps under it. **Completed the goal?** asks for a recap
     (and a photo if you like), saves it to Memories, and throws a parade down Main Street.
+  - Every task and step can be **assigned to a family member** (their color dot shows on the row) or left for everyone.
+  - Goals can have an optional **target date**, shown gently ("10 days to go", later "Still going strong") and on the calendar.
+  - **Pause** a task, a goal, or a whole list ("Rest this list for a while"). Nothing resting is ever due, and no progress is lost.
   - **💡 Ideas** on every list and in the builder: easy tasks, goals and ready-made plans, added only with a tap.
   Higher-tier buildings pay more per task (1×, 1.5×, 2×, 3×).
 - **Consistency, not volume.** The first 6 check-offs a day pay in full, then a small token. The first check-off of

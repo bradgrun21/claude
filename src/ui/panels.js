@@ -1,6 +1,6 @@
 import { SECTIONS, SECTION_KEYS, BUILDINGS, byId, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from '../data/catalog.js';
 import { levelNeed, population, TOWNHALL, taskReward, goalReward, canUpgradeTownHall, unlockedAt } from '../systems/economy.js';
-import { isAvailable, isLive, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS } from '../systems/lists.js';
+import { isAvailable, isLive, isPaused, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS, targetLabel } from '../systems/lists.js';
 import { sectionUnlocked, unlockHint, unlockShort } from '../systems/progression.js';
 import { IDEAS } from '../data/ideas.js';
 import { dailyChallenges, challengeProgress, milestoneState, QUICK_WINS } from '../systems/challenges.js';
@@ -77,13 +77,17 @@ export function renderTownHall(state) {
 /* ---------- One building's list: tasks + goals (with steps) ---------- */
 const FREQS = [['daily', 'Daily'], ['w1', '1×/wk'], ['w2', '2×/wk'], ['w3', '3×/wk'], ['w4', '4×/wk'], ['w5', '5×/wk'], ['w6', '6×/wk'], ['once', 'Once']];
 export const freqSelect = (attr, code) => `<select class="freq" ${attr} aria-label="How often">${FREQS.map(([v, l]) => `<option value="${v}"${code === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+/* A family member's little color dot with their initial (or nothing for "everyone"). */
+export const whoDot = (family, name) => { const m = name && family.find((x) => x.name === name); return m ? `<span class="who" style="--c:${m.color}" title="${esc(m.name)}">${esc(m.name.trim()[0].toUpperCase())}</span>` : ''; };
+const people = (state) => state.family.filter((m) => m.kind !== 'pet');
 function taskRow(state, list, t, day, r) {
-  const avail = isAvailable(t, day, list);
-  const prog = progressLabel(t, day);
-  return `<div class="task${avail ? '' : ' done'}${t.goalId ? ' sub' : ''}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : 'Done'} ${esc(t.title)}">${avail ? '' : svgI('check', '#fff', 18, 3)}</button>
+  const paused = isPaused(list, t);
+  const avail = !paused && isAvailable(t, day, list);
+  const prog = paused ? 'Resting' : progressLabel(t, day);
+  return `<div class="task${avail ? '' : paused ? ' paused' : ' done'}${t.goalId ? ' sub' : ''}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : paused ? 'Resting' : 'Done'} ${esc(t.title)}">${avail ? '' : paused ? svgI('moon', '#8A7A62', 16, 2.4) : svgI('check', '#fff', 18, 3)}</button>
     <button type="button" class="tx" data-tedit="${list.id}:${t.id}"><b>${esc(t.title)}</b>${prog ? `<small>${prog}</small>` : ''}</button>
-    ${!avail && t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 15)}</button>` : ''}
-    <span class="fpill">${freqLabel(t)}</span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
+    ${!avail && !paused && t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 15)}</button>` : ''}
+    ${whoDot(people(state), t.who)}<span class="fpill">${freqLabel(t)}</span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
 }
 export function renderListCard(state, list, day, { compact = false } = {}) {
   const b = state.buildings.find((x) => x.id === list.buildingId);
@@ -98,10 +102,12 @@ export function renderListCard(state, list, day, { compact = false } = {}) {
     <div class="lhead">${compact ? `<span class="limg">${img(b.type)}</span>` : ''}<div class="lt"><span class="lname">${esc(def.name)}</span><small>${lv > 1 ? `Grown to level ${lv} · ` : ''}${used} ${used === 1 ? 'day' : 'days'} of use${nextAt ? ` · grows at ${nextAt}` : ''}</small></div>
     <div class="ladd"><button type="button" class="btn soft small" data-addt="${list.id}">+ Task</button><button type="button" class="btn soft small" data-addg="${list.id}">+ Goal</button><button type="button" class="btn soft small idea" data-ideas="${list.section}:${list.id}" aria-label="Ideas">💡</button></div></div>
     ${loose.map((t) => taskRow(state, list, t, day, r)).join('')}
-    ${goals.map((gl) => `<div class="goalblk"><div class="ghead"><span class="gico">🎯</span><b>${esc(gl.title)}</b><button type="button" class="btn go-btn small" data-gdone="${list.id}:${gl.id}">Completed the goal?</button></div>
+    ${list.paused ? `<div class="rest-note">${svgI('moon', '#6E4520', 16, 2.4)}<span>Resting${list.pausedOn ? ` since ${shortDate(list.pausedOn)}` : ''}. Nothing here is due, and your progress is safe.</span><button type="button" class="btn go-btn small" data-lpause="${list.id}:0">Resume</button></div>` : ''}
+    ${goals.map((gl) => `<div class="goalblk${gl.paused ? ' paused' : ''}"><div class="ghead"><span class="gico">🎯</span><button type="button" class="gtx" data-gedit="${list.id}:${gl.id}"><b>${esc(gl.title)}</b>${gl.paused ? '<small>Resting</small>' : gl.target ? `<small>By ${shortDate(gl.target)} · ${targetLabel(gl, day)}</small>` : ''}</button><button type="button" class="btn go-btn small" data-gdone="${list.id}:${gl.id}">Completed the goal?</button></div>
       ${list.tasks.filter((t) => t.goalId === gl.id).map((t) => taskRow(state, list, t, day, r)).join('')}
       <button type="button" class="btn link small" data-addsub="${list.id}:${gl.id}">+ Add a step</button></div>`).join('')}
     ${!loose.length && !goals.length ? '<p class="hint">Nothing here yet. Add a task or a goal, or tap 💡 for easy ideas.</p>' : ''}
+    ${!list.paused && (loose.length || goals.length) ? `<button type="button" class="btn link small rest-link" data-lpause="${list.id}:1">${svgI('moon', 'currentColor', 13, 2.4)} Rest this list for a while</button>` : ''}
     ${list.achieved.length ? `<small class="lach">🏆 ${list.achieved.slice(-3).map((a) => `${esc(a.goal)} (${shortDate(a.on)})`).join(' · ')}</small>` : ''}</div>`;
 }
 
@@ -142,20 +148,34 @@ export function renderBuilding(state, b, day) {
 /* ---------- Builder: add tasks or a goal (with optional steps) ---------- */
 export function renderBuilder(d) {
   const sec = SECTIONS[d.section];
-  const rows = d.tasks.map((t, i) => `<div class="trow2"><input class="field" data-tt="${i}" maxlength="60" value="${esc(t.title)}" placeholder="${d.kind === 'goal' ? `Step ${i + 1} (optional)` : i ? 'Another task' : 'Like “Do the dishes”'}" autocomplete="off">${freqSelect(`data-tf="${i}"`, t.freq)}${d.tasks.length > 1 ? `<button type="button" class="trm" data-trm="${i}" aria-label="Remove">–</button>` : ''}</div>`).join('');
+  const fam = d.family || [];
+  const whoBtn = (t, i) => (fam.length ? `<button type="button" class="whob" data-tw="${i}" aria-label="Who does it: ${esc(t.who || 'Everyone')}">${t.who ? whoDot(fam, t.who) : `<span class="who all">${svgI('friends', 'currentColor', 14, 2.4)}</span>`}</button>` : '');
+  const rows = d.tasks.map((t, i) => `<div class="trow2"><input class="field" data-tt="${i}" maxlength="60" value="${esc(t.title)}" placeholder="${d.kind === 'goal' ? `Step ${i + 1} (optional)` : i ? 'Another task' : 'Like “Do the dishes”'}" autocomplete="off">${whoBtn(t, i)}${freqSelect(`data-tf="${i}"`, t.freq)}${d.tasks.length > 1 ? `<button type="button" class="trm" data-trm="${i}" aria-label="Remove">–</button>` : ''}</div>`).join('');
   return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(d.section)}<span>${esc(d.intro)}</span></div>
     ${d.lockKind ? '' : `<div class="seg wide"><button type="button" data-bkind="task" aria-pressed="${d.kind === 'task'}">+ Task</button><button type="button" data-bkind="goal" aria-pressed="${d.kind === 'goal'}">+ Goal</button></div>`}
-    ${d.kind === 'goal' ? `<label class="q" for="gfGoal">Goal <small>(something bigger, like “Run a 5K” or “Host friends for dinner”)</small></label><input class="field" id="gfGoal" maxlength="60" value="${esc(d.goal)}" autocomplete="off"><label class="q">Steps <small>(optional small tasks that move it forward)</small></label>` : '<label class="q">Tasks <small>(simple things, like chores or habits)</small></label>'}
+    ${d.kind === 'goal' ? `<label class="q" for="gfGoal">Goal <small>(something bigger, like “Run a 5K” or “Host friends for dinner”)</small></label><input class="field" id="gfGoal" maxlength="60" value="${esc(d.goal)}" autocomplete="off"><label class="q" for="gfTarget">Target date <small>(optional, no pressure)</small></label><input class="field date" type="date" id="gfTarget" value="${esc(d.target || '')}"><label class="q">Steps <small>(optional. Each one can be daily, a few times a week, or once)</small></label>` : '<label class="q">Tasks <small>(simple things, like chores or habits)</small></label>'}
     ${rows}
+    ${fam.length ? '<p class="foot">Tap the circle on a row to pick who does it. Everyone is the default.</p>' : ''}
     <div class="brow">${d.tasks.length < MAX_TASKS ? `<button type="button" class="btn link" data-addtask="1">+ Add another</button>` : ''}<button type="button" class="btn soft small" data-ideas="${d.section}:draft">💡 Ideas</button></div>
     <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(d.saveLabel)}</button></div>`;
 }
 
-export function renderTaskEdit(list, t) {
-  return `<label class="q" for="teTitle">Task</label><input class="field" id="teTitle" maxlength="60" value="${esc(t.title)}" autocomplete="off">
-    <label class="q">How often</label>${freqSelect('id="teFreq"', freqCode(t))}
-    <div class="actions"><button type="button" class="btn go-btn" data-tsave="${list.id}:${t.id}">Save</button><button type="button" class="btn soft" data-tdel="${list.id}:${t.id}">Remove task</button></div>
-    <p class="foot">Removing a task never takes away progress you've already made.</p>`;
+export function renderTaskEdit(state, list, t, e) {
+  const fam = people(state);
+  return `<label class="q" for="teTitle">Task</label><input class="field" id="teTitle" maxlength="60" value="${esc(e.title)}" autocomplete="off">
+    <div class="te-row"><div><label class="q">How often</label>${freqSelect('id="teFreq"', e.freq)}</div>
+    ${fam.length ? `<div><label class="q">Who does it</label><div class="chips-row"><button type="button" class="pickchip${e.who ? '' : ' on'}" data-twho="">Everyone</button>${fam.map((m) => `<button type="button" class="pickchip${e.who === m.name ? ' on' : ''}" style="--c:${m.color}" data-twho="${esc(m.name)}">${esc(m.name)}</button>`).join('')}</div></div>` : ''}</div>
+    <div class="actions"><button type="button" class="btn go-btn" data-tsave="${list.id}:${t.id}">Save</button><button type="button" class="btn soft" data-tpause="${list.id}:${t.id}">${t.paused ? 'Resume' : `${svgI('moon', 'currentColor', 14, 2.4)} Pause`}</button><button type="button" class="btn soft" data-tdel="${list.id}:${t.id}">Remove</button></div>
+    <p class="foot">${t.paused ? 'This task is resting. It won’t show as due until you resume it.' : 'Pause it for a busy season, nothing is lost. Removing a task never takes away progress you’ve already made.'}</p>`;
+}
+
+export function renderGoalEdit(list, g, e, day) {
+  const steps = list.tasks.filter((t) => t.goalId === g.id).length;
+  return `<label class="q" for="geTitle">Goal</label><input class="field" id="geTitle" maxlength="60" value="${esc(e.title)}" autocomplete="off">
+    <label class="q" for="geTarget">Target date <small>(optional)</small></label><div class="te-row"><input class="field date" type="date" id="geTarget" value="${esc(e.target || '')}">${e.target ? '<button type="button" class="btn link small" data-gclear="1">Clear date</button>' : ''}</div>
+    ${g.target ? `<p class="hint">${targetLabel(g, day)}.</p>` : ''}
+    <div class="actions"><button type="button" class="btn go-btn" data-gsave="${list.id}:${g.id}">Save</button><button type="button" class="btn soft" data-gpause="${list.id}:${g.id}">${g.paused ? 'Resume' : `${svgI('moon', 'currentColor', 14, 2.4)} Pause`}</button><button type="button" class="btn soft" data-gdel="${list.id}:${g.id}">Remove</button></div>
+    <p class="foot">${g.paused ? 'This goal and its steps are resting.' : `Pausing rests the goal and its ${steps} ${steps === 1 ? 'step' : 'steps'}. Removing it also removes its steps.`}</p>`;
 }
 
 export function renderGoalDone(d) {

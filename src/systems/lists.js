@@ -1,12 +1,15 @@
 import { byId } from '../data/catalog.js';
 import { taskReward, goalReward, grant } from './economy.js';
-import { fromKey, addDays } from './time.js';
+import { fromKey, addDays, daysBetween } from './time.js';
 
 /*
  * Every section building holds one list with two kinds of things:
  *   - Tasks: simple repeating or one-time things ("Dishes · Daily"). No big goal needed.
  *   - Goals: a bigger thing ("Run a 5K") with optional sub-tasks under it.
- * Task kinds: 'daily' (once a day), 'weekly' (up to N days a week), 'once' (one time).
+ * Task kinds: 'daily' (once a day), 'weekly' (up to N days a week), 'once' (one time). Goal steps use the same kinds.
+ * A task can be assigned to one family member (who = their name) or to everyone (who = null).
+ * Tasks, goals and whole lists can be paused ("resting"): nothing paused is ever due, and pausing never costs progress.
+ * Goals can have an optional target date, shown gently as "N days to go", never as overdue.
  *
  * Progress comes from consistency, not from adding more things:
  *   - the first 6 check-offs each day pay in full; after that, a small token amount
@@ -46,8 +49,8 @@ export function fromFreq(code) {
 }
 export function freqLabel(t) { return t.kind === 'weekly' ? `${t.per}×/wk` : t.kind === 'daily' ? 'Daily' : 'Once'; }
 
-export function makeTask(title, kind = 'daily', per = 3, goalId = null) {
-  return { id: uid('t'), title: String(title).trim(), kind, per: kind === 'weekly' ? Math.max(1, Math.min(7, per)) : 1, done: [], goalId };
+export function makeTask(title, kind = 'daily', per = 3, goalId = null, who = null) {
+  return { id: uid('t'), title: String(title).trim(), kind, per: kind === 'weekly' ? Math.max(1, Math.min(7, per)) : 1, done: [], goalId, who: who || null, paused: false };
 }
 
 /* Older saves had one big goal per list. Turn it into the new shape. */
@@ -66,8 +69,11 @@ export function migrateList(l) {
 const goalOf = (list, task) => (task.goalId ? list.goals.find((g) => g.id === task.goalId) : null);
 /* A task is live unless it belongs to a goal that's already been completed. */
 export const isLive = (list, task) => { const g = goalOf(list, task); return !g || !g.achievedOn; };
+/* Resting: the task itself, its goal, or the whole list is paused. */
+export const isPaused = (list, task) => !!(task.paused || list?.paused || (list && goalOf(list, task)?.paused));
 export function isAvailable(task, day, list = null) {
   if (list && !isLive(list, task)) return false;
+  if (isPaused(list, task)) return false;
   if (task.kind === 'once') return task.done.length === 0;
   if (task.done.includes(day)) return false;
   if (task.kind === 'weekly') return doneThisWeek(task, day) < (task.per || 1);
@@ -76,7 +82,8 @@ export function isAvailable(task, day, list = null) {
 export function progressLabel(task, day) {
   if (task.kind === 'once') return task.done.length ? 'Done' : '';
   if (task.kind === 'daily') return task.done.includes(day) ? 'Done today' : '';
-  return `${doneThisWeek(task, day)} of ${task.per} this week`;
+  const n = doneThisWeek(task, day);
+  return n >= task.per ? 'Done this week' : `${n} of ${task.per} this week`;
 }
 
 /* createList(state, building, goalTitle, tasks, day): with a goal title the tasks become its steps; without one they're plain tasks. */
@@ -88,17 +95,17 @@ export function createList(state, building, goal, tasks = [], today) {
   for (const t of tasks.filter((x) => x.title && x.title.trim()).slice(0, MAX_TASKS)) list.tasks.push(makeTask(t.title, t.kind, t.per, g ? g.id : null));
   return list;
 }
-export function addGoal(state, listId, title, today) {
+export function addGoal(state, listId, title, today, target = null) {
   const list = state.lists.find((l) => l.id === listId);
   if (!list || !title || !title.trim()) return null;
-  const g = { id: uid('g'), title: title.trim(), createdOn: today, achievedOn: null };
+  const g = { id: uid('g'), title: title.trim(), createdOn: today, achievedOn: null, target: validDay(target), paused: false };
   list.goals.push(g);
   return g;
 }
 export function addTask(state, listId, t) {
   const list = state.lists.find((l) => l.id === listId);
   if (!list || !t.title || !t.title.trim()) return null;
-  const task = makeTask(t.title, t.kind || 'daily', t.per || 3, t.goalId || null);
+  const task = makeTask(t.title, t.kind || 'daily', t.per || 3, t.goalId || null, t.who || null);
   list.tasks.push(task);
   return task;
 }
@@ -108,7 +115,35 @@ export function updateTask(state, listId, taskId, patch) {
   if (!t) return null;
   if (patch.title != null && patch.title.trim()) t.title = patch.title.trim();
   if (patch.freq) Object.assign(t, fromFreq(patch.freq));
+  if (patch.who !== undefined) t.who = patch.who || null;
+  if (patch.paused !== undefined) t.paused = !!patch.paused;
   return t;
+}
+const validDay = (d) => (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
+export function updateGoal(state, listId, goalId, patch) {
+  const list = state.lists.find((l) => l.id === listId);
+  const g = list?.goals.find((x) => x.id === goalId);
+  if (!g) return null;
+  if (patch.title != null && patch.title.trim()) g.title = patch.title.trim();
+  if (patch.target !== undefined) g.target = validDay(patch.target);
+  if (patch.paused !== undefined) g.paused = !!patch.paused;
+  return g;
+}
+export function setListPaused(state, listId, on, day) {
+  const list = state.lists.find((l) => l.id === listId);
+  if (!list) return null;
+  list.paused = !!on;
+  list.pausedOn = on ? day : null;
+  return list;
+}
+/* Gentle countdown for a goal's target date. Never "late": past the date it just says keep going. */
+export function targetLabel(goal, day) {
+  if (!goal.target) return '';
+  const n = daysBetween(day, goal.target);
+  if (n > 1) return `${n} days to go`;
+  if (n === 1) return 'Target is tomorrow';
+  if (n === 0) return 'Target is today';
+  return 'Still going strong';
 }
 export function removeTask(state, listId, taskId) {
   const list = state.lists.find((l) => l.id === listId);

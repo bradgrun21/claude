@@ -625,3 +625,24 @@ select.freq { flex-shrink: 0; border: 2px solid var(--line); border-radius: 12px
 .stile.locked .sart img { filter: grayscale(.7) opacity(.6); }
 .stile .lock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: inline-flex; gap: 4px; align-items: center; background: rgba(22,44,74,.82); color: #fff; font-weight: 800; font-size: 11px; padding: 3px 8px; border-radius: 999px; white-space: nowrap; max-width: 94%; overflow: hidden; text-overflow: ellipsis; }
 .stile .sart { position: relative; }
+
+/* ---------- Pause, who, goal targets ---------- */
+.who { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--c); color: #fff; font-weight: 800; font-size: 12px; text-shadow: 0 1px 0 rgba(0,0,0,.25); box-shadow: 0 2px 0 rgba(0,0,0,.12); }
+.who.all { background: #F4ECDC; color: var(--ink-soft); text-shadow: none; }
+.whob { border: 0; background: transparent; padding: 2px; flex-shrink: 0; display: flex; }
+.whob .who { width: 30px; height: 30px; font-size: 14px; }
+.task.paused .tx b, .task.paused .tx small { color: #9A8C76; }
+.task.paused .check { border-color: #D8CBB4; background: #F4ECDC; }
+.goalblk.paused { opacity: .75; filter: saturate(.5); }
+.gtx { flex: 1; min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; font: inherit; color: inherit; display: flex; flex-direction: column; cursor: pointer; }
+.gtx b { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; line-height: 1.2; }
+.gtx small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.rest-note { display: flex; align-items: center; gap: 8px; margin: 6px 0; padding: 8px 10px; border-radius: 12px; background: #F4ECDC; font-size: 13px; font-weight: 700; color: #6E4520; }
+.rest-note span { flex: 1; }
+.rest-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--ink-soft); font-size: 12.5px; }
+.te-row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.field.date { max-width: 200px; }
+.goal-target { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin: 6px 0; border-radius: 12px; border: 2px solid var(--c); background: #fff; }
+.goal-target span { display: flex; flex-direction: column; }
+.goal-target small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.dots i.gt { background: transparent !important; border: 2px solid var(--c); box-sizing: border-box; }
