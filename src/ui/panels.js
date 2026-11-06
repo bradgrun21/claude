@@ -70,7 +70,7 @@ export function renderBuild(state, tab) {
     return `<p class="hint">Homes bring people to town. You need population to level up and to grow the Town Hall.</p><div class="grid">${BUILDINGS.filter((b) => b.kind === 'home').map((d) => gatedCard(state, d, `+${d.pop} people`)).join('')}</div>`;
   }
   if (tab === 'roads') {
-    const road = `<button type="button" class="bcard" data-road="1"><span class="bimg road-img">${svgI('road', '#5A6370', 40, 2)}</span><b>Road</b><span class="bnote">Every building needs a road that leads to the Town Hall</span><span class="bprice">${coin(ROAD_COST)}<small>/tile</small></span></button>`;
+    const road = `<button type="button" class="bcard" data-road="1"><span class="bimg road-img">${svgI('road', '#5A6370', 40, 2)}</span><b>Road</b><span class="bnote">Every building needs a road that leads to the Town Hall</span><span class="bprice">${ROAD_COST ? `${coin(ROAD_COST)}<small>/tile</small>` : '<span class="cost free">Free</span>'}</span></button>`;
     return `<div class="grid">${road}${BUILDINGS.filter((b) => b.kind === 'decor' && !b.earned).map((d) => gatedCard(state, d, d.desc)).join('')}</div><p class="foot">Decorations don't need a road.</p><div class="h3">Earned by steady use</div>${renderEarnedGrid(state)}`;
   }
   if (tab === 'townhall') return renderTownHall(state);

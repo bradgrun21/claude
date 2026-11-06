@@ -123,6 +123,6 @@ export function renderMoneyLevelUp(level) {
   const L = MONEY_LEVELS.find((l) => l.level === level);
   const text = { 2: 'Your income and bills are in. Next, <b>build the budget</b>: log purchases on 3 different days so the plan meets real life.', 3: 'Your budget is working. Now <b>list your debts</b>, smallest balance first, and start the <b>snowball</b>. The <b>Debt Payoff Center</b> is unlocked to build.', 4: 'Debts are on the table. Now <b>save on purpose</b>: put something in the <b>$1,000 starter emergency fund</b> and start a <b>sinking fund</b>. The <b>Savings Tower</b> is unlocked to build.', 5: 'Every money step is done. You’re a <b>Money master</b>: the <b>Nest Egg Tower</b> is ready to build, free, as your trophy.' }[level] || '';
   const go = { 2: ['logtx', 'Log a purchase'], 3: ['opendebts', 'List my debts'], 4: ['opensavings', 'Set up savings'] }[level];
-  return `<div class="lvlup"><span class="burst">${ART.coin}<b>${level}</b></span><b class="ttl">Money level ${level}: ${L.name}!</b><p>${text}</p>
+  return `<div class="lvlup"><span class="burst mburst">${ART.coin}<b>${level}</b></span><b class="ttl">Money level ${level}: ${L.name}!</b><p>${text}</p>
     ${go ? `<button type="button" class="btn go-btn" data-bank="${go[0]}">${go[1]}</button>` : '<button type="button" class="btn go-btn" data-close="1">Keep going</button>'}</div>`;
 }

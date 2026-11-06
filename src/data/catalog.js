@@ -80,7 +80,7 @@ export const BUILDINGS = [
   { id: 'farmhouse', name: 'Farmhouse', kind: 'home', size: [1, 1], cost: 180, level: 4, pop: 10, desc: '+10 population' },
   { id: 'apartments', name: 'Apartments', kind: 'home', size: [2, 2], cost: 600, level: 8, pop: 25, desc: '+25 population' },
 
-  { id: 'tree', name: 'Oak Tree', kind: 'decor', size: [1, 1], cost: 10, level: 1, desc: 'Just for looks' },
+  { id: 'tree', name: 'Oak Tree', kind: 'decor', size: [1, 1], cost: 0, level: 1, desc: 'Just for looks' },
   { id: 'flowers', name: 'Flower Bed', kind: 'decor', size: [1, 1], cost: 15, level: 1, desc: 'Just for looks' },
   { id: 'bench', name: 'Bench & Lamp', kind: 'decor', size: [1, 1], cost: 20, level: 2, desc: 'Just for looks' },
   { id: 'planter', name: 'Flower Planter', kind: 'decor', size: [1, 1], cost: 15, level: 1, desc: 'Just for looks' },
@@ -98,7 +98,7 @@ export const BUILDINGS = [
     .map(([id, name]) => ({ id, name, kind: 'decor', earned: true, unique: true, size: [1, 1], cost: 0, level: 1, desc: 'Earned by steady use' }))
 ];
 export const byId = Object.fromEntries(BUILDINGS.map((b) => [b.id, b]));
-export const ROAD_COST = 5;
+export const ROAD_COST = 0;
 export const MAX_HOME_LEVEL = 3;
 
 export const mainBuildingFor = (section, spiritualStyle = 'church') =>

@@ -861,3 +861,6 @@ select.freq.meal { flex: 1; min-width: 0; }
 .cc-img { width: 110px; height: 88px; } .cc-img img { width: 100%; height: 100%; object-fit: contain; }
 .choose-card small { padding: 0 10px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); text-align: center; line-height: 1.3; }
 .cc-b { font-size: 11.5px; font-weight: 800; color: var(--c); }
+
+/* Money level up: the level sits in a badge on the coin, not on top of the $ */
+.burst.mburst b { inset: auto -4px -4px auto; width: 40px; height: 40px; padding: 0; border-radius: 50%; background: var(--green-deep); border: 3px solid #fff; font-size: 20px; box-shadow: 0 3px 0 rgba(0,0,0,.15); }

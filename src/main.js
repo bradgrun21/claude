@@ -506,7 +506,7 @@ function boot(state, opts) {
   }
   function bankAction(a, el) {
     if (a === 'setup') return openBudgetSetup();
-    if (a === 'logtx') { panel.tab = 'tx'; renderPanel(); $('txAmt')?.focus(); return; }
+    if (a === 'logtx') { if (panel?.kind === 'bank') { panel.tab = 'tx'; renderPanel(); } else openPanel('bank', { tab: 'tx', ui: {} }); $('txAmt')?.focus(); return; }
     if (a === 'payday') return startPayday();
     if (a === 'opensavings' || a === 'opendebts') return openPanel('bank', { tab: a === 'opensavings' ? 'savings' : 'debts', ui: {} });
     if (a === 'savetx') {
@@ -886,7 +886,7 @@ function boot(state, opts) {
     mode = { kind: 'road', erase: false, added: 0 };
     setModeUI(true);
     const draw = () => {
-      modebar.innerHTML = `<span class="mhint" id="mhint">${mode.pan ? 'Looking around: drag to move, pinch to zoom. Tap the hammer to build again.' : mode.erase ? 'Tap or drag along a road to remove it.' : `Tap or drag across the grass to lay road · ${ROAD_COST} coins a tile`}</span><div class="mbtns">${panToggle()}<div class="seg"><button type="button" data-m="lay" aria-pressed="${!mode.erase}">Lay road</button><button type="button" data-m="erase" aria-pressed="${mode.erase}">Remove</button></div><button type="button" class="btn go-btn" data-m="done">Done</button></div>`;
+      modebar.innerHTML = `<span class="mhint" id="mhint">${mode.pan ? 'Looking around: drag to move, pinch to zoom. Tap the hammer to build again.' : mode.erase ? 'Tap or drag along a road to remove it.' : (ROAD_COST ? `Tap or drag across the grass to lay road · ${ROAD_COST} coins a tile` : 'Tap or drag across the grass to lay road · free')}</span><div class="mbtns">${panToggle()}<div class="seg"><button type="button" data-m="lay" aria-pressed="${!mode.erase}">Lay road</button><button type="button" data-m="erase" aria-pressed="${mode.erase}">Remove</button></div><button type="button" class="btn go-btn" data-m="done">Done</button></div>`;
     };
     mode.draw = draw; draw();
   }
@@ -904,7 +904,7 @@ function boot(state, opts) {
       state.roads.splice(state.roads.indexOf(k), 1);
     } else {
       if (!canPlaceRoad(state, i, j).ok) return;
-      if (!spend(state, ROAD_COST)) { toast('Out of coins for roads', 'Check off tasks to earn more'); return; }
+      if (ROAD_COST && !spend(state, ROAD_COST)) { toast('Out of coins for roads', 'Check off tasks to earn more'); return; }
       state.roads.push(k); mode.added++;
       if (mode.added === 1) { win('road'); sound.pop(); }
     }
@@ -982,6 +982,15 @@ function boot(state, opts) {
     if (hit) { sound.tap(); bld.bounce(hit.object.userData.id); openBuilding(hit.object.userData.id); }
   }
   addEventListener('pointerdown', () => sound.unlock(), { once: true, capture: true });
+  /* Laptop trackpads: a pinch arrives as ctrl+wheel. Anywhere on the page it zooms the map, never the page itself
+     (a page zoom pushes the top and bottom bars off screen). Same for Safari's gesture events. */
+  addEventListener('wheel', (e) => {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+    if (e.target === canvas || mode || panel) return;
+    canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: false, bubbles: true, cancelable: true }));
+  }, { passive: false });
+  for (const g of ['gesturestart', 'gesturechange', 'gestureend']) addEventListener(g, (e) => e.preventDefault(), { passive: false });
 
   /* ---------- Panel clicks ---------- */
   $('panel').addEventListener('click', (e) => {
@@ -1473,7 +1482,7 @@ function boot(state, opts) {
     { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
     { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
     { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Housing, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : panel.tab ? $('panelTabs').querySelector('[data-back]') : $('panelBody').querySelector('[data-cat="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
-    { title: 'You’re on your way!', text: 'Everything has one home: Tasks, Money, Trackers, Calendar and Rewards along the bottom. Locked things show what opens them. The menu has “How Life City works” any time.', target: rectOf('#bottombar'), button: 'Finish tour', cardAt: 'mid' }
+    { title: 'You’re on your way!', text: 'Everything has one home: Tasks, Money, Trackers, Calendar and Rewards along the bottom. Locked things show what opens them. The menu has “How Life City works” any time.', target: rectOf('#bottombar .left'), button: 'Finish tour', cardAt: 'mid' }
   ];
   function runTour() {
     const s = TOUR[state.tour.step];
