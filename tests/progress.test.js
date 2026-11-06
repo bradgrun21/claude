@@ -147,3 +147,51 @@ describe('pause, who, goal targets', () => {
     expect(g.target).toBe(null);
   });
 });
+
+import { habitsFormed, taskSlots, freeSlots, activeItems, tierOpen, noteFormed, nextTier } from '../src/systems/progression.js';
+describe('habits pace each area', () => {
+  const D0 = '2026-11-02';
+  const mk = () => {
+    const s = newCity({ cityName: 'T', family: [{ name: 'Pat', color: '#4E7FA0', kind: 'adult' }] }, D0);
+    const gym = { id: 'g1', type: 'gym', i: 12, j: 19, rot: 0, level: 1, builtOn: D0 }; s.buildings.push(gym);
+    const l = createList(s, gym, '', [], D0);
+    return { s, l };
+  };
+  it('starts with one slot; a task done on 3 different days forms a habit, opens tier 2 and a second slot', () => {
+    const { s, l } = mk();
+    expect(taskSlots(s, 'physical')).toBe(1);
+    const t = addTask(s, l.id, { title: 'Walk 2 minutes', kind: 'daily' });
+    expect(freeSlots(s, 'physical')).toBe(0);
+    expect(tierOpen(s, 'physical', 2)).toBe(false);
+    for (const d of ['2026-11-02', '2026-11-03']) completeTask(s, l.id, t.id, d);
+    expect(habitsFormed(s, 'physical')).toBe(0);
+    completeTask(s, l.id, t.id, '2026-11-05');
+    expect(habitsFormed(s, 'physical')).toBe(1);
+    expect(tierOpen(s, 'physical', 2)).toBe(true);
+    expect(tierOpen(s, 'physical', 3)).toBe(false);
+    expect(freeSlots(s, 'physical')).toBe(1);
+    expect(nextTier(s, 'physical')).toMatchObject({ open: true });
+    expect(noteFormed(s).map((h) => h.title)).toEqual(['Walk 2 minutes']);
+    expect(noteFormed(s)).toEqual([]);
+  });
+  it('a goal is one slot (its steps ride along); paused and finished items free their slot', () => {
+    const { s, l } = mk();
+    const g = addGoal(s, l.id, 'Run a 5K', D0);
+    addTask(s, l.id, { title: 'Run 20 min', kind: 'weekly', per: 3, goalId: g.id });
+    addTask(s, l.id, { title: 'Sign up', kind: 'once', goalId: g.id });
+    expect(activeItems(s, 'physical')).toBe(1);
+    const t = addTask(s, l.id, { title: 'Stretch', kind: 'daily' });
+    expect(activeItems(s, 'physical')).toBe(2);
+    updateTask(s, l.id, t.id, { paused: true });
+    expect(activeItems(s, 'physical')).toBe(1);
+  });
+  it('habits are kept even if the task is removed later', () => {
+    const { s, l } = mk();
+    const t = addTask(s, l.id, { title: 'Walk', kind: 'daily' });
+    for (const d of ['2026-11-02', '2026-11-03', '2026-11-04']) completeTask(s, l.id, t.id, d);
+    noteFormed(s);
+    l.tasks = [];
+    expect(habitsFormed(s, 'physical')).toBe(1);
+    expect(taskSlots(s, 'physical')).toBe(2);
+  });
+});

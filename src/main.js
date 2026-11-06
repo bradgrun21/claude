@@ -29,7 +29,7 @@ import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
 import { createList, completeTask, achieveGoal, addGoal, addTask, updateTask, removeTask, updateGoal, removeGoal, setListPaused, freqCode, listFor, dueCount, totalDue, streak, fromFreq, useLevel, canReviewWeek, reviewWeek, weekSummary, WEEKLY_REVIEW } from './systems/lists.js';
-import { sectionUnlocked, unlockHint, nextSection } from './systems/progression.js';
+import { sectionUnlocked, unlockHint, nextSection, freeSlots, taskSlots, tierOpen, noteFormed, nextTier, habitsFormed, HABIT_DAYS } from './systems/progression.js';
 import { IDEAS } from './data/ideas.js';
 import { createLiving } from './world/living.js';
 import * as TL from './systems/tools.js';
@@ -267,7 +267,7 @@ function boot(state, opts) {
     else if (p.kind === 'taskEdit') { const l = state.lists.find((x) => x.id === p.listId); const t = l?.tasks.find((x) => x.id === p.taskId); if (!t) { closePanel(); return; } title = 'Edit task'; body = renderTaskEdit(state, l, t, p.edit); }
     else if (p.kind === 'goalEdit') { const l = state.lists.find((x) => x.id === p.listId); const g = l?.goals.find((x) => x.id === p.goalId); if (!g) { closePanel(); return; } title = 'Edit goal'; body = renderGoalEdit(l, g, p.edit, today); }
     else if (p.kind === 'goalDone') { title = 'Completed the goal?'; body = renderGoalDone(p.draft); }
-    else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added); }
+    else if (p.kind === 'ideas') { title = `${SECTIONS[p.section].name} ideas`; tabs = p.draft ? `<button type="button" class="wtab back" data-ideaback="1">‹ Back</button>` : ''; body = renderIdeas(state, p.section, p.added, !p.draft && freeSlots(state, p.section) < 1); }
     else if (p.kind === 'review') { title = 'Week in review'; body = renderReview(); }
     else if (p.kind === 'biz') { const b = state.buildings.find((x) => x.id === p.id); if (!b) { closePanel(); return; } title = byId[b.type].name; body = renderBiz(state, b) + `<div class="actions"><button type="button" class="btn soft" data-move="${b.id}">${svgI('move', 'currentColor', 14)} Move</button></div>`; }
     else if (p.kind === 'nest') { title = '🥚 Nest Egg Tower'; body = renderNest(state, p.ui, today); }
@@ -306,7 +306,7 @@ function boot(state, opts) {
     const focusId = document.activeElement?.closest?.('#panelBody') ? document.activeElement.id || document.activeElement.dataset.tt : null;
     $('panelBody').innerHTML = body;
     hydratePhotos($('panelBody'));
-    $('panelBody').scrollTop = keepScroll;
+    $('panelBody').scrollTop = keepScroll; $('panelBody').scrollLeft = 0;
     if (focusId) { const el = $(focusId) || $('panelBody').querySelector(`[data-tt="${focusId}"]`); el?.focus(); }
   }
   $('panelClose').onclick = closePanel;
@@ -333,6 +333,12 @@ function boot(state, opts) {
       Object.assign(draft, { section: def.section, buildingId: b.id, listId: l?.id || null, title: draft.kind === 'goal' && draft.lockKind ? 'New goal' : draft.lockKind ? 'New tasks' : def.name, intro: draft.kind === 'goal' ? 'A bigger thing. Break it into small steps if you like.' : 'Simple things you do, like chores or habits.', saveLabel: 'Save' });
       if (draft.kind === 'goal') draft.tasks = blankRows(1);
     }
+    if (o.mode !== 'step') {
+      const free = o.mode === 'unlock' ? 1 : freeSlots(state, draft.section);
+      if (free < 1) { toast(taskSlots(state, draft.section) === 1 ? `Your ${SECTIONS[draft.section].name} task slot is in use` : `All ${taskSlots(state, draft.section)} ${SECTIONS[draft.section].name} slots are in use`, `Check a task off on ${HABIT_DAYS} different days to open another, or pause or finish one`); return; }
+      draft.maxRows = free;
+      if (draft.kind !== 'goal') draft.tasks = draft.tasks.slice(0, free);
+    }
     if (o.idea) applyIdeaToDraft(draft, o.idea);
     openPanel('goal', { draft, prev: o.prev || null });
     emit('goalform');
@@ -353,7 +359,8 @@ function boot(state, opts) {
   }
   /* Put the draft's tasks/goal onto a list. Returns how many things were added. */
   function applyDraft(list, d) {
-    const rows = d.tasks.filter((t) => t.title.trim());
+    let rows = d.tasks.filter((t) => t.title.trim());
+    if (d.kind !== 'goal' && d.mode !== 'step' && d.maxRows != null) rows = rows.slice(0, d.maxRows);
     let goalId = d.goalId || null, n = 0;
     if (d.kind === 'goal') { const g = addGoal(state, list.id, d.goal, today, d.target || null); if (!g) return 0; goalId = g.id; n++; }
     for (const t of rows) if (addTask(state, list.id, { title: t.title, ...fromFreq(t.freq), goalId, who: t.who })) n++;
@@ -648,6 +655,7 @@ function boot(state, opts) {
     const p = panel;
     if (p.draft) { applyIdeaToDraft(p.draft, code); openPanel('goal', { draft: p.draft, prev: p.builderPrev }); return; }
     const list = state.lists.find((x) => x.id === p.listId); if (!list) return;
+    if (freeSlots(state, p.section) < 1) { toast('All task slots are in use', `Form a habit (${HABIT_DAYS} different days) to open another`); return; }
     const it = ideaSource(p.section, code);
     if (it.kind === 't') addTask(state, list.id, { title: it.title, ...fromFreq(it.freq) });
     else {
@@ -685,8 +693,21 @@ function boot(state, opts) {
     const pp = living.parade(r.goal.title);
     if (pp) later(600, () => stage.flyTo(pp, tween, easeInOut, 11));
     toast(`Goal complete: ${r.goal.title}`, `+${r.reward.coins} coins · +${r.reward.xp} XP · saved to Memories`);
+    later(4200, celebrateHabits);
     win('memory');
     afterProgress();
+  }
+
+  /* ---------- Habits: 3 different days opens the next building and one more task slot ---------- */
+  function celebrateHabits() {
+    const fresh = noteFormed(state);
+    if (!fresh.length) return;
+    persist();
+    const h = fresh[0], sec = SECTIONS[h.section];
+    const nx = nextTier(state, h.section);
+    sound.chime(); fx.confetti(controls.target);
+    toast(h.goal ? `Goal finished, habit counted: ${h.title}` : `Habit formed: ${h.title}!`, nx?.open ? `${nx.def.name} unlocked, and room for one more ${sec.name.toLowerCase()} task` : `Room for one more ${sec.name.toLowerCase()} task`);
+    hud(); renderPanel();
   }
 
   /* ---------- Weekly review ---------- */
@@ -713,7 +734,8 @@ function boot(state, opts) {
     if (def.section && !sectionUnlocked(state, def.section)) { toast(`${SECTIONS[def.section].name} isn’t open yet`, `${unlockHint(state, def.section)}. One area at a time keeps it doable.`); return; }
     if (def.kind === 'section' && def.tier === 1) { openBuilder({ mode: 'unlock', type: id }); return; }
     const open = !def.section || state.lists.some((l) => l.section === def.section) || state.buildings.some((b) => byId[b.type].section === def.section);
-    if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
+    if (def.kind === 'section' && def.tier > 1) { if (!tierOpen(state, def.section, def.tier)) { const need = def.tier - 1 - habitsFormed(state, def.section); toast(`Form ${need} more ${SECTIONS[def.section].name.toLowerCase()} ${need === 1 ? 'habit' : 'habits'} first`, `Check a task off on ${HABIT_DAYS} different days`); return; } }
+    else if (state.level < def.level) { toast(`${def.name} unlocks at level ${def.level}`, 'Check off tasks and build homes to level up'); return; }
     if (def.money && state.budget.level < def.money) { toast(`${def.name} unlocks at money level ${def.money}`, 'Log transactions and update balances at the Bank'); return; }
     if (def.needsBank && !state.buildings.some((b) => b.type === 'bank')) { toast('Build the Bank first', 'Set a Financial goal to open it'); return; }
     if (!open) { toast(`Open ${SECTIONS[def.section].name} first`, `Set a goal at the ${mainBuildingFor(def.section, state.spiritualStyle || 'church').name}`); return; }
@@ -1050,6 +1072,7 @@ function boot(state, opts) {
       later(1200, () => { toast(`${byId[rec.type].name} is growing!`, `${lv1 === 2 ? 10 : 30} days of steady use`); living.construct(rec, () => { syncWorld(); persist(); }); });
     }
     noteStreak(state, today);
+    later(1500, celebrateHabits);
     if (r.task.who && state.family.some((m) => m.name === r.task.who && m.kind === 'kid')) { TL.ensureTools(state); markUse(state, 'kids', today); const st = TL.giveStar(state, r.task.who, 'Chore done', today); if (st) later(700, () => toast(`⭐ for ${r.task.who}!`, `${st.stars} stars · spend them in Kids’ Corner`)); }
     living.refresh();
     if (totalDue(state, today) === 0) later(900, () => { fx.fireworks(controls.target, 4, () => sound.firework()); toast('Everything due today is done!', 'The town is celebrating'); });
@@ -1352,7 +1375,7 @@ function boot(state, opts) {
     { title: `Welcome to ${state.cityName}!`, text: 'I’m Rosie, your town planner. In this town, real-life goals are what build things. Let’s set up your first one.', button: 'Let’s go', cardAt: 'mid' },
     { title: 'Open the Build menu', text: 'Every part of life has its own building. Tap Build.', target: rectOf('#btnBuild'), until: 'panel:build', cardAt: 'mid' },
     { title: 'Start with To-Do', text: 'Tap the Community Job Board. It holds everyday chores and projects.', target: rectOf('[data-pick="jobboard"]'), until: 'goalform', cardAt: 'top', enter: () => { if (panel?.kind === 'build') { panel.tab = 'todo'; renderPanel(); } } },
-    { title: 'Add a task or two', text: 'Something simple, like “Do the dishes”. Pick how often on the right. Want something bigger? Tap + Goal. Then tap Save.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
+    { title: 'Add your first task', text: 'Something simple, like “Do the dishes”. Pick how often on the right. Check it off on 3 different days and the next building unlocks, with room for one more.', target: rectOf('[data-savegoal]'), until: 'placing', cardAt: 'top' },
     { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
     { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
     { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Housing, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : panel.tab ? $('panelTabs').querySelector('[data-back]') : $('panelBody').querySelector('[data-cat="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
@@ -1428,6 +1451,7 @@ function boot(state, opts) {
   stage.resize();
   stage.resetView();
   noteStreak(state, today);
+  noteFormed(state);
   if (state.invest) BZ.accrue(state, today);
   later(2600, () => { syncNest(); if (state.buildings.some((x) => x.type === 'monument')) grow('monument', BZ.monumentLevel(state)); for (const x of state.buildings) if (byId[x.type].kind === 'district') districtGrow(x.type); });
   later(4200, () => { if (state.tour.done) checkDistrict(); });

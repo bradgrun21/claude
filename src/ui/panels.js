@@ -1,7 +1,7 @@
 import { SECTIONS, SECTION_KEYS, BUILDINGS, byId, mainBuildingFor, ROAD_COST, MAX_HOME_LEVEL, homePop, homeUpgradeCost } from '../data/catalog.js';
 import { levelNeed, population, TOWNHALL, taskReward, goalReward, canUpgradeTownHall, unlockedAt } from '../systems/economy.js';
 import { isAvailable, isLive, isPaused, progressLabel, listFor, dueCount, freqCode, freqLabel, useDays, useLevel, USE_LEVELS, MAX_TASKS, targetLabel } from '../systems/lists.js';
-import { sectionUnlocked, unlockHint, unlockShort } from '../systems/progression.js';
+import { sectionUnlocked, unlockHint, unlockShort, SECTION_ORDER, tierOpen, habitsFormed, taskSlots, activeItems, freeSlots, habitProgress, nextTier, HABIT_DAYS } from '../systems/progression.js';
 import { IDEAS } from '../data/ideas.js';
 import { toolForBuilding } from '../systems/tools.js';
 import { EARNED, earnedProgress, isEarned } from '../systems/earned.js';
@@ -46,8 +46,10 @@ export function renderBuild(state, tab) {
     for (const d of rest) {
       const built = has(d.id);
       const moneyLocked = d.money && (state.budget?.level || 1) < d.money;
-      const locked = !built && (state.level < d.level || !open || moneyLocked);
-      cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : moneyLocked ? `Money level ${d.money}` : `Level ${d.level}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${toolNote(d) ? `${toolNote(d)}. ` : d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
+      const habitLocked = !tierOpen(state, tab, d.tier);
+      const need = d.tier - 1 - habitsFormed(state, tab);
+      const locked = !built && (habitLocked || !open || moneyLocked);
+      cards.push(card(d, state, { locked, lockText: !open ? 'Open area first' : habitLocked ? `Form ${need} more ${need === 1 ? 'habit' : 'habits'}` : `Money level ${d.money}`, disabled: built || (!locked && state.coins < d.cost), action: built ? 'built' : 'pick', note: built ? 'Built' : `${toolNote(d) ? `${toolNote(d)}. ` : d.desc} Tasks here pay ${[1, 1.5, 2, 3][d.tier - 1]}×`, price: built ? '<span class="cost done">Built</span>' : undefined }));
     }
     if (tab === 'financial') for (const d of BUILDINGS.filter((b) => b.kind === 'finance')) {
       const built = has(d.id);
@@ -55,7 +57,7 @@ export function renderBuild(state, tab) {
       cards.push(card(d, state, { locked, lockText: !has('bank') ? 'Build the Bank first' : state.level < d.level ? `Level ${d.level}` : 'Add a debt at the Bank', disabled: built, action: built ? 'built' : 'pick', note: built ? 'Built' : d.desc, price: built ? '<span class="cost done">Built</span>' : '<span class="cost free">Free</span>' }));
     }
     return `<div class="sec-head" style="--c:${sec.color}">${sectionChip(tab)}<span>${esc(sec.blurb)}</span></div><div class="grid">${cards.join('')}</div>
-      <p class="foot">${open ? 'Each new building here adds another list, and higher buildings pay more for every task.' : sectionUnlocked(state, tab) ? 'Add your first task or goal to open this area. The first building is free.' : `${unlockHint(state, tab)}. Areas open one at a time so it never feels like too much.`}</p>`;
+      <p class="foot">${open ? `Check a task off on ${HABIT_DAYS} different days to form a habit. Each habit opens the next building here and room for one more task. Higher buildings pay more for every task.` : sectionUnlocked(state, tab) ? 'Add your first task or goal to open this area. The first building is free.' : `${unlockHint(state, tab)}. Areas open one at a time so it never feels like too much.`}</p>`;
   }
   if (tab === 'district') return renderDistrictStore(state);
   if (tab === 'biz') {
@@ -106,8 +108,11 @@ function taskRow(state, list, t, day, r) {
   return `<div class="task${avail ? '' : paused ? ' paused' : ' done'}${t.goalId ? ' sub' : ''}"><button type="button" class="check" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : paused ? 'Resting' : 'Done'} ${esc(t.title)}">${avail ? '' : paused ? svgI('moon', '#8A7A62', 16, 2.4) : svgI('check', '#fff', 18, 3)}</button>
     <button type="button" class="tx" data-tedit="${list.id}:${t.id}"><b>${esc(t.title)}</b>${prog ? `<small>${prog}</small>` : ''}</button>
     ${!avail && !paused && t.done.includes(day) ? `<button type="button" class="btn soft small memo" data-memo="${list.id}:${t.id}" aria-label="Add a photo or recap">${svgI('camera', 'currentColor', 15)}</button>` : ''}
-    ${whoDot(people(state), t.who)}<span class="fpill">${freqLabel(t)}</span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
+    ${habitDots(t)}${whoDot(people(state), t.who)}<span class="fpill">${freqLabel(t)}</span>${avail ? `<span class="rw">+${r.coins}<i class="ci">${ART.coin}</i></span>` : ''}</div>`;
 }
+/* Three dots toward a habit (3 different days). Once-tasks don't build habits, so they get none. */
+export const habitDots = (t, compact = false) => (t.kind === 'once' ? '' : habitProgress(t) >= HABIT_DAYS ? `<span class="hdots done" title="Habit formed">${compact ? '✓' : '✓ habit'}</span>` : `<span class="hdots" title="${habitProgress(t)} of ${HABIT_DAYS} days toward a habit">${[0, 1, 2].map((k) => `<i class="${k < habitProgress(t) ? 'on' : ''}"></i>`).join('')}</span>`);
+const slotLine = (state, section) => { const a = activeItems(state, section), n = taskSlots(state, section); return `${Math.min(a, n)} of ${n} task ${n === 1 ? 'slot' : 'slots'} in use`; };
 export function renderListCard(state, list, day, { compact = false } = {}) {
   const b = state.buildings.find((x) => x.id === list.buildingId);
   const def = byId[b.type];
@@ -118,7 +123,7 @@ export function renderListCard(state, list, day, { compact = false } = {}) {
   const g = goalReward(list.tier);
   const nextAt = USE_LEVELS[lv];
   return `<div class="listcard" style="--c:${SECTIONS[list.section].color}">
-    <div class="lhead">${compact ? `<span class="limg">${img(b.type)}</span>` : ''}<div class="lt"><span class="lname">${esc(def.name)}</span><small>${lv > 1 ? `Grown to level ${lv} · ` : ''}${used} ${used === 1 ? 'day' : 'days'} of use${nextAt ? ` · grows at ${nextAt}` : ''}</small></div>
+    <div class="lhead">${compact ? `<span class="limg">${img(b.type)}</span>` : ''}<div class="lt"><span class="lname">${esc(def.name)}</span><small>${slotLine(state, list.section)}${lv > 1 ? ` · grown to level ${lv}` : ''}</small></div>
     <div class="ladd"><button type="button" class="btn soft small" data-addt="${list.id}">+ Task</button><button type="button" class="btn soft small" data-addg="${list.id}">+ Goal</button><button type="button" class="btn soft small idea" data-ideas="${list.section}:${list.id}" aria-label="Ideas">💡</button></div></div>
     ${loose.map((t) => taskRow(state, list, t, day, r)).join('')}
     ${list.paused ? `<div class="rest-note">${svgI('moon', '#6E4520', 16, 2.4)}<span>Resting${list.pausedOn ? ` since ${shortDate(list.pausedOn)}` : ''}. Nothing here is due, and your progress is safe.</span><button type="button" class="btn go-btn small" data-lpause="${list.id}:0">Resume</button></div>` : ''}
@@ -130,15 +135,35 @@ export function renderListCard(state, list, day, { compact = false } = {}) {
     ${list.achieved.length ? `<small class="lach">🏆 ${list.achieved.slice(-3).map((a) => `${esc(a.goal)} (${shortDate(a.on)})`).join(' · ')}</small>` : ''}</div>`;
 }
 
+/* ---------- Lists as a board: one column per area, compact cards ---------- */
+function kTask(state, list, t, day) {
+  const paused = isPaused(list, t), avail = !paused && isAvailable(t, day, list);
+  return `<div class="kcard${avail ? '' : paused ? ' paused' : ' done'}${t.goalId ? ' step' : ''}"><button type="button" class="check sm" data-done="${list.id}:${t.id}"${avail ? '' : ' disabled'} aria-label="${avail ? 'Check off' : 'Done'} ${esc(t.title)}">${avail ? '' : paused ? svgI('moon', '#8A7A62', 12, 2.4) : svgI('check', '#fff', 13, 3)}</button><button type="button" class="ktx" data-tedit="${list.id}:${t.id}"><b>${esc(t.title)}</b><small>${freqLabel(t)}${paused ? ' · resting' : ''}</small></button>${habitDots(t, true)}${whoDot(people(state), t.who)}</div>`;
+}
 export function renderLists(state, day, filterDue) {
-  const lists = state.lists.filter((l) => !filterDue || dueCount(l, day) > 0);
   if (!state.lists.length) return '<p class="hint">No lists yet. Tap Build, pick an area, and add your first task.</p>';
-  if (!lists.length) return '<div class="empty">' + svgI('check', '#3E8E57', 34, 3) + '<b>Everything due today is done.</b><p class="hint">Come back tomorrow. Rest is part of the plan too.</p></div>';
-  return SECTION_KEYS.map((s) => {
-    const ls = lists.filter((l) => l.section === s);
-    if (!ls.length) return '';
-    return `<div class="sgroup">${sectionChip(s)}${ls.map((l) => renderListCard(state, l, day, { compact: true })).join('')}</div>`;
-  }).join('');
+  const secs = SECTION_ORDER.filter((s) => state.lists.some((l) => l.section === s));
+  const anyDue = state.lists.some((l) => dueCount(l, day) > 0);
+  if (filterDue && !anyDue) return '<div class="empty">' + svgI('check', '#3E8E57', 34, 3) + '<b>Everything due today is done.</b><p class="hint">Come back tomorrow. Rest is part of the plan too.</p></div>';
+  const cols = secs.map((s) => {
+    const ls = state.lists.filter((l) => l.section === s);
+    const cards = [];
+    for (const l of ls) {
+      const loose = l.tasks.filter((t) => !t.goalId && (!filterDue || isAvailable(t, day, l)));
+      const goals = l.goals.filter((g) => !g.achievedOn && (!filterDue || l.tasks.some((t) => t.goalId === g.id && isAvailable(t, day, l))));
+      const sorted = loose.slice().sort((a, b) => isAvailable(b, day, l) - isAvailable(a, day, l));
+      if (ls.length > 1 && (sorted.length || goals.length)) cards.push(`<span class="kbld">${esc(byId[state.buildings.find((x) => x.id === l.buildingId)?.type]?.name || '')}</span>`);
+      for (const t of sorted) cards.push(kTask(state, l, t, day));
+      for (const g of goals) cards.push(`<div class="kgoal${g.paused ? ' paused' : ''}"><div class="kgh"><button type="button" class="ktx" data-gedit="${l.id}:${g.id}"><b>🎯 ${esc(g.title)}</b></button><button type="button" class="btn go-btn tiny" data-gdone="${l.id}:${g.id}" aria-label="Completed the goal?">Done?</button></div>${l.tasks.filter((t) => t.goalId === g.id && (!filterDue || isAvailable(t, day, l))).map((t) => kTask(state, l, t, day)).join('')}</div>`);
+    }
+    const free = freeSlots(state, s), nx = nextTier(state, s);
+    const home = ls.at(-1);
+    const foot = `${free > 0 && home ? `<button type="button" class="kadd" data-addt="${home.id}">+ Add a task <small>${free} ${free === 1 ? 'slot' : 'slots'} open</small></button>` : `<span class="knote">All ${taskSlots(state, s)} slots in use</span>`}
+      ${nx ? `<span class="knote">${nx.open ? `🔓 ${esc(nx.def.name)} is ready to build` : `Form ${nx.need} more ${nx.need === 1 ? 'habit' : 'habits'} to unlock the ${esc(nx.def.name)}`}</span>` : ''}`;
+    return `<div class="kcol" style="--c:${SECTIONS[s].color}"><div class="khead">${svgI(SECTIONS[s].icon, '#fff', 14, 2.6)}<b>${SECTIONS[s].name}</b><small>${Math.min(activeItems(state, s), taskSlots(state, s))}/${taskSlots(state, s)}</small></div>
+      <div class="kbody">${cards.join('') || `<p class="knote">${filterDue ? 'All done here today ✓' : 'Nothing here yet.'}</p>`}</div><div class="kfoot">${foot}</div></div>`;
+  });
+  return `<div class="kanban">${cols.join('')}</div><p class="foot">Dots show progress toward a habit: check a task off on ${HABIT_DAYS} different days. Each habit unlocks the area’s next building and room for one more task.</p>`;
 }
 
 export function renderBuilding(state, b, day) {
@@ -175,7 +200,8 @@ export function renderBuilder(d) {
     ${d.kind === 'goal' ? `<label class="q" for="gfGoal">Goal <small>(something bigger, like “Run a 5K” or “Host friends for dinner”)</small></label><input class="field" id="gfGoal" maxlength="60" value="${esc(d.goal)}" autocomplete="off"><label class="q" for="gfTarget">Target date <small>(optional, no pressure)</small></label><input class="field date" type="date" id="gfTarget" value="${esc(d.target || '')}"><label class="q">Steps <small>(optional. Each one can be daily, a few times a week, or once)</small></label>` : '<label class="q">Tasks <small>(simple things, like chores or habits)</small></label>'}
     ${rows}
     ${fam.length ? '<p class="foot">Tap the circle on a row to pick who does it. Everyone is the default.</p>' : ''}
-    <div class="brow">${d.tasks.length < MAX_TASKS ? `<button type="button" class="btn link" data-addtask="1">+ Add another</button>` : ''}<button type="button" class="btn soft small" data-ideas="${d.section}:draft">💡 Ideas</button></div>
+    ${d.kind !== 'goal' && d.mode !== 'step' && d.maxRows != null ? `<p class="foot">${d.maxRows === 1 ? 'One task for now.' : `Up to ${d.maxRows} tasks right now.`} Check a task off on ${HABIT_DAYS} different days to form a habit, and you’ll unlock the next building and room for another.</p>` : ''}
+    <div class="brow">${d.tasks.length < (d.kind === 'goal' || d.mode === 'step' ? 6 : d.maxRows ?? MAX_TASKS) ? `<button type="button" class="btn link" data-addtask="1">+ Add another</button>` : ''}<button type="button" class="btn soft small" data-ideas="${d.section}:draft">💡 Ideas</button></div>
     <div class="actions"><button type="button" class="btn go-btn" data-savegoal="1">${esc(d.saveLabel)}</button></div>`;
 }
 
@@ -205,9 +231,9 @@ export function renderGoalDone(d) {
     <div class="actions"><button type="button" class="btn go-btn" data-gconfirm="1">Yes! Save it and celebrate</button><button type="button" class="btn soft" data-close="1">Not yet</button></div>`;
 }
 
-export function renderIdeas(state, section, added) {
+export function renderIdeas(state, section, added, full = false) {
   const I = IDEAS[section];
-  const plus = (key, done) => done ? '<span class="added">✓ Added</span>' : `<button type="button" class="btn go-btn small" data-idea="${key}">+ Add</button>`;
+  const plus = (key, done) => done ? '<span class="added">✓ Added</span>' : full ? '<span class="added muted">Slots full</span>' : `<button type="button" class="btn go-btn small" data-idea="${key}">+ Add</button>`;
   const fl = (code) => FREQS.find(([v]) => v === code)?.[1] || 'Daily';
   return `<div class="sec-head" style="--c:${SECTIONS[section].color}">${sectionChip(section)}<span>Easy wins to start with. Add only what fits your life right now. Fewer, finished beats more, half-done.</span></div>
     <div class="h3">Quick tasks</div>${I.tasks.map(([t, f], k) => `<div class="idea-row"><span><b>${esc(t)}</b></span><span class="fpill">${fl(f)}</span>${plus(`t:${k}`, added.has(`t:${k}`))}</div>`).join('')}
@@ -255,7 +281,7 @@ export function readyCount(state, cat) {
   if (SECTIONS[cat]) {
     const open = state.lists.some((l) => l.section === cat);
     if (!open) return 1;
-    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && state.level >= b.level && (!b.money || (state.budget?.level || 1) >= b.money) && state.coins >= b.cost).length;
+    return BUILDINGS.filter((b) => b.section === cat && b.tier > 1 && !built(b.id) && tierOpen(state, cat, b.tier) && (!b.money || (state.budget?.level || 1) >= b.money) && state.coins >= b.cost).length;
   }
   if (cat === 'district') return built('bank') ? DISTRICT.filter((d) => !built(d.building) && catActive(state, d.cat)).length : 0;
   if (cat === 'biz') return bizCount(state) < bizSlots(state) ? BUILDINGS.filter((b) => b.kind === 'biz' && state.level >= b.level && state.coins >= bizCost(state, b.id)).length ? 1 : 0 : 0;

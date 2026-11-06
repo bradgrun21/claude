@@ -30,6 +30,12 @@ Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is up
   - **Pause** a task, a goal, or a whole list ("Rest this list for a while"). Nothing resting is ever due, and no progress is lost.
   - **💡 Ideas** on every list and in the builder: easy tasks, goals and ready-made plans, added only with a tap.
   Higher-tier buildings pay more per task (1×, 1.5×, 2×, 3×).
+- **Habits pace each area.** An area starts with one task slot. Checking a task off on 3 different days forms a
+  habit (a finished goal counts too), which unlocks that area's next building and opens one more slot. A goal is one
+  slot and its steps ride along; paused or finished items free their slot; habits stay counted even if a task is
+  removed. Area buildings past the first open by habits, not by town level. Progress dots on each task show 1-2-3 days.
+- **Lists board.** The Lists screen is a board with one column per open area: compact cards, goals with their steps,
+  slots in use, "+ Add a task" when a slot is open, and what the next habit unlocks.
 - **Consistency, not volume.** The first 6 check-offs a day pay in full, then a small token. The first check-off of
   the day earns a daily-visit bonus, streaks pay at 3/7/14/30/60/100 days (one rest day a week never breaks one),
   and a weekly **Week in review** pays for looking back. Buildings **grow** (pennants, then a gold star) after 10 and

@@ -32,7 +32,7 @@ export const TOOL_TABS = {
 /* ---------- Ribbon cutting ---------- */
 export function renderRibbon(tool, buildingName) {
   const t = T.toolById[tool];
-  return `<div class="ribbon-wrap"><div class="ribbon"><span class="rb-l"></span><span class="rb-bow">🎀</span><span class="rb-r"></span></div>
+  return `<div class="ribbon-wrap"><div class="rb-band"><span class="rb-l"></span><span class="rb-bow">🎀</span><span class="rb-r"></span></div>
     <b class="ttl">Grand opening at the ${esc(buildingName)}!</b>
     <div class="rb-tool"><span class="rb-emoji">${t.emoji}</span><span><b>New: ${esc(t.name)}</b><small>${esc(t.blurb)}</small></span></div>
     <p class="rb-keeper"><b>${esc(t.keeper)}:</b> “Welcome! Cut the ribbon and I’ll show you around.”</p>

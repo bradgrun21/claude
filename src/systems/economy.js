@@ -90,5 +90,6 @@ export function canUpgradeTownHall(state) {
 }
 
 export function unlockedAt(level) {
-  return Object.values(byId).filter((b) => b.level === level && !b.alt && !b.money);
+  /* Area buildings past the first open by forming habits, not by level, so they aren't listed here. */
+  return Object.values(byId).filter((b) => b.level === level && !b.alt && !b.money && !(b.kind === 'section' && b.tier > 1) && !b.earned && b.kind !== 'district');
 }
