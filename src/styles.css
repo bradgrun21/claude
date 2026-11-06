@@ -802,3 +802,28 @@ select.freq.meal { flex: 1; min-width: 0; }
 .kadd { border: 2px dashed color-mix(in srgb, var(--c) 50%, #fff); background: transparent; border-radius: 10px; padding: 6px; font: inherit; font-weight: 800; font-size: 12.5px; color: var(--c); display: flex; flex-direction: column; align-items: center; }
 .kadd small { font-size: 10.5px; font-weight: 700; color: var(--ink-soft); }
 .knote { font-size: 11px; font-weight: 700; color: var(--ink-soft); line-height: 1.3; }
+
+/* ---------- Hub menus ---------- */
+.hsec { margin-bottom: 12px; }
+.hsec-h { display: flex; align-items: baseline; gap: 8px; margin: 2px 2px 6px; }
+.hsec-h b { font-family: var(--font-display); font-weight: 600; font-size: 16px; color: var(--brown); }
+.hsec-h small { font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+.hgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 7px; }
+.htile { position: relative; display: flex; align-items: center; gap: 9px; padding: 9px 10px; text-align: left; font: inherit; color: inherit; background: #fff; border: 2px solid var(--line); border-radius: 14px; box-shadow: 0 3px 0 rgba(0,0,0,.06); cursor: pointer; }
+.htile:active { transform: translateY(1px); }
+.htile .he { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.htile .ht { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.htile b { font-size: 14px; line-height: 1.2; }
+.htile small { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.25; }
+.htile.locked { background: #F1ECE2; border-style: dashed; box-shadow: none; cursor: default; }
+.htile.locked .he { filter: grayscale(1) opacity(.5); }
+.htile.locked b { color: #9A8C76; }
+.htile.new { border-color: var(--gold); background: #FFFBEC; }
+.htile.build { border-color: color-mix(in srgb, var(--green) 55%, #fff); }
+.hnew, .hbuild { position: absolute; top: -7px; right: 8px; font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; color: #fff; }
+.hnew { background: var(--gold-deep); } .hbuild { background: var(--green-deep); }
+.how { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; border-top: 1px dashed var(--line); }
+.how span:last-child { display: flex; flex-direction: column; }
+.how b { font-size: 14.5px; } .how small { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); line-height: 1.35; }
+.how .ag-n { flex-shrink: 0; }
+.store + .hsec-h { margin-top: 14px; }

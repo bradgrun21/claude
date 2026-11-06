@@ -5,6 +5,20 @@ Find Me the Money: its own repo and its own Netlify site, sharing no Supabase ta
 
 Phase 1 saves everything **in the browser only** (`localStorage`). Nothing is uploaded.
 
+## Menus (one home for each kind of thing)
+
+| Button | What's inside |
+|---|---|
+| Build | The Store, grouped: Life areas (in unlock order), Town (Housing, Main Street, Decor & Roads, Town Hall), Services (Shops & services, Budget District) |
+| Tasks | The board: one column per open area |
+| Money | Budget, Log a purchase, Payday, Savings, Debt snowball · Budget District (one tile per category) · Subscriptions, Nest Egg, Debt Freedom Monument |
+| Trackers | Home: Meal Planner, Car & Home Care, Repair Log · Family: Family Meeting, Kids' Corner, Birthdays & Cards, Date Night Jar, Gifts & Sizes, Pet Records |
+| Calendar | Calendar and Memories (tabs) |
+| Rewards | Quick wins & daily challenges, Earned decorations, Achievements, Stickers |
+
+Every tile is open, New (grand opening), ready to Build, or greyed out with a lock and what unlocks it. The menu has
+"How Life City works". The map is framed by mountains (north and west), two lakes and rolling hills.
+
 ## How it plays (v2, Nov 2026)
 
 - **One open map.** No fog, nothing hidden. Build anywhere on the grid. Every building except decorations must

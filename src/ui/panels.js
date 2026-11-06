@@ -291,8 +291,12 @@ export function readyCount(state, cat) {
   if (cat === 'roads') return BUILDINGS.filter((b) => b.earned && isEarned(state, b.id) && !built(b.id)).length;
   return 0;
 }
+const STORE_GROUPS = [['Life areas', ['todo', 'financial', 'relational', 'physical', 'spiritual']], ['Town', ['homes', 'biz', 'roads', 'townhall']], ['Services', ['shops', 'district']]];
 export function renderStore(state) {
-  return `<div class="store">${STORE.map((c) => { const n = readyCount(state, c.id); const locked = SECTIONS[c.id] && !sectionUnlocked(state, c.id); return `<button type="button" class="stile${locked ? ' locked' : ''}" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>
+  return STORE_GROUPS.map(([label, ids]) => `<div class="hsec-h"><b>${label}</b></div>${storeTiles(state, ids.map((id) => STORE.find((c) => c.id === id)))}`).join('');
+}
+function storeTiles(state, tiles) {
+  return `<div class="store">${tiles.map((c) => { const n = readyCount(state, c.id); const locked = SECTIONS[c.id] && !sectionUnlocked(state, c.id); return `<button type="button" class="stile${locked ? ' locked' : ''}" data-cat="${c.id}"${SECTIONS[c.id] ? ` style="--c:${SECTIONS[c.id].color}"` : ''}>
     <span class="stitle">${esc(c.label)}</span><span class="sart">${img(c.rep(state))}${locked ? `<span class="lock">${svgI('lock', '#fff', 14, 2.6)}${esc(unlockShort(state, c.id))}</span>` : ''}</span>${n ? `<span class="badge">${SECTIONS[c.id] && !state.lists.some((l) => l.section === c.id) ? 'New' : n}</span>` : ''}</button>`; }).join('')}</div>`;
 }
 
@@ -353,7 +357,14 @@ export function renderProfile(state, day, tab, streakNow, editing) {
     ${editing ? `<input class="field" id="cityNameIn" maxlength="32" value="${esc(state.cityName)}"><button type="button" class="btn go-btn small" data-pf="save">Save</button>` : `<b class="pname">${esc(state.cityName)}</b><span class="since">${svgI('clock', '#8A5A30', 15)} ${d.getMonth() + 1}/${d.getFullYear()}</span>
     <span class="fam">${state.family.map((m) => `<i style="background:${m.color}" title="${esc(m.name)}">${esc(m.name[0])}</i>`).join('')}</span>
     <button type="button" class="btn go-btn small" data-pf="edit">${svgI('edit', '#fff', 15)} Edit</button>`}</div>`;
-  const tabs = `<div class="seg wide">${[['info', 'Player info'], ['achievements', 'Achievements'], ['earned', 'Earned'], ['stickers', 'Sticker book']].map(([k, l]) => `<button type="button" data-ptab="${k}" aria-pressed="${tab === k}">${l}</button>`).join('')}</div>`;
+  const tabs = '';
+  const body = profileBody(state, tab === 'info' || !tab ? 'info' : tab, streakNow);
+  return `<div class="profile">${side}<div class="pmain">${tabs}${body}</div></div>`;
+}
+/* Bodies shared by Profile (player info) and the Rewards hub (achievements, earned, stickers). */
+export function profileBody(state, tab, streakNow = 0) {
+  const pop = population(state);
+  const stat = (icon, label, value) => `<div class="stat"><span class="st-ic">${icon}</span><b>${label}</b><span class="st-v">${value}</span></div>`;
   let body;
   if (tab === 'achievements') {
     body = `<div class="ach-grid">${milestoneState(state).map((m) => `<div class="ach${m.claimed ? ' got' : m.ready ? ' ready' : ''}"><span class="ach-ic">${m.claimed || m.ready ? ART.trophy : `${ART.trophy}<i class="lk">${svgI('lock', '#fff', 12, 3)}</i>`}</span>
@@ -368,7 +379,8 @@ export function renderProfile(state, day, tab, streakNow, editing) {
     const areas = new Set(state.lists.map((l) => l.section)).size;
     body = `<div class="lv-row"><span class="lv-star">${ART.xp}<b>${state.level}</b></span><b>Town level</b></div>
       <div class="stats">${stat(svgI('check', '#3E8E57', 28, 3), 'Tasks done', state.stats.tasksDone || 0)}${stat(ART.trophy, 'Big goals reached', state.stats.goalsDone || 0)}${stat(svgI('clock', '#D9774A', 28, 2.6), 'Day streak', streakNow)}
-      ${stat(ART.people, 'Population', pop)}${stat(svgI('home', '#3F8FE0', 28, 2.4), 'Areas open', `${areas} of 5`)}${stat(ART.coin, 'Coins earned', (state.stats.coinsEarned || 0).toLocaleString('en-US'))}</div>`;
+      ${stat(ART.people, 'Population', pop)}${stat(svgI('home', '#3F8FE0', 28, 2.4), 'Areas open', `${areas} of 5`)}${stat(ART.coin, 'Coins earned', (state.stats.coinsEarned || 0).toLocaleString('en-US'))}</div>
+      <p class="foot">Achievements, earned decorations and stickers are in Rewards.</p>`;
   }
-  return `<div class="profile">${side}<div class="pmain">${tabs}${body}</div></div>`;
+  return body;
 }

@@ -24,7 +24,8 @@ import { runSetup } from './ui/setup.js';
 import { createTour } from './ui/tour.js';
 import { svgI, IC, esc } from './ui/icons.js';
 import { ART } from './ui/art.js';
-import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall, renderEarnedWin } from './ui/panels.js';
+import { renderListCard, renderBuild, renderLists, renderBuilding, renderBuilder, renderTaskEdit, renderGoalEdit, renderGoalDone, renderIdeas, renderLevelInfo, renderLevelUp, renderStore, renderRequests, renderProfile, requestItems, STORE, renderTownHall, renderEarnedWin, profileBody } from './ui/panels.js';
+import { renderMoneyHub, renderTrackersHub, renderHowItWorks } from './ui/hubs.js';
 import { dateKey, addDays, shortDate, weekday } from './systems/time.js';
 import { levelNeed, population, checkLevelUp, levelBlocker, spend, canUpgradeTownHall, TOWNHALL } from './systems/economy.js';
 import { canPlace, canPlaceRoad, canRemoveRoad, suggestSpot, footprint, perimeter } from './systems/placement.js';
@@ -50,8 +51,11 @@ import { renderCalendar, renderEventForm, renderMemoryForm, renderMemories, rend
 import { CATEGORIES, catById, setupBudget, addTransaction, ensureEmergencyFund, addFund, updateBalance, addDebt, payDebt, paydayDue, paydayBreakdown, recordPayday, paycheckDueAmount, money as toMoney } from './systems/budget.js';
 import { renderBudgetSetup, renderBank, renderPaydayIn, renderPaydayBreakdown, renderMoneyLevelUp } from './ui/money.js';
 import { createRailway } from './world/railway.js';
+import { createScenery } from './world/scenery.js';
 
 const $ = (id) => document.getElementById(id);
+/* Notebook art for the Trackers button. */
+const TRACK_ART = '<svg viewBox="0 0 48 48" aria-hidden="true"><rect x="9" y="5" width="30" height="38" rx="5" fill="#4FA7A0" stroke="#2B3A50" stroke-width="2.5"/><rect x="14" y="10" width="21" height="28" rx="3" fill="#FFFDF2"/><path d="M18 17h13M18 23h13M18 29h8" stroke="#8A5A30" stroke-width="2.5" stroke-linecap="round"/><circle cx="9" cy="14" r="2.5" fill="#F2B54A"/><circle cx="9" cy="24" r="2.5" fill="#F2B54A"/><circle cx="9" cy="34" r="2.5" fill="#F2B54A"/></svg>';
 const params = new URLSearchParams(location.search);
 const DEBUG = params.has('debug') || params.has('fps');
 
@@ -76,6 +80,7 @@ function boot(state, opts) {
   let today = dateKey();
   state.stats.lastDay = today;
   const terrain = createTerrain(scene, renderer);
+  createScenery(scene);
   const roads = createRoads(scene);
   const fx = createEffects(scene, camera);
   const bld = createBuildings(scene, fx);
@@ -93,7 +98,7 @@ function boot(state, opts) {
 
   /* ---------- Static HUD art ---------- */
   $('icoPop').innerHTML = ART.people; $('icoCoin').innerHTML = ART.coin; $('menuBtn').innerHTML = svgI('menu', '#fff', 24, 3);
-  $('artBuild').innerHTML = ART.hardhat; $('artLists').innerHTML = ART.clipboard; $('artTrophy').innerHTML = ART.trophy; $('artWins').innerHTML = ART.wins; $('artCal').innerHTML = ART.calendar; $('artMem').innerHTML = ART.album;
+  $('artBuild').innerHTML = ART.hardhat; $('artLists').innerHTML = ART.clipboard; $('artTrophy').innerHTML = ART.trophy; $('artWins').innerHTML = ART.wins; $('artCal').innerHTML = ART.calendar; $('artMem').innerHTML = ART.album; $('artMoney').innerHTML = ART.coin; $('artTrack').innerHTML = TRACK_ART;
   $('lvlStar').insertAdjacentHTML('afterbegin', ART.xp);
   $('panelClose').innerHTML = svgI('chevron', '#fff', 22, 3.2);
 
@@ -130,8 +135,10 @@ function boot(state, opts) {
     badge('bdgTrophy', milestoneState(state).filter((m) => m.ready).length + (state.earned || []).filter((e) => !state.buildings.some((b) => b.type === e.id)).length);
     badge('bdgCal', state.events.filter((e) => !e.done && e.date <= today).length);
     const winsLeft = QUICK_WINS.filter((q) => state.quickWins[q.id] !== 'claimed').length;
-    $('lblWins').textContent = winsLeft ? 'Quick wins' : 'Challenges';
-    badge('bdgWins', requestItems(state, today).length);
+    $('lblWins').textContent = 'Rewards';
+    badge('bdgWins', requestItems(state, today).length + milestoneState(state).filter((m) => m.ready).length + (state.earned || []).filter((e) => !state.buildings.some((b) => b.type === e.id)).length);
+    badge('bdgMoney', (paydayDue(state.budget, today) ? 1 : 0) + (state.buildings.some((x) => x.type === 'bank') && !state.budget.setup ? 1 : 0));
+    badge('bdgTrack', TL.TOOLS.filter((t) => TL.toolAvailable(state, t.id) && !TL.toolOpened(state, t.id)).length + TL.careDueCount(state, today) + TL.cardsDueSoon(state, today));
     const first = state.family[0];
     $('avatarIn').textContent = (state.cityName || 'L').trim()[0].toUpperCase();
     $('profileBtn').style.setProperty('--c', first ? first.color : '#3F8FE0');
@@ -284,11 +291,19 @@ function boot(state, opts) {
       tabs = tl.map(([k, l]) => `<button type="button" class="wtab${p.tab === k || (p.tab === 'recipe' && k === 'recipes') ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
       body = p.tab === 'list' && b && byId[b.type].kind === 'section' ? renderBuilding(state, b, today) : p.tab === 'upgrade' ? renderTownHall(state) : p.tab === 'budget' && dd ? renderCatHub(state, dd.cat, p.ui, today) : renderTool(state, p, today);
     }
-    else if (p.kind === 'requests') { title = 'Available tasks'; body = renderRequests(state, today); }
+    else if (p.kind === 'requests' || p.kind === 'rewards') {
+      const t = p.tab || 'wins';
+      title = 'Rewards';
+      tabs = [['wins', 'Quick wins'], ['earned', 'Earned'], ['achievements', 'Achievements'], ['stickers', 'Stickers']].map(([k, l]) => `<button type="button" class="wtab${t === k ? ' on' : ''}" data-ttab="${k}">${l}</button>`).join('');
+      body = t === 'wins' ? renderRequests(state, today) : t === 'earned' ? `<p class="hint">These can’t be bought. They’re earned by showing up week after week.</p>${profileBody(state, 'earned')}` : profileBody(state, t);
+    }
+    else if (p.kind === 'money') { title = '💰 Money'; body = renderMoneyHub(state, today); }
+    else if (p.kind === 'trackers') { title = '📓 Trackers'; body = renderTrackersHub(state, today); }
+    else if (p.kind === 'how') { title = 'How Life City works'; body = renderHowItWorks(); }
     else if (p.kind === 'profile') { title = 'Profile'; body = renderProfile(state, today, p.tab, streak(state, today), p.editing); }
-    else if (p.kind === 'calendar') { title = 'Calendar'; body = renderCalendar(state, today, p.ym, p.sel); }
+    else if (p.kind === 'calendar') { title = 'Calendar'; tabs = `<button type="button" class="wtab on">Calendar</button><button type="button" class="wtab" data-openp="memories">Memories</button>`; body = renderCalendar(state, today, p.ym, p.sel); }
     else if (p.kind === 'event') { title = p.draft.id ? 'Edit outing' : 'Plan an outing'; body = renderEventForm(p.draft, state); }
-    else if (p.kind === 'memories') { title = 'Memories'; body = renderMemories(state, p.filter); }
+    else if (p.kind === 'memories') { title = 'Memories'; tabs = `<button type="button" class="wtab" data-openp="calendar">Calendar</button><button type="button" class="wtab on">Memories</button>`; body = renderMemories(state, p.filter); }
     else if (p.kind === 'memory') { title = p.draft.eventId ? 'How did it go?' : 'Add a memory'; body = renderMemoryForm(p.draft); }
     else if (p.kind === 'bank') { title = 'Bank'; body = renderBank(state, today, p.tab, p.ui) + (p.tab === 'list' ? (() => { const bk = state.buildings.find((x) => x.type === 'bank'); const l = bk && listFor(state, bk.id); return l ? renderListCard(state, l, today) : '<p class="hint">No list yet.</p>'; })() + `<div class="actions"><button type="button" class="btn soft" data-move="${state.buildings.find((x) => x.type === 'bank')?.id}">Move the Bank</button></div>` : ''); }
     else if (p.kind === 'budgetSetup') { title = 'Your budget'; body = renderBudgetSetup(p.draft); }
@@ -988,6 +1003,10 @@ function boot(state, opts) {
     if (d.idea) { addIdea(d.idea, b); return; }
     if (d.ideaback) { openPanel('goal', { draft: panel.draft, prev: panel.builderPrev }); return; }
     if (d.ribbon) { cutRibbon(d.ribbon, b); return; }
+    if (d.open) { const prev = snapshot(); openBuilding(d.open); if (panel && prev) panel.hubPrev = prev; return; }
+    if (d.distopen) { openBuilding(d.distopen); return; }
+    if (d.hubpay) { startPayday(); return; }
+    if (d.openp) { if (d.openp === 'calendar') openPanel('calendar', { ym: ymOf(today), sel: today }); else openPanel(d.openp); return; }
     if (d.biz) { const r = state.buildings.find((x) => x.id === d.biz); if (r) collectShop(r, b); renderPanel(); return; }
     if (d.bizall) { const n = BZ.collectAll(state); if (n) { flyRewards(centerOf(b), { coins: n }); sound.coin(); toast(`+${n} coins from Main Street`); for (const x of state.buildings) if (byId[x.type]?.kind === 'biz') bld.bounce(x.id); } persist(); hud(); renderPanel(); return; }
     if (d.nest) { nestAction(d.nest, b); return; }
@@ -1300,6 +1319,7 @@ function boot(state, opts) {
     const q = state.settings.quality;
     const seg = (v, l) => `<button type="button" data-menu="q:${v}" aria-pressed="${q === v}">${l}</button>`;
     return `<p class="hint"><b>${esc(state.cityName)}</b> · started ${shortDate(state.startDate)} · ${streak(state, today)}-day streak</p>
+      <div class="set-row"><span>How Life City works</span><button type="button" class="btn go-btn small" data-menu="how">Show me</button></div>
       <div class="set-row"><span>Town paper</span><button type="button" class="btn soft small" data-menu="paper">Read it</button></div>
       <div class="set-row"><span>Sound and haptics</span><button type="button" class="btn soft small" data-menu="sound">${state.settings.sound ? 'On' : 'Off'}</button></div>
       <div class="set-row"><span>Day and night<br><small>Auto follows your clock</small></span><div class="seg">${['auto', 'day', 'night'].map((v) => `<button type="button" data-menu="sky:${v}" aria-pressed="${skyMode() === v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</div></div>
@@ -1310,6 +1330,7 @@ function boot(state, opts) {
   }
   function menuAction(a) {
     if (a === 'paper') { openPanel('paper'); return; }
+    if (a === 'how') { openPanel('how'); return; }
     if (a === 'sound') { sound.setEnabled(!state.settings.sound); if (state.settings.sound) sound.pop(); }
     if (a.startsWith('sky:')) { state.settings.sky = a.slice(4); state.settings.night = state.settings.sky === 'night'; easeSky(); }
     if (a.startsWith('q:')) { const v = a.slice(2); state.settings.quality = v; stage.setQuality(v === 'auto' ? detectQuality() : v); autoChecked = true; }
@@ -1340,10 +1361,12 @@ function boot(state, opts) {
   $('btnBuild').onclick = () => { sound.tap(); openPanel('build'); };
   $('btnLists').onclick = () => { sound.tap(); openPanel('lists', { due: false }); };
   $('btnToday').onclick = () => { sound.tap(); openPanel('lists', { due: true }); };
-  $('btnTrophy').onclick = () => { sound.tap(); openPanel('profile', { tab: 'achievements' }); };
+  $('btnTrophy').onclick = () => { sound.tap(); openPanel('rewards', { tab: 'achievements' }); };
+  $('btnMoney').onclick = () => { sound.tap(); openPanel('money'); };
+  $('btnTrack').onclick = () => { sound.tap(); openPanel('trackers'); };
   $('btnCal').onclick = () => { sound.tap(); openPanel('calendar', { ym: ymOf(today), sel: today }); };
   $('btnMem').onclick = () => { sound.tap(); openPanel('memories'); };
-  $('btnWins').onclick = () => { sound.tap(); openPanel('requests'); };
+  $('btnWins').onclick = () => { sound.tap(); openPanel('rewards', { tab: 'wins' }); };
   $('profileBtn').onclick = () => { sound.tap(); openPanel('profile', { tab: 'info' }); };
   function goAction(code) {
     const [kind, id] = code.split(':');
@@ -1379,7 +1402,7 @@ function boot(state, opts) {
     { title: 'Place it by a road', text: 'Drag it where you like. Every building needs to touch a road that leads to the Town Hall. Then tap Place.', target: rectOf('#placeBtn'), until: 'placed', cardAt: 'top' },
     { title: 'Check off a task', text: 'Tap the bubble over your new building, then tap a circle to check off a task. Tasks pay coins and XP.', target: () => { const b = firstSection(); const t = b && document.querySelector(`[data-bub="${b.id}"]`); return t && t.offsetParent ? t.getBoundingClientRect() : (panel?.kind === 'building' ? $('panelBody').querySelector('.check:not([disabled])')?.getBoundingClientRect() : null); }, until: 'task', cardAt: 'top' },
     { title: 'Bring people to town', text: 'Homes add population. You need people to level up. Tap Build, then Housing, and build a Cottage.', target: () => (panel?.kind === 'build' ? (panel.tab === 'homes' ? $('panelBody').querySelector('[data-pick="cottage"]') : panel.tab ? $('panelTabs').querySelector('[data-back]') : $('panelBody').querySelector('[data-cat="homes"]'))?.getBoundingClientRect() : (mode ? $('placeBtn')?.getBoundingClientRect() : rectOf('#btnBuild')())), until: 'home', cardAt: 'top', enter: () => { if (panel && panel.kind !== 'build') closePanel(); } },
-    { title: 'You’re on your way!', text: 'Areas open one at a time: Financial next, then Relational once your budget is set, then Physical and Spiritual. Tap 💡 on any list for easy ideas. Showing up daily matters more than adding more.', target: rectOf('#btnWins'), button: 'Finish tour', cardAt: 'mid' }
+    { title: 'You’re on your way!', text: 'Everything has one home: Tasks, Money, Trackers, Calendar and Rewards along the bottom. Locked things show what opens them. The menu has “How Life City works” any time.', target: rectOf('#bottombar'), button: 'Finish tour', cardAt: 'mid' }
   ];
   function runTour() {
     const s = TOUR[state.tour.step];
