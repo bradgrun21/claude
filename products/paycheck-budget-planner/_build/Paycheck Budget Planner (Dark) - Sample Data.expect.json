@@ -1,0 +1,130 @@
+[
+ {
+  "cell": "Dashboard!D11",
+  "value": 5175,
+  "tol": 0.02,
+  "why": "Income actual in June"
+ },
+ {
+  "cell": "Dashboard!C11",
+  "value": 5200,
+  "tol": 0.02,
+  "why": "Income planned"
+ },
+ {
+  "cell": "Dashboard!D12",
+  "value": 2111.27,
+  "tol": 0.02,
+  "why": "Bills actual in June"
+ },
+ {
+  "cell": "Dashboard!C12",
+  "value": 2208,
+  "tol": 0.02,
+  "why": "Bills planned"
+ },
+ {
+  "cell": "Dashboard!D13",
+  "value": 1303.87,
+  "tol": 0.02,
+  "why": "Expenses actual in June"
+ },
+ {
+  "cell": "Dashboard!C13",
+  "value": 1460,
+  "tol": 0.02,
+  "why": "Expenses planned"
+ },
+ {
+  "cell": "Dashboard!D14",
+  "value": 750.0,
+  "tol": 0.02,
+  "why": "Savings actual in June"
+ },
+ {
+  "cell": "Dashboard!C14",
+  "value": 750,
+  "tol": 0.02,
+  "why": "Savings planned"
+ },
+ {
+  "cell": "Dashboard!D15",
+  "value": 565,
+  "tol": 0.02,
+  "why": "Debt actual in June"
+ },
+ {
+  "cell": "Dashboard!C15",
+  "value": 725,
+  "tol": 0.02,
+  "why": "Debt planned"
+ },
+ {
+  "cell": "Dashboard!J21",
+  "value": 498.91,
+  "tol": 0.02,
+  "why": "Groceries spent in June"
+ },
+ {
+  "cell": "Dashboard!F30",
+  "text": "✓ Paid",
+  "why": "Rent is paid in June"
+ },
+ {
+  "cell": "Dashboard!F34",
+  "text": "Due Jun 27",
+  "why": "Phone is not paid yet on Jun 26"
+ },
+ {
+  "cell": "Paychecks!B6",
+  "value": 2450,
+  "why": "expected paycheck"
+ },
+ {
+  "cell": "Paychecks!C6",
+  "value": 1770.0,
+  "tol": 0.02,
+  "why": "assigned to paycheck 12"
+ },
+ {
+  "cell": "Paychecks!I6",
+  "value": 1617.03,
+  "tol": 0.02,
+  "why": "spent in pay period"
+ },
+ {
+  "cell": "Paychecks!H6",
+  "value": 2725,
+  "tol": 0.02,
+  "why": "income in pay period"
+ },
+ {
+  "cell": "Savings Goals!G10",
+  "value": 5600.0,
+  "tol": 0.02,
+  "why": "Emergency fund balance"
+ },
+ {
+  "cell": "Debt Payoff!G10",
+  "value": 1720,
+  "tol": 0.02,
+  "why": "Credit card balance"
+ },
+ {
+  "cell": "Year Overview!C22",
+  "value": 33665,
+  "tol": 0.02,
+  "why": "income year to date"
+ },
+ {
+  "cell": "Year Overview!C37",
+  "value": 62400,
+  "why": "planned income for the year"
+ },
+ {
+  "cell": "Subscriptions!D6",
+  "value": 79.8033,
+  "tol": 0.01,
+  "why": "active subscriptions per month"
+ }
+]

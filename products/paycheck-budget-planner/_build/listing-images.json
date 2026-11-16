@@ -1,0 +1,205 @@
+{
+ "out": "../listing-images",
+ "size": [
+  2400,
+  1800
+ ],
+ "product": "Paycheck Budget Planner",
+ "brand": {
+  "bg": "F6F3EE",
+  "ink": "1F2A2C",
+  "muted": "6F7B7D",
+  "band": "1F3A3D",
+  "accent": "3E9A84",
+  "card": "FFFFFF",
+  "chips": [
+   "3E9A84",
+   "4A78B0",
+   "E07B53",
+   "D99A2B",
+   "9466AE"
+  ]
+ },
+ "slides": [
+  {
+   "layout": "hero",
+   "kicker": "Google Sheets + Excel",
+   "title": "Paycheck Budget Planner",
+   "sub": "Budget every paycheck. See every bill coming. Know exactly what is left.",
+   "chips": [
+    "10 tabs",
+    "Bill calendar",
+    "Savings goals",
+    "Debt payoff",
+    "Light + dark"
+   ],
+   "badge": "Instant download",
+   "image": "previews/light/05-dashboard.png"
+  },
+  {
+   "layout": "feature",
+   "kicker": "Budget by paycheck",
+   "title": "Know what each paycheck has to cover",
+   "body": "Pick a paycheck. The bills due before your next payday line up on their own.",
+   "points": [
+    "Weekly, every 2 weeks, twice a month or monthly",
+    "Bills sorted by due date",
+    "See what is left before you spend it"
+   ],
+   "image": "previews/light/06-paychecks.png",
+   "side": "right"
+  },
+  {
+   "layout": "feature",
+   "kicker": "Monthly dashboard",
+   "title": "Your whole month on one page",
+   "body": "Planned against actual for income, bills, spending, savings and debt.",
+   "points": [
+    "Pick any month from a dropdown",
+    "Paid and due status for every bill",
+    "Built-in 50 / 30 / 20 check"
+   ],
+   "image": "previews/light/05-dashboard.png",
+   "side": "left",
+   "crop": [
+    0,
+    0.325,
+    1,
+    1
+   ]
+  },
+  {
+   "layout": "feature",
+   "kicker": "Bill calendar",
+   "title": "Every bill and payday on one calendar",
+   "body": "Due dates fill in from your setup. Paydays are marked for you.",
+   "points": [
+    "What is due this month",
+    "What is already paid",
+    "What is still to pay"
+   ],
+   "image": "previews/light/07-bill-calendar.png",
+   "side": "right"
+  },
+  {
+   "layout": "duo",
+   "kicker": "Savings goals + debt payoff",
+   "title": "Watch savings grow and debt shrink",
+   "images": [
+    "previews/light/08-savings-goals.png",
+    "previews/light/09-debt-payoff.png"
+   ],
+   "labels": [
+    "Savings goals and sinking funds",
+    "Debt payoff with snowball order"
+   ]
+  },
+  {
+   "layout": "feature",
+   "kicker": "Year overview",
+   "title": "Twelve months side by side",
+   "body": "See where the year is going, month by month and category by category.",
+   "points": [
+    "Income against spending",
+    "Savings rate for the year",
+    "Every category, plan against actual"
+   ],
+   "image": "previews/light/10-year-overview.png",
+   "side": "left"
+  },
+  {
+   "layout": "duo",
+   "kicker": "Two looks, same planner",
+   "title": "Light and dark mode included",
+   "images": [
+    "previews/light/05-dashboard.png",
+    "previews/dark/05-dashboard.png"
+   ],
+   "labels": [
+    "Light",
+    "Dark"
+   ]
+  },
+  {
+   "layout": "list",
+   "kicker": "What you get",
+   "title": "10 tabs that work together",
+   "items": [
+    [
+     "Setup",
+     "Year, pay schedule and your categories"
+    ],
+    [
+     "Budget Plan",
+     "Twelve months of planned amounts"
+    ],
+    [
+     "Transactions",
+     "One simple log for income and spending"
+    ],
+    [
+     "Dashboard",
+     "One month at a glance"
+    ],
+    [
+     "Paychecks",
+     "What each paycheck has to cover"
+    ],
+    [
+     "Bill Calendar",
+     "Due dates and paydays"
+    ],
+    [
+     "Savings Goals",
+     "Sinking funds and progress bars"
+    ],
+    [
+     "Debt Payoff",
+     "Balances, dates and snowball order"
+    ],
+    [
+     "Year Overview",
+     "The whole year by month and category"
+    ],
+    [
+     "Subscriptions",
+     "Every recurring charge in one list"
+    ]
+   ],
+   "footer": "4 files: light and dark, each blank and with sample data"
+  },
+  {
+   "layout": "steps",
+   "kicker": "How it works",
+   "title": "Up and running in three steps",
+   "steps": [
+    [
+     "Download",
+     "Open the PDF from your Etsy purchases and click the link to make your own copy."
+    ],
+    [
+     "Set up",
+     "Enter your pay schedule and your categories on the Setup tab."
+    ],
+    [
+     "Track",
+     "Log what you earn and spend. Every tab updates itself."
+    ]
+   ],
+   "footer": "Works with a free Google account or Excel 2016 and later. No subscription."
+  },
+  {
+   "layout": "feature",
+   "kicker": "Easy setup",
+   "title": "Make it yours in ten minutes",
+   "body": "Rename anything. Empty rows are simply ignored.",
+   "points": [
+    "Up to 54 categories",
+    "Works for any year",
+    "Yellow cells show where to type"
+   ],
+   "image": "previews/light/02-setup.png",
+   "side": "right"
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+  "out": "../Paycheck Budget Planner - START HERE.pdf",
+  "product": "Paycheck Budget Planner",
+  "tagline": "Thank you for your purchase. Your planner is two clicks away.",
+  "accent": "1F3A3D",
+  "links": [
+    {"label": "Light version", "url": "PASTE-COPY-LINK"},
+    {"label": "Dark version", "url": "PASTE-COPY-LINK"},
+    {"label": "Light version with sample data", "url": "PASTE-COPY-LINK"},
+    {"label": "Dark version with sample data", "url": "PASTE-COPY-LINK"}
+  ],
+  "excel_note": "Prefer Excel? The .xlsx files are included in your download and open in Excel 2016 or later.",
+  "steps": [
+    "Sign in to your Google account, then click a button above and choose “Make a copy”. The copy is yours alone.",
+    "Open the Setup tab. Enter your budget year, how often you are paid, your first payday and your take-home pay.",
+    "Rename the starter categories, type a monthly amount for each, and give your bills a due day.",
+    "Log income and spending on the Transactions tab: date, category, amount.",
+    "Open the Dashboard, Paychecks and Bill Calendar tabs and pick a month or paycheck from the yellow dropdown."
+  ],
+  "tips": [
+    "Yellow cells are yours to type in. Pale yellow cells are filled in for you and can be typed over.",
+    "Want to see it working first? Open a sample-data copy and explore.",
+    "On a phone or tablet, use the free Google Sheets app."
+  ],
+  "terms": "For personal use by one household. Please do not share, resell or redistribute this file or its links.",
+  "support": "Questions? Message the shop on Etsy and we will help."
+}
