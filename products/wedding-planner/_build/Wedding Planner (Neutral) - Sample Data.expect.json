@@ -1,0 +1,136 @@
+[
+ {
+  "cell": "Calc!Y6",
+  "value": 34330,
+  "tol": 0.01,
+  "why": "total cost (real price, else estimate)"
+ },
+ {
+  "cell": "Calc!Y7",
+  "value": 11420,
+  "tol": 0.01,
+  "why": "total paid"
+ },
+ {
+  "cell": "Calc!Y8",
+  "value": 22910,
+  "tol": 0.01,
+  "why": "still to pay"
+ },
+ {
+  "cell": "Calc!Y5",
+  "value": 36000,
+  "tol": 0.01,
+  "why": "shares add up to the whole budget"
+ },
+ {
+  "cell": "Budget!D10",
+  "value": 7050,
+  "tol": 0.01,
+  "why": "Venue cost"
+ },
+ {
+  "cell": "Budget!G11",
+  "value": 390,
+  "tol": 0.01,
+  "why": "Catering left"
+ },
+ {
+  "cell": "Budget!K10",
+  "text": "Engagement photos",
+  "why": "earliest unpaid item"
+ },
+ {
+  "cell": "Budget!M10",
+  "value": 350,
+  "tol": 0.01,
+  "why": "its balance"
+ },
+ {
+  "cell": "Budget!K12",
+  "text": "Wedding rings",
+  "why": "third payment in date order"
+ },
+ {
+  "cell": "Calc!Y9",
+  "value": 96,
+  "tol": 0,
+  "why": "guests invited"
+ },
+ {
+  "cell": "Calc!Y10",
+  "value": 67,
+  "tol": 0,
+  "why": "attending"
+ },
+ {
+  "cell": "Calc!Y11",
+  "value": 10,
+  "tol": 0,
+  "why": "declined"
+ },
+ {
+  "cell": "Calc!Y13",
+  "value": 61,
+  "tol": 0,
+  "why": "seated"
+ },
+ {
+  "cell": "Dashboard!K17",
+  "value": 8,
+  "tol": 0,
+  "why": "chicken meals"
+ },
+ {
+  "cell": "Dashboard!K22",
+  "value": 2,
+  "tol": 0,
+  "why": "attending with no meal yet"
+ },
+ {
+  "cell": "Dashboard!K25",
+  "value": 19,
+  "tol": 0,
+  "why": "first group attending"
+ },
+ {
+  "cell": "Seating Plan!I10",
+  "value": 8,
+  "tol": 0,
+  "why": "guests at table 3"
+ },
+ {
+  "cell": "Seating Plan!H11",
+  "text": "James Bennett",
+  "why": "first guest at table 3"
+ },
+ {
+  "cell": "Seating Plan!H18",
+  "text": "Zoe Vance",
+  "why": "eighth guest at table 3"
+ },
+ {
+  "cell": "Calc!Y14",
+  "value": 44,
+  "tol": 0,
+  "why": "tasks on the checklist"
+ },
+ {
+  "cell": "Calc!Y15",
+  "value": 26,
+  "tol": 0,
+  "why": "tasks done"
+ },
+ {
+  "cell": "Vendors!H10",
+  "value": 7050,
+  "tol": 0.01,
+  "why": "Willow Barn total"
+ },
+ {
+  "cell": "Calc!Y21",
+  "value": 9,
+  "tol": 0,
+  "why": "thank-yous sent"
+ }
+]

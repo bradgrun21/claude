@@ -15,8 +15,8 @@ What gets made, in the product folder:
 ```
 products/<product-slug>/
 ├── <Product> (Classic).xlsx ... (Dark).xlsx   one blank workbook per colour theme (six by default)
-├── <Product> (Classic) - Sample Data.xlsx     filled in, for buyers to explore and for the pictures
-├── <Product> (Dark) - Sample Data.xlsx
+├── <Product> (<theme>) - Sample Data.xlsx     filled in, in two themes that suit the niche: for buyers
+│                                              to explore and for the pictures
 ├── <Product> - START HERE.pdf                 what Etsy delivers: copy links + quick start
 ├── listing-images/01..10.jpg                  2400 x 1800
 ├── LISTING.md                                 title, 13 tags, description, price, notes

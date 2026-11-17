@@ -48,6 +48,12 @@ too; 12 to 50 debts; extra monthly payment; month-by-month payoff schedule; debt
 interest and interest saved; per-debt payoff dates; Google Sheets and Excel. Listings showed at about
 $1-$7 on sale, the most-reviewed with 11k+ reviews. One competitor sells a one-off "windfall" simulator.
 
+Wedding planner (checked November 2026): budget with estimate / actual / paid and what is still owed,
+payment due dates and a monthly view, guest list with RSVPs and meal choices, a seating plan that reads
+from the guest list, vendor contacts and comparison, a checklist dated from the wedding day, gifts and
+thank-yous, a day-of timeline. Sellers describe 10 to 21 tabs; listings showed at about $1-$27 on sale,
+the most-reviewed seen at ~6.3k reviews.
+
 Trackers in general: Start Here tab, one log, one dashboard, dropdowns for categories, progress bars.
 
 ## Before building a new niche

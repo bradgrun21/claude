@@ -1,0 +1,27 @@
+{
+  "out": "../Wedding Planner - START HERE.pdf",
+  "product": "Wedding Planner & Budget",
+  "tagline": "Congratulations! Pick a colour theme below - your planner is two clicks away.",
+  "accent": "4B4037",
+  "links": [
+    {"label": "Neutral", "url": "PASTE-COPY-LINK"}, {"label": "Blush", "url": "PASTE-COPY-LINK"},
+    {"label": "Sage", "url": "PASTE-COPY-LINK"}, {"label": "Pastel", "url": "PASTE-COPY-LINK"},
+    {"label": "Classic", "url": "PASTE-COPY-LINK"}, {"label": "Dark", "url": "PASTE-COPY-LINK"},
+    {"label": "Neutral with sample data", "url": "PASTE-COPY-LINK"}, {"label": "Blush with sample data", "url": "PASTE-COPY-LINK"}
+  ],
+  "excel_note": "Prefer Excel? The .xlsx files are included in your download and open in Excel 2016 or later.",
+  "steps": [
+    "Sign in to your Google account, then click a button above and choose “Make a copy”. The copy is yours alone.",
+    "Open the Setup tab. Enter your names, wedding date and total budget. The budget split fills itself in.",
+    "List what you are paying for on the Expenses tab: an estimate first, the real price once you have it, and what you have paid.",
+    "Add your guests on the Guest List tab, one row each. Record replies, meals and table numbers as they come in.",
+    "Work through the Checklist, and keep an eye on the Dashboard."
+  ],
+  "tips": [
+    "Yellow cells are yours to type in. Pale yellow cells are filled in for you and can be typed over.",
+    "Want to see it working first? Open a sample-data copy and explore.",
+    "To share it with your partner, use the Share button in your own copy."
+  ],
+  "terms": "For personal use by one couple. Please do not share, resell or redistribute this file or its links.",
+  "support": "Questions? Message the shop on Etsy and we will help."
+}

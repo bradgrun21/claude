@@ -21,6 +21,27 @@ These come from building the example. Each one fixed a real problem.
 - **"k-th item on this day"** (calendar cells) uses a key column - `day*100 + COUNTIF(day$1:day_i, day_i)` -
   and `INDEX/MATCH` on `day*100+k`.
 
+## Lists that sort and place themselves
+
+- **"The next N by date"** (payments, tasks): a hidden helper column holds `date + ROW()/100000` for the
+  rows that qualify and `""` for the rest. `SMALL(keys, k)` gives the k-th, `MATCH` finds its row, and
+  `INDEX` pulls any column. The row fraction breaks ties between equal dates.
+- **"Who is in group g, in order"** (a seating plan, a calendar): the helper is
+  `g*1000 + COUNTIFS(group$first:group_i, group_i, ...)`, and seat s of group g is `MATCH(g*1000+s, keys, 0)`.
+  Put the same conditions in the `COUNTIFS` as in the test for having a key, or seats are skipped.
+- `INDEX` of an empty cell returns 0. Add `&""` when the result is text that may be blank.
+- A conditional format cannot read another sheet in Google Sheets, so show the setting it needs in a cell
+  on the same sheet (a card does nicely) and point the rule at that.
+
+## Sample data that hangs together
+
+- Anchor the sample to one date (the wedding, the year start) and express every other date as an offset
+  from it. A sample where replies arrive before the invitations go out reads as fake.
+- Anything that follows `TODAY()` (countdowns, overdue flags) changes after the build date. Assert only
+  values that do not depend on today, and tell the seller when the sample will look stale.
+- Pick the two sample-data themes to suit the niche (`SAMPLE_THEMES`): neutral and blush for a wedding,
+  classic and dark for a budget.
+
 ## Forecasts and simulations
 
 When a product has to project forward (debt payoff, savings growth, loan schedules), put the
