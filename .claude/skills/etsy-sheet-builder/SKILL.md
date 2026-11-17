@@ -44,7 +44,9 @@ Settle these before writing code. Ask only for what the request leaves open; oth
 
 Write `products/<slug>/_build/build.py` (or keep it beside the skill's example) using `scripts/sheetkit.py`.
 Read `examples/budget_planner/build.py` first - it is a complete product and the pattern to follow -
-and `references/build-patterns.md` for why it is shaped that way. `references/compatibility.md` is the
+and `references/build-patterns.md` for why it is shaped that way. If the product forecasts anything
+month by month, read `examples/debt_payoff_tracker/build.py` too: it shows a simulation grid on hidden
+sheets and a reference calculation to test it against. `references/compatibility.md` is the
 list of what survives Excel, Google Sheets and LibreOffice at once; a formula or feature that is not on
 it does not go in.
 
@@ -64,9 +66,13 @@ python scripts/verify_workbook.py "<workbook>.xlsx" --expect "_build/<workbook>.
        --previews _build/previews/light --dpi 230
 ```
 
-Run it on all four workbooks. It recalculates with LibreOffice and fails on any formula error, any
+Run it on all four workbooks. It hard-recalculates with LibreOffice and fails on any formula error, any
 expected value that is off, and lists functions outside the portable set. The blank workbook matters as
 much as the sample one: an empty template must show no errors and no nonsense.
+
+For anything with real logic (a forecast, a schedule, an allocation), also build a few odd cases in a
+temp folder - one item, the maximum, an impossible input, every option of every dropdown - and check
+each against the Python reference. Sample data only exercises the happy path.
 
 Then **open every preview PNG and look at it.** The verifier cannot see a truncated header, a chart
 that overlaps a table, or a tab that reads as a wall of zeros. Fix and rebuild until each tab would
@@ -120,7 +126,8 @@ one thing a buyer will not forgive.
 - `scripts/make_listing_images.py` - listing images from previews
 - `scripts/make_delivery_pdf.py` - the buyer's PDF
 - `scripts/check_listing.py` - listing limits, writes LISTING.md
-- `examples/budget_planner/` - the Paycheck Budget Planner: build script and listing image spec
+- `examples/budget_planner/` - the Paycheck Budget Planner: build script and the listing, image and PDF specs
+- `examples/debt_payoff_tracker/` - the Debt Payoff Tracker: a forecast built as a formula grid, with its reference check
 - `references/top-sellers.md` - what sells and what each product type is expected to include
 - `references/build-patterns.md` - how to structure a workbook that does not break
 - `references/compatibility.md` - what works in Excel, Google Sheets and LibreOffice together

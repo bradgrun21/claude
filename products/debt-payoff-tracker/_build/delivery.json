@@ -1,0 +1,27 @@
+{
+  "out": "../Debt Payoff Tracker - START HERE.pdf",
+  "product": "Debt Payoff Tracker",
+  "tagline": "Thank you for your purchase. Your tracker is two clicks away.",
+  "accent": "1F3A3D",
+  "links": [
+    {"label": "Light version", "url": "PASTE-COPY-LINK"},
+    {"label": "Dark version", "url": "PASTE-COPY-LINK"},
+    {"label": "Light version with sample data", "url": "PASTE-COPY-LINK"},
+    {"label": "Dark version with sample data", "url": "PASTE-COPY-LINK"}
+  ],
+  "excel_note": "Prefer Excel? The .xlsx files are included in your download and open in Excel 2016 or later.",
+  "steps": [
+    "Sign in to your Google account, then click a button above and choose “Make a copy”. The copy is yours alone.",
+    "Open the My Debts tab. List each debt with its balance, interest rate (APR) and minimum payment.",
+    "Open the Payoff Plan tab. Choose Snowball, Avalanche or My order, and type what extra you can pay each month.",
+    "Each time you pay, add a row on the Payment Log tab: date, debt, amount.",
+    "When a statement arrives, type its balance in “Balance after” so interest is counted."
+  ],
+  "tips": [
+    "Yellow cells are yours to type in. Pale yellow cells are optional or filled in for you.",
+    "Want to see it working first? Open a sample-data copy and explore.",
+    "The forecast is a plan based on fixed rates and minimum payments. It is not financial advice."
+  ],
+  "terms": "For personal use by one household. Please do not share, resell or redistribute this file or its links.",
+  "support": "Questions? Message the shop on Etsy and we will help."
+}

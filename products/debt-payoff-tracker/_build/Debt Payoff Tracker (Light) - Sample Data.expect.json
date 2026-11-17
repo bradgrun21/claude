@@ -1,0 +1,104 @@
+[
+ {
+  "cell": "Calc!AI9",
+  "value": 37,
+  "tol": 0,
+  "why": "months to debt-free, method S"
+ },
+ {
+  "cell": "Calc!AI13",
+  "value": 5788.63,
+  "tol": 0.05,
+  "why": "interest, method S"
+ },
+ {
+  "cell": "Calc!U9",
+  "value": 25,
+  "tol": 0,
+  "why": "month the car loan is paid off"
+ },
+ {
+  "cell": "Payoff Plan!C35",
+  "value": 20326.72,
+  "tol": 0.01,
+  "why": "last debt in the snowball order is the biggest"
+ },
+ {
+  "cell": "Calc!AI10",
+  "value": 37,
+  "tol": 0,
+  "why": "months to debt-free, method A"
+ },
+ {
+  "cell": "Calc!AI14",
+  "value": 5510.55,
+  "tol": 0.05,
+  "why": "interest, method A"
+ },
+ {
+  "cell": "Calc!AI11",
+  "value": 37,
+  "tol": 0,
+  "why": "months to debt-free, method C"
+ },
+ {
+  "cell": "Calc!AI15",
+  "value": 5584.72,
+  "tol": 0.05,
+  "why": "interest, method C"
+ },
+ {
+  "cell": "Calc!AI18",
+  "value": 111,
+  "tol": 0,
+  "why": "months with minimum payments only"
+ },
+ {
+  "cell": "Calc!AI19",
+  "value": 12333.92,
+  "tol": 0.05,
+  "why": "interest with minimum payments only"
+ },
+ {
+  "cell": "Calc!AI7",
+  "value": 45362.32,
+  "tol": 0.01,
+  "why": "total owed now"
+ },
+ {
+  "cell": "Calc!AI23",
+  "value": 2,
+  "tol": 0,
+  "why": "debts paid off"
+ },
+ {
+  "cell": "Year Summary!D22",
+  "value": 14749.17,
+  "tol": 0.01,
+  "why": "paid in 2026"
+ },
+ {
+  "cell": "Year Summary!C22",
+  "value": 91,
+  "tol": 0,
+  "why": "payments logged in 2026"
+ },
+ {
+  "cell": "My Debts!I14",
+  "value": 2880.95,
+  "tol": 0.01,
+  "why": "Travel card balance now"
+ },
+ {
+  "cell": "My Debts!I17",
+  "value": 10586.83,
+  "tol": 0.01,
+  "why": "Car loan balance now"
+ },
+ {
+  "cell": "My Debts!I10",
+  "value": 0.0,
+  "tol": 0.01,
+  "why": "Store card balance now"
+ }
+]

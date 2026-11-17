@@ -1,2 +1,3 @@
-_build/*.preview.xlsx
+**/_build/*.preview.xlsx
+**/_build/*.preview.json
 __pycache__/

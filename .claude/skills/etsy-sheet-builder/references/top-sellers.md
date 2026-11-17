@@ -42,6 +42,11 @@ print-ready summary for sign-off.
 Seller tools (fees, bookkeeping, inventory): a sales log, fee and profit per order, monthly P&L,
 inventory with reorder flags, tax-time summary.
 
+Debt payoff tracker (checked November 2026): snowball and avalanche in one file, often a custom order
+too; 12 to 50 debts; extra monthly payment; month-by-month payoff schedule; debt-free date; total
+interest and interest saved; per-debt payoff dates; Google Sheets and Excel. Listings showed at about
+$1-$7 on sale, the most-reviewed with 11k+ reviews. One competitor sells a one-off "windfall" simulator.
+
 Trackers in general: Start Here tab, one log, one dashboard, dropdowns for categories, progress bars.
 
 ## Before building a new niche

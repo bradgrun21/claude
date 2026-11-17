@@ -7,7 +7,7 @@ saves it as Google Sheets; LibreOffice is what the verifier uses. A feature must
 
 Use only these (the verifier warns about anything else):
 
-`ABS AND AVERAGE AVERAGEIF(S) CHOOSE COUNT COUNTA COUNTBLANK COUNTIF(S) DATE DAY EDATE EOMONTH IF IFERROR
+`ABS (also inside SUMPRODUCT, over ranges) AND AVERAGE AVERAGEIF(S) CHOOSE COUNT COUNTA COUNTBLANK COUNTIF(S) DATE DAY EDATE EOMONTH IF IFERROR
 INDEX INT ISNUMBER ISTEXT LARGE LEFT LEN MATCH MAX MID MIN MOD MONTH N NOT NPER OR PMT RANK REPT RIGHT
 ROUND ROUNDUP ROUNDDOWN SEARCH SMALL SUBSTITUTE SUM SUMIF(S) SUMPRODUCT TEXT TODAY TRIM UPPER VLOOKUP
 WEEKDAY YEAR`
@@ -41,6 +41,9 @@ handling that differs between apps).
   the instructions tab should say how to switch it off.
 - **Currency symbols are part of the number format**, so a formula cannot switch them. Ship one currency
   and tell the buyer how to change the format.
+- **LibreOffice can mis-order a big grid on open.** `verify_workbook.py` therefore runs a hard
+  recalculation (calculateAll) before reading values or drawing previews. If you ever read values from a
+  plain `soffice --convert-to`, a 30,000-formula workbook may hand you stale numbers.
 - **Validation lists from a formula-filled range** show blank entries at the end in Excel. Harmless.
 
 ## Not verified by this skill

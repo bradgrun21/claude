@@ -4,7 +4,7 @@
     python verify_workbook.py "out/My Template.xlsx" [--expect expect.json] [--previews out/previews] [--dpi 170]
 
 What it checks
-  1. Every formula evaluates (LibreOffice recalculates a copy; any #DIV/0!, #N/A, #NAME? ... fails).
+  1. Every formula evaluates (LibreOffice hard-recalculates a copy; any #DIV/0!, #N/A, #NAME? ... fails).
   2. Only portable functions are used (anything else is listed as a warning - see references/compatibility.md).
   3. Optional expected values: a JSON list like
         [{"cell": "Dashboard!D11", "value": 4300, "tol": 0.01}, {"cell": "Dashboard!F30", "text": "✓ Paid"}]
@@ -41,27 +41,60 @@ WEEKNUM YEAR
 FUNC = re.compile(r"(?<![A-Za-z0-9_.])([A-Z][A-Z0-9.]*)\(")
 
 
-def soffice(args, timeout=240):
+MACRO = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Module1" script:language="StarBasic">
+    Sub RecalculateAndSave()
+      ThisComponent.calculateAll()
+      ThisComponent.calculateAll()
+      ThisComponent.store()
+      ThisComponent.close(True)
+    End Sub
+</script:module>"""
+
+
+def soffice(args, timeout=300, profile=None):
     exe = shutil.which("soffice") or shutil.which("libreoffice")
     if not exe:
         raise SystemExit(json.dumps({"error": "LibreOffice (soffice) is not installed; cannot verify."}))
-    profile = tempfile.mkdtemp(prefix="lo_profile_")
+    own = profile is None
+    profile = profile or tempfile.mkdtemp(prefix="lo_profile_")
     env = dict(os.environ, SAL_USE_VCLPLUGIN="svp", HOME=os.environ.get("HOME", "/tmp"))
     try:
-        return subprocess.run([exe, f"-env:UserInstallation=file://{profile}", "--headless", *args],
+        return subprocess.run([exe, f"-env:UserInstallation=file://{profile}", "--headless", "--norestore", *args],
                               capture_output=True, text=True, timeout=timeout, env=env)
     finally:
-        shutil.rmtree(profile, ignore_errors=True)
+        if own:
+            shutil.rmtree(profile, ignore_errors=True)
 
 
 def recalculated_copy(path: Path, tmp: Path) -> Path:
+    """A copy of the workbook with every formula recalculated from scratch.
+
+    Opening the file is not enough: on load LibreOffice can evaluate a cell before the range it sums
+    (seen with a 240-row simulation grid), leaving a wrong value that looks perfectly healthy. A macro
+    that runs calculateAll() - a hard recalculation - gives the same numbers Excel and Sheets will.
+    """
     out = tmp / "recalc"
     out.mkdir()
-    res = soffice(["--convert-to", "xlsx", "--outdir", str(out), str(path)])
-    made = out / (path.stem + ".xlsx")
-    if not made.exists():
-        raise SystemExit(json.dumps({"error": "LibreOffice could not open the workbook", "detail": res.stderr[-500:]}))
-    return made
+    copy = out / path.name
+    shutil.copyfile(path, copy)
+    profile = tempfile.mkdtemp(prefix="lo_profile_")
+    try:
+        soffice(["--terminate_after_init"], timeout=120, profile=profile)
+        macro_dir = Path(profile) / "user" / "basic" / "Standard"
+        if not macro_dir.exists():
+            raise SystemExit(json.dumps({"error": "LibreOffice did not create a usable profile; nothing was verified."}))
+        (macro_dir / "Module1.xba").write_text(MACRO)
+        before = copy.stat().st_mtime_ns
+        res = soffice(["vnd.sun.star.script:Standard.Module1.RecalculateAndSave?language=Basic&location=application",
+                       str(copy)], profile=profile)
+        if copy.stat().st_mtime_ns == before:
+            raise SystemExit(json.dumps({"error": "LibreOffice did not recalculate the workbook",
+                                         "detail": (res.stderr or "")[-500:]}))
+    finally:
+        shutil.rmtree(profile, ignore_errors=True)
+    return copy
 
 
 def scan(path: Path, tmp: Path) -> dict:
@@ -116,6 +149,9 @@ def render(path: Path, outdir: Path, dpi: int, tmp: Path) -> list:
     names = json.loads(meta.read_text())["sheets"]
     pdfdir = tmp / "pdf"
     pdfdir.mkdir()
+    twin_tmp = tmp / "twin"
+    twin_tmp.mkdir()
+    twin = recalculated_copy(twin, twin_tmp)       # pictures must show hard-recalculated numbers too
     soffice(["--convert-to", "pdf", "--outdir", str(pdfdir), str(twin)])
     pdf = pdfdir / (twin.stem + ".pdf")
     if not pdf.exists():
