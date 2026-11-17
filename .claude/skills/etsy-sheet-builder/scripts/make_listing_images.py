@@ -14,6 +14,7 @@ spec.json (paths are relative to the spec file):
     {"layout": "hero",    "kicker": "...", "title": "...", "sub": "...", "chips": ["..."], "image": "previews/05-dashboard.png"},
     {"layout": "feature", "kicker": "...", "title": "...", "body": "...", "points": ["..."], "image": "...", "side": "right"},
     {"layout": "duo",     "kicker": "...", "title": "...", "images": ["a.png", "b.png"], "labels": ["Light", "Dark"]},
+    {"layout": "grid",    "kicker": "...", "title": "...", "images": [six pictures], "labels": [...], "cols": 3},
     {"layout": "list",    "kicker": "...", "title": "...", "items": [["Dashboard", "One month at a glance"], ...], "footer": "..."},
     {"layout": "steps",   "kicker": "...", "title": "...", "steps": [["Buy", "..."], ...], "footer": "..."}
   ]
@@ -282,6 +283,36 @@ def render(spec_path: Path):
             if s.get("footer"):
                 f = font("semibold", 38)
                 d.text(((W - d.textlength(s["footer"], font=f)) / 2, H - 200), s["footer"], font=f, fill=rgb(brand["accent"]))
+            footer_mark(d, W, H, brand, spec["product"])
+        elif lay == "grid":
+            y = header(d, W, brand, s, 110, 110, W - 220, title_size=s.get("title_size", 92)) + 20
+            imgs, labels = s["images"], s.get("labels", [])
+            cols = s.get("cols", 3)
+            rows = -(-len(imgs) // cols)
+            gap = 50
+            cw = (W - 220 - gap * (cols - 1)) // cols
+            ch = (H - y - 150 - gap * (rows - 1)) // rows
+            for i in range(len(imgs)):
+                cx = 110 + (i % cols) * (cw + gap)
+                cy = y + (i // cols) * (ch + gap)
+                shot = load(base, s, "images", i)
+                crop = s.get("crop")
+                if crop:
+                    w, h = shot.size
+                    shot = shot.crop((int(crop[0] * w), int(crop[1] * h), int(crop[2] * w), int(crop[3] * h)))
+                shadowed(im, (cx, cy, cx + cw, cy + ch - 62), 20, rgb(brand["card"]), blur=22, offset=10, alpha=46)
+                iw, ih = cw - 16, ch - 62 - 16
+                if shot.height * iw / shot.width >= ih:          # keep the full width, cut the bottom
+                    inner = shot.resize((iw, round(shot.height * iw / shot.width)), Image.LANCZOS).crop((0, 0, iw, ih))
+                else:
+                    inner = fit(shot, iw, ih)
+                mask = Image.new("L", inner.size, 0)
+                ImageDraw.Draw(mask).rounded_rectangle((0, 0, inner.width, inner.height), 12, fill=255)
+                im.paste(inner, (cx + 8, cy + 8), mask)
+                d = ImageDraw.Draw(im)
+                if i < len(labels):
+                    f = font("semibold", 38)
+                    d.text((cx + (cw - d.textlength(labels[i], font=f)) / 2, cy + ch - 50), labels[i], font=f, fill=rgb(brand["ink"]))
             footer_mark(d, W, H, brand, spec["product"])
         else:
             raise SystemExit(f"unknown layout: {lay}")

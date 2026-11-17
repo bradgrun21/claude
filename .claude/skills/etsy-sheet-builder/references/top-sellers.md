@@ -26,7 +26,8 @@ searches a month against roughly 20,900 listings.
   reviews as the biggest general budget. Narrow beats broad for a new shop.
 - **Low price, high volume.** Leaders sit at $2-$4 on a permanent sale from a higher list price.
 - **Excel and Google Sheets together** in almost every top title.
-- **Dark mode** is named in the title of the top budget listing.
+- **Dark mode** is named in the title of the top budget listing, and colourways are bundled:
+  neutral beige, pastel, blush pink and sage green recur. See `palettes.md`.
 - **Titles are keyword lists**, not sentences: product, platform, method, extras.
 
 ## What buyers expect inside

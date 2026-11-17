@@ -18,7 +18,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 from openpyxl.worksheet.datavalidation import DataValidation  # noqa: E402
 
-from sheetkit import Kit, L, ref, rng  # noqa: E402
+from sheetkit import THEME_ORDER, Kit, L, ref, rng  # noqa: E402
+
+SAMPLE_THEMES = ("classic", "dark")
 
 PRODUCT = "Debt Payoff Tracker"
 ND, NM = 15, 240                      # debts, months simulated
@@ -163,7 +165,7 @@ def build(out_dir: Path, theme: str, demo: bool):
     wb = kit.workbook()
     hair = kit.hairline()
     MT = kit.money_txt
-    QUIET = "46524F" if theme == "dark" else "D8D2C8"
+    QUIET = "quiet"   # the muted series in charts, from the palette
     debts = DEMO_DEBTS if demo else []
     log = demo_log() if demo else []
     expect = []
@@ -653,13 +655,16 @@ def build(out_dir: Path, theme: str, demo: bool):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="products/debt-payoff-tracker")
-    out = Path(ap.parse_args().out)
-    for theme in ("light", "dark"):
-        for demo in (False, True):
-            path, expect = build(out, theme, demo)
-            if demo:
-                (out / "_build" / f"{path.stem}.expect.json").write_text(json.dumps(expect, indent=1, ensure_ascii=False))
-            print("built", path.name)
+    ap.add_argument("--themes", default=",".join(THEME_ORDER), help="comma-separated palette names")
+    a = ap.parse_args()
+    out = Path(a.out)
+    for theme in a.themes.split(","):
+        build(out, theme, False)
+        # sample-data copies ship for two themes; the rest are built only to photograph the colours
+        target = out if theme in SAMPLE_THEMES else out / "_build" / "theme-samples"
+        path, expect = build(target, theme, True)
+        (path.parent / "_build" / f"{path.stem}.expect.json").write_text(json.dumps(expect, indent=1, ensure_ascii=False))
+        print("built", theme)
 
 
 if __name__ == "__main__":

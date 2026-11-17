@@ -14,15 +14,14 @@ What gets made, in the product folder:
 
 ```
 products/<product-slug>/
-├── <Product> (Light).xlsx                 blank, light theme
-├── <Product> (Dark).xlsx                  blank, dark theme
-├── <Product> (Light) - Sample Data.xlsx   filled in, for buyers to explore and for the pictures
+├── <Product> (Classic).xlsx ... (Dark).xlsx   one blank workbook per colour theme (six by default)
+├── <Product> (Classic) - Sample Data.xlsx     filled in, for buyers to explore and for the pictures
 ├── <Product> (Dark) - Sample Data.xlsx
-├── <Product> - START HERE.pdf             what Etsy delivers: copy links + quick start
-├── listing-images/01..10.jpg              2400 x 1800
-├── LISTING.md                             title, 13 tags, description, price, notes
-├── README.md                              the seller's publishing steps and Google Sheets checklist
-└── _build/                                previews, specs, expected values (not for buyers)
+├── <Product> - START HERE.pdf                 what Etsy delivers: copy links + quick start
+├── listing-images/01..10.jpg                  2400 x 1800
+├── LISTING.md                                 title, 13 tags, description, price, notes
+├── README.md                                  the seller's publishing steps and Google Sheets checklist
+└── _build/                                    previews, specs, expected values (not for buyers)
 ```
 
 ## The workflow
@@ -50,8 +49,10 @@ sheets and a reference calculation to test it against. `references/compatibility
 list of what survives Excel, Google Sheets and LibreOffice at once; a formula or feature that is not on
 it does not go in.
 
-The build must produce all four workbooks from one function (`theme` x `sample data`), so the dark
-version and the sample version can never drift from the real one.
+The build must produce every workbook from one function (`theme` x `sample data`), so no colour theme
+and no sample copy can drift from the real one. Loop over `THEME_ORDER` as the examples do. Colours come
+only from palette keys - `references/palettes.md` explains the six built-in palettes, where they came
+from, and how to add one.
 
 Sample data has to look like a real person's file: realistic names and amounts, a part-finished current
 month, a few things over budget. Generate it with a fixed random seed. Use generic names, not brands.
@@ -63,10 +64,10 @@ one category's spend, a balance) in Python and write them to `_build/<file>.expe
 
 ```bash
 python scripts/verify_workbook.py "<workbook>.xlsx" --expect "_build/<workbook>.expect.json" \
-       --previews _build/previews/light --dpi 230
+       --previews _build/previews/classic --dpi 230
 ```
 
-Run it on all four workbooks. It hard-recalculates with LibreOffice and fails on any formula error, any
+Run it on every workbook. It hard-recalculates with LibreOffice and fails on any formula error, any
 expected value that is off, and lists functions outside the portable set. The blank workbook matters as
 much as the sample one: an empty template must show no errors and no nonsense.
 
@@ -87,7 +88,7 @@ example spec) and run:
 python scripts/make_listing_images.py _build/listing-images.json
 ```
 
-Ten images: a hero with the main dashboard, one per headline feature, light/dark side by side, what is
+Ten images: a hero with the main dashboard, one per headline feature, the colour themes in a grid, what is
 included, how it works. The pictures are the real tabs, so they cannot promise anything the file does
 not do. Look at each image; shorten any headline that crowds its picture.
 
@@ -121,7 +122,7 @@ one thing a buyer will not forgive.
 
 ## Files
 
-- `scripts/sheetkit.py` - themes, cards, tables, inputs, dropdowns, progress bars, charts, save
+- `scripts/sheetkit.py` - six palettes with a contrast check, cards, tables, inputs, dropdowns, progress bars, charts, save
 - `scripts/verify_workbook.py` - recalculate, find errors, check expected values, render previews
 - `scripts/make_listing_images.py` - listing images from previews
 - `scripts/make_delivery_pdf.py` - the buyer's PDF
@@ -131,4 +132,5 @@ one thing a buyer will not forgive.
 - `references/top-sellers.md` - what sells and what each product type is expected to include
 - `references/build-patterns.md` - how to structure a workbook that does not break
 - `references/compatibility.md` - what works in Excel, Google Sheets and LibreOffice together
+- `references/palettes.md` - the six colour themes, the research behind them, adding your own
 - `references/listing.md` - Etsy listing rules, delivery, pricing, AI disclosure

@@ -31,10 +31,10 @@
     "Bill calendar",
     "Savings goals",
     "Debt payoff",
-    "Light + dark"
+    "6 colour themes"
    ],
    "badge": "Instant download",
-   "image": "previews/light/05-dashboard.png"
+   "image": "previews/classic/05-dashboard.png"
   },
   {
    "layout": "feature",
@@ -46,7 +46,7 @@
     "Bills sorted by due date",
     "See what is left before you spend it"
    ],
-   "image": "previews/light/06-paychecks.png",
+   "image": "previews/classic/06-paychecks.png",
    "side": "right"
   },
   {
@@ -59,7 +59,7 @@
     "Paid and due status for every bill",
     "Built-in 50 / 30 / 20 check"
    ],
-   "image": "previews/light/05-dashboard.png",
+   "image": "previews/classic/05-dashboard.png",
    "side": "left",
    "crop": [
     0,
@@ -78,7 +78,7 @@
     "What is already paid",
     "What is still to pay"
    ],
-   "image": "previews/light/07-bill-calendar.png",
+   "image": "previews/classic/07-bill-calendar.png",
    "side": "right"
   },
   {
@@ -86,8 +86,8 @@
    "kicker": "Savings goals + debt payoff",
    "title": "Watch savings grow and debt shrink",
    "images": [
-    "previews/light/08-savings-goals.png",
-    "previews/light/09-debt-payoff.png"
+    "previews/classic/08-savings-goals.png",
+    "previews/classic/09-debt-payoff.png"
    ],
    "labels": [
     "Savings goals and sinking funds",
@@ -104,19 +104,28 @@
     "Savings rate for the year",
     "Every category, plan against actual"
    ],
-   "image": "previews/light/10-year-overview.png",
+   "image": "previews/classic/10-year-overview.png",
    "side": "left"
   },
   {
-   "layout": "duo",
-   "kicker": "Two looks, same planner",
-   "title": "Light and dark mode included",
+   "layout": "grid",
+   "kicker": "Pick your look",
+   "title": "Six colour themes included",
+   "cols": 3,
    "images": [
-    "previews/light/05-dashboard.png",
+    "previews/classic/05-dashboard.png",
+    "previews/neutral/05-dashboard.png",
+    "previews/blush/05-dashboard.png",
+    "previews/sage/05-dashboard.png",
+    "previews/pastel/05-dashboard.png",
     "previews/dark/05-dashboard.png"
    ],
    "labels": [
-    "Light",
+    "Classic",
+    "Neutral",
+    "Blush",
+    "Sage",
+    "Pastel",
     "Dark"
    ]
   },
@@ -166,7 +175,7 @@
      "Every recurring charge in one list"
     ]
    ],
-   "footer": "4 files: light and dark, each blank and with sample data"
+   "footer": "8 files: six colour themes, plus sample-data copies in Classic and Dark"
   },
   {
    "layout": "steps",
@@ -198,7 +207,7 @@
     "Works for any year",
     "Yellow cells show where to type"
    ],
-   "image": "previews/light/02-setup.png",
+   "image": "previews/classic/02-setup.png",
    "side": "right"
   }
  ]

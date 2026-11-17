@@ -4,8 +4,8 @@
 
 - Title: 140 characters.
 - Tags: 13, each 20 characters or fewer. Use all 13. Multi-word phrases beat single words.
-- Digital files: 5 per listing, 20 MB each. Deliver the PDF plus the .xlsx files (zip them if there
-  are more than four).
+- Digital files: 5 per listing, 20 MB each. Deliver the PDF plus one zip of the .xlsx files - with
+  six colour themes there are always more than four.
 - Photos: Etsy has offered 10 to 20 slots; make ten and check the current number. First photo is the
   thumbnail - it must read at thumbnail size.
 

@@ -35,8 +35,9 @@ WHAT IS INCLUDED
 
 YOU WILL RECEIVE
 • 1 PDF with links to copy the Google Sheets versions
-• 4 spreadsheets: light and dark, each blank and with sample data
-• Excel (.xlsx) files of the same four
+• 6 colour themes: Classic, Neutral, Blush, Sage, Pastel and Dark
+• Sample-data copies in Classic and Dark, so you can see it working
+• Excel (.xlsx) files of all eight
 
 GOOD TO KNOW
 • Up to 15 debts, forecast up to 20 years ahead
@@ -64,7 +65,8 @@ PLEASE NOTE
 
 ## Before you publish
 
-- Replace the four PASTE-COPY-LINK placeholders in the delivery PDF before uploading it – see README.md.
+- Replace the eight PASTE-COPY-LINK placeholders in the delivery PDF before uploading it – see README.md.
 - Confirm the AI disclosure wording against Etsy's current Creativity Standards (etsy.com/legal/creativity).
 - Open your converted Google Sheet and run the checklist in README.md before you publish.
 - The sample data is dated 2026 and the forecast starts from the month the file is opened, so sample screenshots will show later dates over time.
+- Etsy takes 5 digital files per listing: upload the PDF plus one zip of the eight .xlsx files.

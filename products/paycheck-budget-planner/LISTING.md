@@ -38,8 +38,9 @@ WHAT IS INCLUDED
 
 YOU WILL RECEIVE
 • 1 PDF with links to copy the Google Sheets versions
-• 4 spreadsheets: light and dark, each blank and with sample data
-• Excel (.xlsx) files of the same four
+• 6 colour themes: Classic, Neutral, Blush, Sage, Pastel and Dark
+• Sample-data copies in Classic and Dark, so you can see it working
+• Excel (.xlsx) files of all eight
 
 GOOD TO KNOW
 • Paid weekly, every two weeks, twice a month or monthly – it handles all four
@@ -65,7 +66,8 @@ PLEASE NOTE
 
 ## Before you publish
 
-- Replace the four PASTE-COPY-LINK placeholders in the delivery PDF before uploading it – see README.md.
+- Replace the eight PASTE-COPY-LINK placeholders in the delivery PDF before uploading it – see README.md.
 - Confirm the AI disclosure wording against Etsy's current Creativity Standards (etsy.com/legal/creativity).
 - Open your converted Google Sheet and click through every tab before you publish – see the checklist in README.md.
 - Add your shop name to the terms and support lines if you want them branded.
+- Etsy takes 5 digital files per listing: upload the PDF plus one zip of the eight .xlsx files.

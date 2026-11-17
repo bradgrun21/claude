@@ -70,19 +70,26 @@ def build(spec_path: Path):
         y -= gap
 
     heading("1. Get your copy")
-    for link in spec["links"]:
+    links = spec["links"]
+    cols = 2 if len(links) > 4 else 1                 # many colour themes: two columns of smaller buttons
+    gap = 12
+    bw = (W - 108 - gap * (cols - 1)) / cols
+    bh, step = (30, 40) if cols == 2 else (38, 50)
+    for n, link in enumerate(links):
         ok = str(link["url"]).startswith("http")
         if not ok:
             missing.append(link["label"])
+        x = 54 + (n % cols) * (bw + gap)
         c.setFillColor(accent if ok else HexColor("#D0503F"))
-        c.roundRect(54, y - 30, W - 108, 38, 8, stroke=0, fill=1)
+        c.roundRect(x, y - bh + 8, bw, bh, 7, stroke=0, fill=1)
         c.setFillColor(white)
-        c.setFont("Helvetica-Bold", 13)
-        label = f"Make a copy:  {link['label']}" if ok else f"LINK MISSING - {link['label']}"
-        c.drawString(72, y - 17, label)
+        c.setFont("Helvetica-Bold", 11 if cols == 2 else 13)
+        label = (f"Copy:  {link['label']}" if cols == 2 else f"Make a copy:  {link['label']}") if ok else f"LINK MISSING - {link['label']}"
+        c.drawString(x + 14, y - bh / 2 + 4, label)
         if ok:
-            c.linkURL(link["url"], (54, y - 30, W - 54, y + 8), relative=0)
-        y -= 50
+            c.linkURL(link["url"], (x, y - bh + 8, x + bw, y + 8), relative=0)
+        if n % cols == cols - 1 or n == len(links) - 1:
+            y -= step
     if spec.get("excel_note"):
         para(spec["excel_note"], size=10, color=muted)
     y -= 6

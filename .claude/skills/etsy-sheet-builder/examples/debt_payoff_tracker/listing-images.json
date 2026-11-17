@@ -1,51 +1,226 @@
 {
-  "out": "../listing-images",
-  "size": [2400, 1800],
-  "product": "Debt Payoff Tracker",
-  "brand": {"bg": "F6F3EE", "ink": "1F2A2C", "muted": "6F7B7D", "band": "1F3A3D", "accent": "9466AE", "card": "FFFFFF",
-            "chips": ["9466AE", "3E9A84", "4A78B0", "E07B53", "D99A2B"]},
-  "slides": [
-    {"layout": "hero", "kicker": "Google Sheets + Excel", "title": "Debt Payoff Tracker",
-     "sub": "Pick a method. See your debt-free date. Watch every balance fall.",
-     "chips": ["Snowball", "Avalanche", "Your own order", "Up to 15 debts", "Light + dark"],
-     "badge": "Instant download", "image": "previews/light/03-payoff-plan.png"},
-    {"layout": "feature", "kicker": "Your debt-free date", "title": "Know the month you will be done",
-     "body": "Type what extra you can pay each month and watch the date move.",
-     "points": ["Debt-free date and time to go", "Interest you will still pay", "What the plan saves you"],
-     "image": "previews/light/03-payoff-plan.png", "side": "right", "crop": [0, 0, 1, 0.61]},
-    {"layout": "feature", "kicker": "Snowball or avalanche", "title": "Compare every method side by side",
-     "body": "Smallest balance first, highest rate first, or your own order.",
-     "points": ["Date, months and interest for each", "Against minimum payments only", "Switch with one dropdown"],
-     "image": "previews/light/03-payoff-plan.png", "side": "left", "crop": [0.55, 0.165, 1, 0.61]},
-    {"layout": "feature", "kicker": "Payoff schedule", "title": "Every month, mapped out",
-     "body": "Payment, interest, principal and balance until the last debt is gone.",
-     "points": ["Each payoff month is highlighted", "Every debt's balance by month", "Up to 20 years ahead"],
-     "image": "previews/light/04-payoff-schedule.png", "side": "right"},
-    {"layout": "feature", "kicker": "My debts", "title": "All your debts in one list",
-     "body": "Balance, rate, minimum and due day. The rest fills itself in.",
-     "points": ["Balance now and progress bar", "Pay order and payoff date", "Next due date, red when close"],
-     "image": "previews/light/02-my-debts.png", "side": "left"},
-    {"layout": "duo", "kicker": "Track as you go", "title": "Log payments, see the year add up",
-     "images": ["previews/light/05-payment-log.png", "previews/light/06-year-summary.png"],
-     "labels": ["Payment log", "Year summary"]},
-    {"layout": "duo", "kicker": "Two looks, same tracker", "title": "Light and dark mode included",
-     "images": ["previews/light/03-payoff-plan.png", "previews/dark/03-payoff-plan.png"],
-     "labels": ["Light", "Dark"]},
-    {"layout": "list", "kicker": "What you get", "title": "Everything in one workbook",
-     "items": [["My Debts", "Your list, with balances and progress"], ["Payoff Plan", "Method, extra payment, debt-free date"],
-               ["Payoff Schedule", "Month by month until you are done"], ["Payment Log", "Every payment you make"],
-               ["Year Summary", "Paid by month and by debt"], ["3 payoff methods", "Snowball, avalanche or your order"],
-               ["Up to 15 debts", "Cards, loans, medical, anything"], ["One-time payments", "See what a bonus or refund does"],
-               ["Statement balances", "Keep interest accurate as you go"], ["Light and dark", "Blank and sample-data copies"]],
-     "footer": "4 files: light and dark, each blank and with sample data"},
-    {"layout": "steps", "kicker": "How it works", "title": "Up and running in three steps",
-     "steps": [["Download", "Open the PDF from your Etsy purchases and click the link to make your own copy."],
-               ["List your debts", "Balance, interest rate and minimum payment for each one."],
-               ["Pick a plan", "Choose a method, add what extra you can, and log payments as you go."]],
-     "footer": "Works with a free Google account or Excel 2016 and later. No subscription."},
-    {"layout": "feature", "kicker": "Progress", "title": "See how far you have come",
-     "body": "Every debt in payoff order, with what you have cleared so far.",
-     "points": ["Paid-off debts get a tick", "Progress bar for every debt", "Payoff date for each one"],
-     "image": "previews/light/03-payoff-plan.png", "side": "right", "crop": [0, 0.6, 1, 1]}
+ "out": "../listing-images",
+ "size": [
+  2400,
+  1800
+ ],
+ "product": "Debt Payoff Tracker",
+ "brand": {
+  "bg": "F6F3EE",
+  "ink": "1F2A2C",
+  "muted": "6F7B7D",
+  "band": "1F3A3D",
+  "accent": "9466AE",
+  "card": "FFFFFF",
+  "chips": [
+   "9466AE",
+   "3E9A84",
+   "4A78B0",
+   "E07B53",
+   "D99A2B"
   ]
+ },
+ "slides": [
+  {
+   "layout": "hero",
+   "kicker": "Google Sheets + Excel",
+   "title": "Debt Payoff Tracker",
+   "sub": "Pick a method. See your debt-free date. Watch every balance fall.",
+   "chips": [
+    "Snowball",
+    "Avalanche",
+    "Your own order",
+    "Up to 15 debts",
+    "6 colour themes"
+   ],
+   "badge": "Instant download",
+   "image": "previews/classic/03-payoff-plan.png"
+  },
+  {
+   "layout": "feature",
+   "kicker": "Your debt-free date",
+   "title": "Know the month you will be done",
+   "body": "Type what extra you can pay each month and watch the date move.",
+   "points": [
+    "Debt-free date and time to go",
+    "Interest you will still pay",
+    "What the plan saves you"
+   ],
+   "image": "previews/classic/03-payoff-plan.png",
+   "side": "right",
+   "crop": [
+    0,
+    0,
+    1,
+    0.61
+   ]
+  },
+  {
+   "layout": "feature",
+   "kicker": "Snowball or avalanche",
+   "title": "Compare every method side by side",
+   "body": "Smallest balance first, highest rate first, or your own order.",
+   "points": [
+    "Date, months and interest for each",
+    "Against minimum payments only",
+    "Switch with one dropdown"
+   ],
+   "image": "previews/classic/03-payoff-plan.png",
+   "side": "left",
+   "crop": [
+    0.55,
+    0.165,
+    1,
+    0.61
+   ]
+  },
+  {
+   "layout": "feature",
+   "kicker": "Payoff schedule",
+   "title": "Every month, mapped out",
+   "body": "Payment, interest, principal and balance until the last debt is gone.",
+   "points": [
+    "Each payoff month is highlighted",
+    "Every debt's balance by month",
+    "Up to 20 years ahead"
+   ],
+   "image": "previews/classic/04-payoff-schedule.png",
+   "side": "right"
+  },
+  {
+   "layout": "feature",
+   "kicker": "My debts",
+   "title": "All your debts in one list",
+   "body": "Balance, rate, minimum and due day. The rest fills itself in.",
+   "points": [
+    "Balance now and progress bar",
+    "Pay order and payoff date",
+    "Next due date, red when close"
+   ],
+   "image": "previews/classic/02-my-debts.png",
+   "side": "left"
+  },
+  {
+   "layout": "duo",
+   "kicker": "Track as you go",
+   "title": "Log payments, see the year add up",
+   "images": [
+    "previews/classic/05-payment-log.png",
+    "previews/classic/06-year-summary.png"
+   ],
+   "labels": [
+    "Payment log",
+    "Year summary"
+   ]
+  },
+  {
+   "layout": "grid",
+   "kicker": "Pick your look",
+   "title": "Six colour themes included",
+   "cols": 3,
+   "images": [
+    "previews/classic/03-payoff-plan.png",
+    "previews/neutral/03-payoff-plan.png",
+    "previews/blush/03-payoff-plan.png",
+    "previews/sage/03-payoff-plan.png",
+    "previews/pastel/03-payoff-plan.png",
+    "previews/dark/03-payoff-plan.png"
+   ],
+   "labels": [
+    "Classic",
+    "Neutral",
+    "Blush",
+    "Sage",
+    "Pastel",
+    "Dark"
+   ]
+  },
+  {
+   "layout": "list",
+   "kicker": "What you get",
+   "title": "Everything in one workbook",
+   "items": [
+    [
+     "My Debts",
+     "Your list, with balances and progress"
+    ],
+    [
+     "Payoff Plan",
+     "Method, extra payment, debt-free date"
+    ],
+    [
+     "Payoff Schedule",
+     "Month by month until you are done"
+    ],
+    [
+     "Payment Log",
+     "Every payment you make"
+    ],
+    [
+     "Year Summary",
+     "Paid by month and by debt"
+    ],
+    [
+     "3 payoff methods",
+     "Snowball, avalanche or your order"
+    ],
+    [
+     "Up to 15 debts",
+     "Cards, loans, medical, anything"
+    ],
+    [
+     "One-time payments",
+     "See what a bonus or refund does"
+    ],
+    [
+     "Statement balances",
+     "Keep interest accurate as you go"
+    ],
+    [
+     "6 colour themes",
+     "Classic, neutral, blush, sage, pastel, dark"
+    ]
+   ],
+   "footer": "8 files: six colour themes, plus sample-data copies in Classic and Dark"
+  },
+  {
+   "layout": "steps",
+   "kicker": "How it works",
+   "title": "Up and running in three steps",
+   "steps": [
+    [
+     "Download",
+     "Open the PDF from your Etsy purchases and click the link to make your own copy."
+    ],
+    [
+     "List your debts",
+     "Balance, interest rate and minimum payment for each one."
+    ],
+    [
+     "Pick a plan",
+     "Choose a method, add what extra you can, and log payments as you go."
+    ]
+   ],
+   "footer": "Works with a free Google account or Excel 2016 and later. No subscription."
+  },
+  {
+   "layout": "feature",
+   "kicker": "Progress",
+   "title": "See how far you have come",
+   "body": "Every debt in payoff order, with what you have cleared so far.",
+   "points": [
+    "Paid-off debts get a tick",
+    "Progress bar for every debt",
+    "Payoff date for each one"
+   ],
+   "image": "previews/classic/03-payoff-plan.png",
+   "side": "right",
+   "crop": [
+    0,
+    0.6,
+    1,
+    1
+   ]
+  }
+ ]
 }

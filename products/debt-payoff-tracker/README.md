@@ -6,31 +6,31 @@ Everything here is ready except the Google Sheets copy links, which only you can
 
 | File | What it is for |
 |---|---|
-| `Debt Payoff Tracker (Light).xlsx` / `(Dark).xlsx` | The blank templates buyers use |
-| `... - Sample Data.xlsx` (light and dark) | Filled-in copies buyers can explore |
-| `Debt Payoff Tracker - START HERE.pdf` | The file Etsy delivers. Its four links are placeholders until step 4 |
+| `Debt Payoff Tracker (Classic).xlsx`, `(Neutral)`, `(Blush)`, `(Sage)`, `(Pastel)`, `(Dark)` | The blank templates buyers use, one per colour theme |
+| `... - Sample Data.xlsx` (Classic and Dark) | Filled-in copies buyers can explore |
+| `Debt Payoff Tracker - START HERE.pdf` | The file Etsy delivers. Its eight links are placeholders until step 4 |
 | `listing-images/` | Ten listing photos, 2400 x 1800 |
 | `LISTING.md` | Title, 13 tags, description, price - paste into Etsy |
 | `_build/` | Previews and build files. Not for buyers |
 
 ## Steps
 
-1. **Upload** the four .xlsx files to a Google Drive folder you will never edit.
+1. **Upload** the eight .xlsx files to a Google Drive folder you will never edit.
 2. **Convert** each one: open it, then File → Save as Google Sheets.
 3. **Check** each converted sheet with the list below.
 4. **Share and link:** Share → Anyone with the link → Viewer. Copy the link and change the ending from
-   `/edit...` to `/copy`. Put the four links in `_build/delivery.json` and run
+   `/edit...` to `/copy`. Put the eight links in `_build/delivery.json` and run
    `python .claude/skills/etsy-sheet-builder/scripts/make_delivery_pdf.py products/debt-payoff-tracker/_build/delivery.json`
    (or ask Claude to). A link that is still missing shows in red.
-5. **List it:** upload the PDF and the .xlsx files as the digital files, add the ten images in order,
+5. **List it:** upload the PDF and one zip of the .xlsx files as the digital files (Etsy takes five), add the ten images in order,
    paste the copy from `LISTING.md`.
 
 ## Check once in Google Sheets
 
 The formulas were tested with LibreOffice, not inside Google Sheets, so run this once on the
-sample-data copy. This workbook is heavier than most (about 32,000 formulas), so also note how it feels.
+Classic sample-data copy, then open each other colour theme and glance at the first three tabs. This workbook is heavier than most (about 32,000 formulas), so also note how it feels.
 
-- [ ] All six tabs open and look like the pictures in `_build/previews/light/`
+- [ ] All six tabs open and look like the pictures in `_build/previews/classic/`
 - [ ] Payoff Plan shows a debt-free date, not an error. On the day it was built the sample showed
       37 months to go and $5,788.63 interest for Snowball; the months should match, the dates move with today
 - [ ] Payoff Plan: change the method dropdown - the date, the highlighted row and the payoff order change
@@ -55,4 +55,4 @@ If something fails, tell Claude which item and it can adjust the build.
 ## Rebuilding
 
 `python .claude/skills/etsy-sheet-builder/examples/debt_payoff_tracker/build.py --out products/debt-payoff-tracker`
-rebuilds all four workbooks. Change the sample debts, capacity or colours in that file.
+rebuilds every workbook in all six colour themes (add `--themes classic,dark` to build fewer). Change the sample debts, capacity or colours in that file.

@@ -8,7 +8,7 @@ conditional formats - see references/compatibility.md.
 Typical use:
 
     from sheetkit import Kit, L
-    kit = Kit(theme="light")
+    kit = Kit(theme="classic")      # or neutral, blush, sage, pastel, dark
     wb = kit.workbook()
     ws = kit.sheet(wb, "Dashboard", widths=[2, 24, 13, 13, 13, 19, 2], rows=40, tab="income")
     kit.banner(ws, 2, 2, 6, "Monthly Budget", "Pick a month - everything updates.")
@@ -36,24 +36,102 @@ from openpyxl.utils import get_column_letter as L
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.properties import PageSetupProperties
 
-__all__ = ["Kit", "L", "THEMES", "ref", "rng"]
+__all__ = ["Kit", "L", "THEMES", "THEME_ORDER", "check_theme", "contrast", "ref", "rng"]
 
+# Six palettes. The five besides "classic" are the colour themes that recur in the most-reviewed budget
+# listings on Etsy (see references/palettes.md). Keys:
+#   bg / surface / ink / muted / line      page, cards and tables, text, secondary text, hairlines
+#   band, band_ink, band_sub                the title banner and its text
+#   input, input_soft, input_line           cells the buyer types in (always a cream-yellow family, so the
+#                                           instructions can say "yellow cells" in every theme)
+#   income, bills, expenses, savings, debt  five category colours, used as header fills and chart colours
+#   <category>_ink, neutral_ink             optional darker twin, used when the colour is text on white
+#   on_cat                                  text colour on a category fill;  neutral = the grey header fill
+#   quiet                                   the muted "planned" series in charts;  pos / neg = good / bad numbers
 THEMES = {
-    "light": dict(
-        bg="F6F3EE", surface="FFFFFF", ink="1F2A2C", muted="7A8587", line="E7E1D8",
+    "classic": dict(
+        bg="F6F3EE", surface="FFFFFF", ink="1F2A2C", muted="727D7F", line="E7E1D8",
         band="1F3A3D", band_ink="FFFFFF", band_sub="B9CFC9",
         input="FFF5D6", input_soft="FFFBF0", input_line="EBDCA8",
-        pos="2E8B6F", neg="D0503F", on_cat="FFFFFF", neutral="5E6B6D",
-        income="3E9A84", bills="4A78B0", expenses="E07B53", savings="D99A2B", debt="9466AE",
+        pos="2A8266", neg="C8472F", on_cat="FFFFFF", neutral="5E6B6D", quiet="D8D2C8",
+        income="2F8A75", bills="4A78B0", expenses="C9623A", savings="B07A12", debt="9466AE",
+    ),
+    "neutral": dict(      # white, beige and warm brown
+        bg="F4EEE6", surface="FFFFFF", ink="2E2925", muted="847A70", line="E7DED2",
+        band="4B4037", band_ink="FFFFFF", band_sub="DCCFBE",
+        input="FFF4D4", input_soft="FFFAEC", input_line="E8D9A8",
+        pos="5A7B55", neg="B5533F", on_cat="FFFFFF", neutral="7A6F64", quiet="DDD3C5",
+        income="667A59", bills="5F7482", expenses="A8674A", savings="97752A", debt="7B6573",
+    ),
+    "blush": dict(        # blush pink with dusty accents
+        bg="FBF1F0", surface="FFFFFF", ink="3A2A2E", muted="917A7E", line="F1DEDD",
+        band="8E4A5B", band_ink="FFFFFF", band_sub="F3CFD6",
+        input="FFF5DC", input_soft="FFFBF1", input_line="EBDDB0",
+        pos="4A8473", neg="C0495A", on_cat="FFFFFF", neutral="8C6F76", quiet="EBD9DA",
+        income="558679", bills="7377A3", expenses="C06262", savings="A8782E", debt="96648E",
+    ),
+    "sage": dict(         # sage green with earth tones
+        bg="F1F4EE", surface="FFFFFF", ink="26302A", muted="748075", line="DDE4D8",
+        band="4F6B57", band_ink="FFFFFF", band_sub="CFE0D0",
+        input="FFF5D6", input_soft="FFFBF0", input_line="E6DBA6",
+        pos="4B7A5C", neg="B6533F", on_cat="FFFFFF", neutral="6E7B70", quiet="D5DDD0",
+        income="4B7A5C", bills="5A7C89", expenses="AE6E48", savings="9C7C22", debt="86708F",
+    ),
+    "pastel": dict(       # soft multi-colour: pastel fills carry dark text, so each category has an _ink twin
+        bg="FAF8FC", surface="FFFFFF", ink="33303D", muted="827E8F", line="E8E4EF",
+        band="CDBDEA", band_ink="33303D", band_sub="5A5470",
+        input="FFF6D8", input_soft="FFFCF0", input_line="EADDAA",
+        pos="2F8F6C", neg="CF4D47", on_cat="33303D", neutral="DAD6E3", quiet="E4E0EC",
+        income="A8DCC4", bills="A9CCEF", expenses="F7B9A6", savings="F6DC94", debt="D4B5E6",
+        income_ink="2A8765", bills_ink="3F78B5", expenses_ink="C95F41", savings_ink="A27810", debt_ink="8757AD",
+        neutral_ink="6E6A7C",
     ),
     "dark": dict(
         bg="121718", surface="1B2223", ink="E8ECE8", muted="93A09E", line="2B3536",
         band="0B0F10", band_ink="FFFFFF", band_sub="8FB5AC",
         input="3A3418", input_soft="2A2818", input_line="6B5F2A",
-        pos="5CC2A8", neg="F0806E", on_cat="101516", neutral="6F7C7E",
+        pos="5CC2A8", neg="F0806E", on_cat="101516", neutral="6F7C7E", quiet="46524F",
         income="4DB89E", bills="6C9FDD", expenses="F08C66", savings="EFBE57", debt="B58AD0",
     ),
 }
+THEMES["light"] = THEMES["classic"]          # old name
+THEME_ORDER = ["classic", "neutral", "blush", "sage", "pastel", "dark"]
+CATEGORIES = ("income", "bills", "expenses", "savings", "debt")
+
+
+def contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio between two hex colours (1 = identical, 21 = black on white)."""
+    def lum(h):
+        ch = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+        ch = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in ch]
+        return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def check_theme(t: dict) -> list:
+    """Readability problems in a palette, as a list of strings (empty = fine). Run this on any palette you add."""
+    bad = []
+
+    def need(label, a, b, ratio):
+        got = contrast(t[a] if a in t else a, t[b] if b in t else b)
+        if got < ratio:
+            bad.append(f"{label}: {got:.2f}, needs {ratio}")
+    need("text on cards", "ink", "surface", 7)
+    need("text on the page", "ink", "bg", 7)
+    need("text in input cells", "ink", "input", 7)
+    need("secondary text", "muted", "surface", 3.5)
+    need("banner title", "band_ink", "band", 4.5)
+    need("banner subtitle", "band_sub", "band", 3)
+    need("good numbers", "pos", "surface", 3.5)
+    need("bad numbers", "neg", "surface", 3.5)
+    need("header text on the grey strip", "on_cat", "neutral", 3.5)
+    for c in CATEGORIES + ("neutral",):
+        if c != "neutral":
+            need(f"header text on {c}", "on_cat", c, 3.5)
+        need(f"{c} as text on cards", t.get(c + "_ink", t[c]), "surface", 3.0)
+    return bad
+
 
 ERROR_TOKENS = ("#DIV/0!", "#N/A", "#NAME?", "#REF!", "#VALUE!", "#NUM!", "#NULL!")
 
@@ -73,11 +151,14 @@ def rng(c1: int, r1: int, c2: int, r2: int, sheet: str | None = None) -> str:
 class Kit:
     """Holds a theme and writes consistently styled cells, cards, tables and charts."""
 
-    def __init__(self, theme: str = "light", font: str = "Inter", currency: str = "$", palette: dict | None = None):
-        self.theme_name = theme
+    def __init__(self, theme: str = "classic", font: str = "Inter", currency: str = "$", palette: dict | None = None):
+        self.theme_name = "classic" if theme == "light" else theme
         self.t = dict(THEMES[theme])
-        if palette:
+        if palette:                      # your own colours: start from a theme and override keys
             self.t.update(palette)
+            problems = check_theme(self.t)
+            if problems:
+                raise ValueError("palette is hard to read: " + "; ".join(problems))
         self.font_name = font
         self.currency = currency
         c = currency
@@ -97,6 +178,12 @@ class Kit:
             return None
         return self.t.get(key_or_hex, key_or_hex)
 
+    def text(self, key_or_hex: str | None) -> str | None:
+        """Colour for text and bars: a category's darker _ink twin when the theme has one."""
+        if key_or_hex is None:
+            return None
+        return self.t.get(f"{key_or_hex}_ink", self.color(key_or_hex))
+
     def fill(self, key_or_hex: str) -> PatternFill:
         hexv = self.color(key_or_hex)
         if hexv not in self._fills:
@@ -105,7 +192,7 @@ class Kit:
 
     def font(self, size=10, bold=False, color="ink", italic=False, name=None, underline=None) -> Font:
         return Font(name=name or self.font_name, size=size, bold=bold, italic=italic,
-                    color=self.color(color), underline=underline)
+                    color=self.text(color), underline=underline)
 
     def workbook(self) -> Workbook:
         wb = Workbook()
@@ -303,14 +390,14 @@ class Kit:
     # ------------------------------------------------- conditional formatting
     def cf_negative(self, ws, cells: str, color="neg"):
         ws.conditional_formatting.add(cells, CellIsRule(operator="lessThan", formula=["0"],
-                                                        font=Font(color=self.color(color))))
+                                                        font=Font(color=self.text(color))))
 
     def cf_formula(self, ws, cells: str, formula: str, color=None, fill=None, bold=None):
         """formula is relative to the top-left cell of `cells` and must only reference its own sheet
         (Google Sheets drops conditional formats that point at another sheet)."""
         kw = {}
         if color or bold is not None:
-            kw["font"] = Font(color=self.color(color), bold=bold)
+            kw["font"] = Font(color=self.text(color), bold=bold)
         if fill:
             kw["fill"] = PatternFill("solid", bgColor=self.color(fill), fgColor=self.color(fill))
         ws.conditional_formatting.add(cells, FormulaRule(formula=[formula.lstrip("=")], **kw))
@@ -389,7 +476,7 @@ class Kit:
         ch = LineChart()
         for title, values, col in series:
             s = Series(Reference(range_string=values), title=title)
-            s.graphicalProperties = GraphicalProperties(ln=LineProperties(solidFill=self.color(col), w=28575))
+            s.graphicalProperties = GraphicalProperties(ln=LineProperties(solidFill=self.text(col), w=28575))  # a thin line needs the darker tone
             s.smooth = False
             ch.series.append(s)
         ch.set_categories(Reference(range_string=cats))
@@ -474,3 +561,13 @@ def _no_auto_title(chart):
         return tree
 
     chart._write = _write
+
+
+if __name__ == "__main__":      # python sheetkit.py  -> contrast report for every built-in palette
+    import sys
+    failed = False
+    for name in THEME_ORDER:
+        problems = check_theme(THEMES[name])
+        failed = failed or bool(problems)
+        print(f"{name:8}", "ok" if not problems else "; ".join(problems))
+    sys.exit(1 if failed else 0)
