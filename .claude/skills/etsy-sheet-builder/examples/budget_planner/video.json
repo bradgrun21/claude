@@ -1,0 +1,122 @@
+{
+ "out": "../listing-video.mp4",
+ "size": [
+  1440,
+  1080
+ ],
+ "fps": 30,
+ "product": "Paycheck Budget Planner",
+ "brand": {
+  "bg": "F6F3EE",
+  "ink": "1F2A2C",
+  "muted": "6F7B7D",
+  "band": "1F3A3D",
+  "band_sub": "B9CFC9",
+  "accent": "2F8A75",
+  "card": "FFFFFF"
+ },
+ "scenes": [
+  {
+   "type": "title",
+   "kicker": "Google Sheets + Excel",
+   "title": "Paycheck Budget Planner",
+   "sub": "Budget every paycheck. See every bill coming.",
+   "seconds": 1.4
+  },
+  {
+   "type": "states",
+   "kicker": "Monthly dashboard",
+   "caption": "Pick a month. Everything updates.",
+   "images": [
+    "video/a/05-dashboard.png",
+    "video/b/05-dashboard.png",
+    "video/c/05-dashboard.png"
+   ],
+   "seconds_each": 1.3,
+   "crop": [
+    0,
+    0,
+    1,
+    0.455
+   ],
+   "spotlight": [
+    0.797,
+    0.004,
+    0.882,
+    0.039
+   ]
+  },
+  {
+   "type": "states",
+   "kicker": "Budget by paycheck",
+   "caption": "See what each paycheck has to cover.",
+   "images": [
+    "video/a/06-paychecks.png",
+    "video/c/06-paychecks.png"
+   ],
+   "seconds_each": 1.3,
+   "crop": [
+    0,
+    0,
+    0.8,
+    0.56
+   ],
+   "spotlight": [
+    0.655,
+    0.008,
+    0.724,
+    0.052
+   ]
+  },
+  {
+   "type": "states",
+   "kicker": "Bill calendar",
+   "caption": "Every bill and payday on one calendar.",
+   "images": [
+    "video/a/07-bill-calendar.png",
+    "video/c/07-bill-calendar.png"
+   ],
+   "seconds_each": 1.25,
+   "crop": [
+    0,
+    0,
+    1,
+    0.86
+   ],
+   "spotlight": [
+    0.642,
+    0.012,
+    0.75,
+    0.078
+   ]
+  },
+  {
+   "type": "states",
+   "kicker": "Pick your look",
+   "caption": "Six colour themes included.",
+   "images": [
+    "previews/classic/05-dashboard.png",
+    "previews/neutral/05-dashboard.png",
+    "previews/blush/05-dashboard.png",
+    "previews/sage/05-dashboard.png",
+    "previews/pastel/05-dashboard.png",
+    "previews/dark/05-dashboard.png"
+   ],
+   "seconds_each": 0.5,
+   "fade": 0.22,
+   "crop": [
+    0,
+    0,
+    1,
+    0.455
+   ]
+  },
+  {
+   "type": "end",
+   "kicker": "Paycheck Budget Planner",
+   "title": "Instant download",
+   "sub": "Google Sheets + Excel",
+   "seconds": 1.4
+  }
+ ]
+}

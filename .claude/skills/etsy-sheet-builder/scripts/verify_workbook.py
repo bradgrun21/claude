@@ -3,6 +3,10 @@
 
     python verify_workbook.py "out/My Template.xlsx" [--expect expect.json] [--previews out/previews] [--dpi 170]
 
+    # photograph another state of the workbook (for the listing video): type into input cells first
+    python verify_workbook.py "out/My Template.xlsx" --render-only --previews out/states/april \
+           --set "Dashboard!K2=April" --set "Paychecks!K2=11"
+
 What it checks
   1. Every formula evaluates (LibreOffice hard-recalculates a copy; any #DIV/0!, #N/A, #NAME? ... fails).
   2. Only portable functions are used (anything else is listed as a warning - see references/compatibility.md).
@@ -45,12 +49,28 @@ MACRO = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
 <script:module xmlns:script="http://openoffice.org/2000/script" script:name="Module1" script:language="StarBasic">
     Sub RecalculateAndSave()
+{changes}
       ThisComponent.calculateAll()
       ThisComponent.calculateAll()
       ThisComponent.store()
       ThisComponent.close(True)
     End Sub
 </script:module>"""
+
+
+def macro_text(changes: dict | None) -> str:
+    """The recalculation macro, optionally typing values into cells first ({"Dashboard!K2": "April"})."""
+    from xml.sax.saxutils import escape
+    lines = []
+    for target, value in (changes or {}).items():
+        sheet, addr = target.rsplit("!", 1)
+        cell = f'ThisComponent.Sheets.getByName("{sheet.strip(chr(39))}").getCellRangeByName("{addr}")'
+        if isinstance(value, (int, float)):
+            lines.append(f"      {cell}.Value = {value}")
+        else:
+            text = str(value).replace('"', '""')
+            lines.append(f'      {cell}.String = "{text}"')
+    return MACRO.format(changes=escape("\n".join(lines)))
 
 
 def soffice(args, timeout=300, profile=None):
@@ -68,12 +88,15 @@ def soffice(args, timeout=300, profile=None):
             shutil.rmtree(profile, ignore_errors=True)
 
 
-def recalculated_copy(path: Path, tmp: Path) -> Path:
+def recalculated_copy(path: Path, tmp: Path, changes: dict | None = None) -> Path:
     """A copy of the workbook with every formula recalculated from scratch.
 
     Opening the file is not enough: on load LibreOffice can evaluate a cell before the range it sums
     (seen with a 240-row simulation grid), leaving a wrong value that looks perfectly healthy. A macro
     that runs calculateAll() - a hard recalculation - gives the same numbers Excel and Sheets will.
+
+    `changes` types values into input cells first, to photograph the workbook in another state
+    (a different month picked, an extra payment typed in).
     """
     out = tmp / "recalc"
     out.mkdir()
@@ -85,7 +108,7 @@ def recalculated_copy(path: Path, tmp: Path) -> Path:
         macro_dir = Path(profile) / "user" / "basic" / "Standard"
         if not macro_dir.exists():
             raise SystemExit(json.dumps({"error": "LibreOffice did not create a usable profile; nothing was verified."}))
-        (macro_dir / "Module1.xba").write_text(MACRO)
+        (macro_dir / "Module1.xba").write_text(macro_text(changes))
         before = copy.stat().st_mtime_ns
         res = soffice(["vnd.sun.star.script:Standard.Module1.RecalculateAndSave?language=Basic&location=application",
                        str(copy)], profile=profile)
@@ -140,7 +163,7 @@ def check_expected(values, expect_path: Path) -> list:
     return failures
 
 
-def render(path: Path, outdir: Path, dpi: int, tmp: Path) -> list:
+def render(path: Path, outdir: Path, dpi: int, tmp: Path, changes: dict | None = None) -> list:
     from PIL import Image, ImageChops
     twin = path.parent / "_build" / (path.stem + ".preview.xlsx")
     meta = path.parent / "_build" / (path.stem + ".preview.json")
@@ -151,7 +174,7 @@ def render(path: Path, outdir: Path, dpi: int, tmp: Path) -> list:
     pdfdir.mkdir()
     twin_tmp = tmp / "twin"
     twin_tmp.mkdir()
-    twin = recalculated_copy(twin, twin_tmp)       # pictures must show hard-recalculated numbers too
+    twin = recalculated_copy(twin, twin_tmp, changes)   # pictures must show hard-recalculated numbers too
     soffice(["--convert-to", "pdf", "--outdir", str(pdfdir), str(twin)])
     pdf = pdfdir / (twin.stem + ".pdf")
     if not pdf.exists():
@@ -174,21 +197,39 @@ def render(path: Path, outdir: Path, dpi: int, tmp: Path) -> list:
     return made
 
 
+def parse_changes(pairs) -> dict:
+    changes = {}
+    for pair in pairs or []:
+        target, value = pair.split("=", 1)
+        try:
+            changes[target] = float(value) if "." in value else int(value)
+        except ValueError:
+            changes[target] = value
+    return changes
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("workbook")
     ap.add_argument("--expect")
     ap.add_argument("--previews")
     ap.add_argument("--dpi", type=int, default=170)
+    ap.add_argument("--set", action="append", metavar="SHEET!CELL=VALUE",
+                    help="type a value into an input cell before drawing the previews (repeatable)")
+    ap.add_argument("--render-only", action="store_true", help="skip the checks; just draw the previews")
     a = ap.parse_args()
     path = Path(a.workbook).resolve()
+    changes = parse_changes(a.set)
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
-        report = scan(path, tmp)
-        values = report.pop("_values")
-        report["expect_failures"] = check_expected(values, Path(a.expect)) if a.expect else []
+        if a.render_only:
+            report = {"file": str(path), "errors": [], "expect_failures": []}
+        else:
+            report = scan(path, tmp)
+            values = report.pop("_values")
+            report["expect_failures"] = check_expected(values, Path(a.expect)) if a.expect else []
         if a.previews:
-            report["previews"] = render(path, Path(a.previews), a.dpi, tmp)
+            report["previews"] = render(path, Path(a.previews), a.dpi, tmp, changes)
     ok = not report["errors"] and not report["expect_failures"]
     report["status"] = "ok" if ok else "FAILED"
     print(json.dumps(report, indent=1, default=str, ensure_ascii=False))

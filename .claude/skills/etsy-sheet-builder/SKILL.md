@@ -19,6 +19,7 @@ products/<product-slug>/
 │                                              to explore and for the pictures
 ├── <Product> - START HERE.pdf                 what Etsy delivers: copy links + quick start
 ├── listing-images/01..10.jpg                  2400 x 1800
+├── listing-video.mp4                          about 15 seconds, silent
 ├── LISTING.md                                 title, 13 tags, description, price, notes
 ├── README.md                                  the seller's publishing steps and Google Sheets checklist
 └── _build/                                    previews, specs, expected values (not for buyers)
@@ -92,7 +93,22 @@ Ten images: a hero with the main dashboard, one per headline feature, the colour
 included, how it works. The pictures are the real tabs, so they cannot promise anything the file does
 not do. Look at each image; shorten any headline that crowds its picture.
 
-### 5. Delivery PDF and listing copy
+### 5. Listing video
+
+A short silent video that shows the workbook changing sells what a still picture cannot. Photograph the
+sample workbook in two or three states per scene, then stitch them:
+
+```bash
+python scripts/verify_workbook.py "<sample workbook>.xlsx" --render-only --previews _build/video/a \
+       --set "Dashboard!K2=April" --set "Paychecks!K2=10"      # types into input cells, then recalculates
+python scripts/make_listing_video.py _build/video.json          # see its docstring and the example spec
+```
+
+Aim for under 15 seconds: a title card, one scene per headline feature (the selector changing, with a
+`spotlight` on the cell that changed), the colour themes, an end card. Choose states whose numbers look
+healthy - a scene full of red negatives is a poor advert. Pull a few frames with ffmpeg and look at them.
+
+### 6. Delivery PDF and listing copy
 
 ```bash
 python scripts/make_delivery_pdf.py _build/delivery.json     # copy links are placeholders until the seller uploads
@@ -102,7 +118,7 @@ python scripts/check_listing.py _build/listing.json          # enforces 140-char
 `references/listing.md` covers how to write the title, tags and description, pricing, and the AI
 disclosure. Say plainly in the description that the template was designed with AI tools.
 
-### 6. Hand over
+### 7. Hand over
 
 Write `README.md` in the product folder with the seller's steps (upload, convert, share, copy link,
 regenerate the PDF) and the Google Sheets checklist - copy the one in the example product and adjust it.
@@ -117,17 +133,18 @@ Then tell the user:
 ## Requirements
 
 Python with `openpyxl`, `Pillow` and `reportlab`; LibreOffice (`soffice`) and `pdftoppm` for verifying
-and previews. If LibreOffice is missing, say so and stop before shipping - an untested template is the
+and previews; `ffmpeg` for the video (skip the video, and say so, if it is missing). If LibreOffice is missing, say so and stop before shipping - an untested template is the
 one thing a buyer will not forgive.
 
 ## Files
 
 - `scripts/sheetkit.py` - six palettes with a contrast check, cards, tables, inputs, dropdowns, progress bars, charts, save
-- `scripts/verify_workbook.py` - recalculate, find errors, check expected values, render previews
+- `scripts/verify_workbook.py` - recalculate, find errors, check expected values, render previews (also in another state, with `--set`)
 - `scripts/make_listing_images.py` - listing images from previews
+- `scripts/make_listing_video.py` - the silent listing video from pictures of the workbook in different states
 - `scripts/make_delivery_pdf.py` - the buyer's PDF
 - `scripts/check_listing.py` - listing limits, writes LISTING.md
-- `examples/budget_planner/` - the Paycheck Budget Planner: build script and the listing, image and PDF specs
+- `examples/budget_planner/` - the Paycheck Budget Planner: build script and the listing, image, video and PDF specs
 - `examples/debt_payoff_tracker/` - the Debt Payoff Tracker: a forecast built as a formula grid, with its reference check
 - `references/top-sellers.md` - what sells and what each product type is expected to include
 - `references/build-patterns.md` - how to structure a workbook that does not break

@@ -10,6 +10,7 @@ Everything here is ready except the Google Sheets copy links, which only you can
 | `... - Sample Data.xlsx` (Classic and Dark) | Filled-in copies buyers can explore |
 | `Paycheck Budget Planner - START HERE.pdf` | The file Etsy delivers. Its eight links are placeholders until step 4 |
 | `listing-images/` | Ten listing photos, 2400 x 1800 |
+| `listing-video.mp4` | A 15-second silent demo for the listing's video slot |
 | `LISTING.md` | Title, 13 tags, description, price - paste into Etsy |
 | `_build/` | Previews and build files. Not for buyers |
 
@@ -22,7 +23,7 @@ Everything here is ready except the Google Sheets copy links, which only you can
    `/edit...` to `/copy`. Put the eight links in `_build/delivery.json` and run
    `python .claude/skills/etsy-sheet-builder/scripts/make_delivery_pdf.py products/paycheck-budget-planner/_build/delivery.json`
    (or ask Claude to). A link that is still missing shows in red.
-5. **List it:** upload the PDF and one zip of the .xlsx files as the digital files (Etsy takes five), add the ten images in order,
+5. **List it:** upload the PDF and one zip of the .xlsx files as the digital files (Etsy takes five), add the ten images in order and the video,
    paste the copy from `LISTING.md`.
 
 ## Check once in Google Sheets

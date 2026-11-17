@@ -12,6 +12,16 @@
 These limits are from general knowledge of Etsy's listing form; confirm in the form itself if a
 number matters.
 
+## Video
+
+One video per listing. From general knowledge of Etsy's listing form, not checked this session: 5 to 15
+seconds, played without sound, shown after the first photo. Confirm the limits in the form.
+`make_listing_video.py` writes a 1440 x 1080 silent MP4 and warns outside 5-15 seconds.
+
+The video is made from pictures of the real workbook, so it can only show what the file does. It is not
+a screen recording: the dropdown does not open, the state simply changes. A seller who wants a narrated
+walkthrough should record their own screen.
+
 ## Title
 
 Front-load what a buyer types: product, then platform, then method and extras.
