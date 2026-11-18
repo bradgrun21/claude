@@ -2,3 +2,4 @@
 **/_build/*.preview.json
 **/_build/theme-samples/
 __pycache__/
+dist/*Etsy package.zip
